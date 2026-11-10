@@ -6,102 +6,151 @@ const appStartTime = performance.now();
 let lastFpsUpdateTime = performance.now();
 let frameCount = 0;
 let currentFps = 60;
+let lastRaycastTime = 0;
 
-// --- Global Constants & Coordinate Bounds ---
-const GRID_SIZE = 1025;
+// --- Constants & Coordinate Bounds ---
 const TERRAIN_WIDTH_M = 5000.0;
 const TERRAIN_HEIGHT_M = 5000.0;
 const WEST_EDGE_EASTING = 8140750.0;
 const SOUTH_EDGE_NORTHING = -287375.0;
 const MARS_RADIUS_M = 3396190.0;
 
-const BOXWORK_SOL_START = 4600;
-const BOXWORK_SOL_END = 4805;
+// Quality presets configuration
+const QUALITY_SETTINGS = {
+  low: { segments: 160, dustCount: 250, pixelRatio: 1.0 },
+  medium: { segments: 320, dustCount: 600, pixelRatio: 1.0 },
+  high: { segments: 512, dustCount: 1200, pixelRatio: Math.min(window.devicePixelRatio, 1.5) }
+};
+let currentQuality = 'medium';
 
 // DOM Elements
 const loadingOverlay = document.getElementById('loading-overlay');
 const loadingStatus = document.getElementById('loading-status');
 const progressBar = document.getElementById('progress-bar');
 const btnSkipIntro = document.getElementById('btn-skip-intro');
+const perfReadout = document.getElementById('perf-readout');
 
-const fpsValDisplay = document.getElementById('fps-val');
-const loadValDisplay = document.getElementById('load-val');
-
-// Controls
+// Layer Controls
+const lyrSat = document.getElementById('lyr-sat');
 const exagSlider = document.getElementById('exag-slider');
-const exagValueDisplay = document.getElementById('exag-value');
+const exagVal = document.getElementById('exag-val');
+
+const lyrSlope = document.getElementById('lyr-slope');
+const slopeOpacity = document.getElementById('slope-opacity');
+const slopeOv = document.getElementById('slope-ov');
+
+const lyrCrismHyd = document.getElementById('lyr-crism-hyd');
+const crismHydOpacity = document.getElementById('crism-hyd-opacity');
+const crismHydOv = document.getElementById('crism-hyd-ov');
+
+const lyrCrismPhy = document.getElementById('lyr-crism-phy');
+const crismPhyOpacity = document.getElementById('crism-phy-opacity');
+const crismPhyOv = document.getElementById('crism-phy-ov');
+
+const lyrThemis = document.getElementById('lyr-themis');
+const themisOpacity = document.getElementById('themis-opacity');
+const themisOv = document.getElementById('themis-ov');
+
+const lyrRoute = document.getElementById('lyr-route');
+const lyrBoxwork = document.getElementById('lyr-boxwork');
+const routeColorMode = document.getElementById('route-color-mode');
 
 const timeSlider = document.getElementById('time-slider');
-const timeValDisplay = document.getElementById('time-val');
-const toggleDust = document.getElementById('toggle-dust');
+const timeVal = document.getElementById('time-val');
+const lyrDust = document.getElementById('lyr-dust');
+const qualityPreset = document.getElementById('quality-preset');
 
-// Layer Toggles & Opacity Sliders
-const toggleSatellite = document.getElementById('toggle-satellite');
+const btnReset = document.getElementById('btn-reset');
+const btnBoxwork = document.getElementById('btn-boxwork');
 
-const toggleSlope = document.getElementById('toggle-slope');
-const slopeOpacitySlider = document.getElementById('slope-opacity-slider');
-const slopeOpacityVal = document.getElementById('slope-opacity-val');
+// Inspector Elements
+const inspectorPanel = document.getElementById('inspector-panel');
+const inspectorMode = document.getElementById('inspector-mode');
+const inspectorUnpin = document.getElementById('inspector-unpin');
 
-const toggleCrismHyd = document.getElementById('toggle-crism-hyd');
-const crismHydOpacitySlider = document.getElementById('crism-hyd-opacity-slider');
-const crismHydOpacityVal = document.getElementById('crism-hyd-opacity-val');
+const iElev = document.getElementById('i-elev');
+const iSlope = document.getElementById('i-slope');
+const iTier = document.getElementById('i-tier');
+const iXy = document.getElementById('i-xy');
+const iLonlat = document.getElementById('i-lonlat');
+const iSol = document.getElementById('i-sol');
+const iCrismHyd = document.getElementById('i-crism-hyd');
+const iCrismPhy = document.getElementById('i-crism-phy');
+const iThemis = document.getElementById('i-themis');
 
-const toggleCrismPhy = document.getElementById('toggle-crism-phy');
-const crismPhyOpacitySlider = document.getElementById('crism-phy-opacity-slider');
-const crismPhyOpacityVal = document.getElementById('crism-phy-opacity-val');
+const iRad = document.getElementById('i-rad');
+const iDust = document.getElementById('i-dust');
+const iTemp = document.getElementById('i-temp');
+const iWind = document.getElementById('i-wind');
+const iSignal = document.getElementById('i-signal');
+const iMobility = document.getElementById('i-mobility');
 
-const toggleThemis = document.getElementById('toggle-themis');
-const themisOpacitySlider = document.getElementById('themis-opacity-slider');
-const themisOpacityVal = document.getElementById('themis-opacity-val');
+// Timeline Elements
+const btnPlay = document.getElementById('btn-play');
+const tlSlider = document.getElementById('tl-slider');
+const tlSol = document.getElementById('tl-sol');
+const tlFollow = document.getElementById('tl-follow');
+const speedBtns = document.querySelectorAll('.tl-speed .sp');
 
-const toggleRoute = document.getElementById('toggle-route');
-const toggleBoxwork = document.getElementById('toggle-boxwork');
-
-const btnResetCam = document.getElementById('btn-reset-cam');
-const btnFocusBoxwork = document.getElementById('btn-focus-boxwork');
-
-// Timeline Replay Controls
-const btnPlayPause = document.getElementById('btn-play-pause');
-const timelineSlider = document.getElementById('timeline-slider');
-const timelineSolBadge = document.getElementById('timeline-sol-badge');
-const speedButtons = document.querySelectorAll('.speed-btn');
-
-const tStatSol = document.getElementById('t-stat-sol');
-const tStatElev = document.getElementById('t-stat-elev');
-const tStatDist = document.getElementById('t-stat-dist');
-const tStatClimb = document.getElementById('t-stat-climb');
-
-// Hover Readout Elements
-const readoutElev = document.getElementById('readout-elev');
-const readoutSlope = document.getElementById('readout-slope');
-const readoutHazard = document.getElementById('readout-hazard');
-const readoutSol = document.getElementById('readout-sol');
-const readoutLocalCoords = document.getElementById('readout-local-coords');
-const readoutGeoCoords = document.getElementById('readout-geo-coords');
-const hoverStateBadge = document.getElementById('hover-state');
+const tsSol = document.getElementById('ts-sol');
+const tsElev = document.getElementById('ts-elev');
+const tsDist = document.getElementById('ts-dist');
+const tsClimb = document.getElementById('ts-climb');
+const tsNet = document.getElementById('ts-net');
 
 // Science Popup
 const sciencePopup = document.getElementById('science-popup');
 const popupTitle = document.getElementById('popup-title');
 const popupSol = document.getElementById('popup-sol');
-const popupCloseBtn = document.getElementById('popup-close');
+const popupClose = document.getElementById('popup-close');
 
-// State Variables
-let currentExag = 1.0;
-let minElev = -4131.74;
-let maxElev = -3412.51;
+// Global Data
 let rawHeights = null;
 let rawSlopes = null;
-let routeData = null;
 let routePoints = [];
+let minElev = -4131.74;
+let maxElev = -3412.51;
+let currentExag = 1.0;
+let currentTimeHour = 14.0;
+
+// Pixel Data for Inspector Sampling
+let crismHydCtx = null;
+let crismPhyCtx = null;
+let themisCtx = null;
 
 // Replay State
 let isPlaying = false;
-let replaySpeed = 5.0; // sols per real second
+let replaySpeed = 5.0; // sols per sec
 let currentReplaySol = 3721;
 let lastReplayTime = 0;
+let isPinned = false;
+let pinnedPoint = null;
 
-// Meshes & Layers
+// Three.js Objects
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+const initialFogColor = new THREE.Color(0x2a160e);
+scene.background = initialFogColor;
+scene.fog = new THREE.FogExp2(initialFogColor, 0.000075);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 10, 45000);
+camera.position.set(0, 3400, 3900);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(QUALITY_SETTINGS.medium.pixelRatio);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+container.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI / 2 - 0.03;
+controls.minDistance = 80;
+controls.maxDistance = 20000;
+
+// Meshes & Groups
 let terrainGeometry = null;
 let terrainMesh = null;
 let hazardMesh = null;
@@ -110,137 +159,71 @@ let crismPhyMesh = null;
 let themisMesh = null;
 
 let routeGroup = null;
-let activeTrailLine = null;
-let futureTrailLine = null;
-let roverTokenGroup = null;
-let roverBeaconRing = null;
-let boxworkGroup = null;
+let routeLine = null;
+let trailLine = null;
+let roverGroup = null;
+let roverBeacon = null;
 let scienceMarkersGroup = null;
 let startFlagGroup = null;
+let boxworkGroup = null;
 let dustParticles = null;
 let dustVelocities = [];
-
-let hoverCursorMesh = null;
-let nearestSolMarker = null;
-
-// Camera & Lighting State
-let cameraAnimId = null;
-let isIntroActive = false;
-let introStartTime = 0;
-const INTRO_DURATION = 4000;
-
-// Three.js Core Objects
-const container = document.getElementById('canvas-container');
-const scene = new THREE.Scene();
-const initialFogColor = new THREE.Color(0x2a160e);
-scene.background = initialFogColor;
-scene.fog = new THREE.FogExp2(initialFogColor, 0.000075);
-
-const camera = new THREE.PerspectiveCamera(
-  45,
-  window.innerWidth / window.innerHeight,
-  10,
-  50000
-);
-const initialCamPos = new THREE.Vector3(0, 3400, 3900);
-const initialTarget = new THREE.Vector3(0, 360, 0);
-camera.position.copy(initialCamPos);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
-container.appendChild(renderer.domElement);
-
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.06;
-controls.target.copy(initialTarget);
-controls.maxPolarAngle = Math.PI / 2 - 0.03;
-controls.minDistance = 80;
-controls.maxDistance = 22000;
-
-controls.addEventListener('start', () => {
-  if (cameraAnimId) {
-    cancelAnimationFrame(cameraAnimId);
-    cameraAnimId = null;
-  }
-  if (isIntroActive) {
-    endCinematicIntro();
-  }
-});
-
-// Raycasting for Hover Readout & Markers
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2(-9999, -9999);
-let isMouseOverCanvas = false;
+let hoverCursor = null;
 
 // Lights
 let sunLight = null;
-let fillLight = null;
 let ambientLight = null;
 let hemiLight = null;
 
 function setupLights() {
-  ambientLight = new THREE.AmbientLight(0x5a443b, 1.1);
+  ambientLight = new THREE.AmbientLight(0x5a443b, 1.2);
   scene.add(ambientLight);
 
-  hemiLight = new THREE.HemisphereLight(0xffeedd, 0x1f140e, 0.7);
+  hemiLight = new THREE.HemisphereLight(0xffeedd, 0x1f140e, 0.75);
   scene.add(hemiLight);
 
-  // Directional Mars Sun
   sunLight = new THREE.DirectionalLight(0xfff5ea, 2.4);
   sunLight.position.set(-3200, 4200, -3200);
   scene.add(sunLight);
-
-  fillLight = new THREE.DirectionalLight(0xb08870, 0.6);
-  fillLight.position.set(3500, 1800, 3000);
-  scene.add(fillLight);
 }
 
-// --- Coordinate Mapping & Bilinear Sampling Helpers ---
-
+// Coordinate Conversion & Bilinear Interpolation
 function sampleGridBilinear(data, col, row) {
-  const c = Math.max(0, Math.min(GRID_SIZE - 1, col));
-  const r = Math.max(0, Math.min(GRID_SIZE - 1, row));
-
+  const c = Math.max(0, Math.min(1024, col));
+  const r = Math.max(0, Math.min(1024, row));
   const c0 = Math.floor(c);
-  const c1 = Math.min(GRID_SIZE - 1, c0 + 1);
+  const c1 = Math.min(1024, c0 + 1);
   const r0 = Math.floor(r);
-  const r1 = Math.min(GRID_SIZE - 1, r0 + 1);
-
+  const r1 = Math.min(1024, r0 + 1);
   const fc = c - c0;
   const fr = r - r0;
-
-  const v00 = data[r0 * GRID_SIZE + c0];
-  const v01 = data[r0 * GRID_SIZE + c1];
-  const v10 = data[r1 * GRID_SIZE + c0];
-  const v11 = data[r1 * GRID_SIZE + c1];
-
+  const v00 = data[r0 * 1025 + c0];
+  const v01 = data[r0 * 1025 + c1];
+  const v10 = data[r1 * 1025 + c0];
+  const v11 = data[r1 * 1025 + c1];
   const top = (1.0 - fc) * v00 + fc * v01;
   const bot = (1.0 - fc) * v10 + fc * v11;
   return (1.0 - fr) * top + fr * bot;
 }
 
 function localToGrid(lx, ly) {
-  const col = (lx / TERRAIN_WIDTH_M) * (GRID_SIZE - 1);
-  const row = (1.0 - (ly / TERRAIN_HEIGHT_M)) * (GRID_SIZE - 1);
-  return { col, row };
+  return {
+    col: (lx / TERRAIN_WIDTH_M) * 1024.0,
+    row: (1.0 - (ly / TERRAIN_HEIGHT_M)) * 1024.0
+  };
 }
 
 function localToMesh(lx, ly) {
-  const meshX = lx - TERRAIN_WIDTH_M / 2.0;
-  const meshZ = TERRAIN_HEIGHT_M / 2.0 - ly;
-  return { meshX, meshZ };
+  return {
+    meshX: lx - TERRAIN_WIDTH_M / 2.0,
+    meshZ: TERRAIN_HEIGHT_M / 2.0 - ly
+  };
 }
 
 function meshToLocal(mx, mz) {
-  const lx = mx + TERRAIN_WIDTH_M / 2.0;
-  const ly = TERRAIN_HEIGHT_M / 2.0 - mz;
   return {
-    lx: Math.max(0, Math.min(TERRAIN_WIDTH_M, lx)),
-    ly: Math.max(0, Math.min(TERRAIN_HEIGHT_M, ly))
+    lx: Math.max(0, Math.min(TERRAIN_WIDTH_M, mx + TERRAIN_WIDTH_M / 2.0)),
+    ly: Math.max(0, Math.min(TERRAIN_HEIGHT_M, TERRAIN_HEIGHT_M / 2.0 - mz))
   };
 }
 
@@ -252,109 +235,106 @@ function localToMarsGeo(lx, ly) {
   return { easting, northing, lon, lat };
 }
 
-// --- Terrain & Draped Overlay Layers ---
+// --- Terrain & Multi-Layer Construction ---
+let satTexture = null;
 
-let satelliteTexRef = null;
+function createTerrainLayers(satTex, slopeTex, crismHydTex, crismPhyTex, themisTex) {
+  satTexture = satTex;
+  const seg = QUALITY_SETTINGS[currentQuality].segments;
 
-function createTerrainAndDrapedLayers(satTex, slopeTex, crismHydTex, crismPhyTex, themisTex) {
-  satelliteTexRef = satTex;
-
-  // 1. Shared Base Geometry (1025 x 1025 vertices)
-  terrainGeometry = new THREE.PlaneGeometry(
-    TERRAIN_WIDTH_M,
-    TERRAIN_HEIGHT_M,
-    GRID_SIZE - 1,
-    GRID_SIZE - 1
-  );
+  if (terrainGeometry) terrainGeometry.dispose();
+  terrainGeometry = new THREE.PlaneGeometry(TERRAIN_WIDTH_M, TERRAIN_HEIGHT_M, seg, seg);
   terrainGeometry.rotateX(-Math.PI / 2);
 
-  const posAttr = terrainGeometry.attributes.position;
-  for (let i = 0; i < posAttr.count; i++) {
-    const elev = rawHeights[i];
-    posAttr.setY(i, (elev - minElev) * currentExag);
-  }
-  posAttr.needsUpdate = true;
-  terrainGeometry.computeVertexNormals();
+  updateGeometryHeights(terrainGeometry);
 
-  // 2. Base Satellite Mesh
-  const terrainMaterial = new THREE.MeshStandardMaterial({
+  // Base Terrain
+  const terrainMat = new THREE.MeshStandardMaterial({
     map: satTex,
     roughness: 0.88,
-    metalness: 0.08,
-    flatShading: false
+    metalness: 0.08
   });
-  terrainMesh = new THREE.Mesh(terrainGeometry, terrainMaterial);
+  terrainMesh = new THREE.Mesh(terrainGeometry, terrainMat);
   terrainMesh.name = 'MarsTerrain';
   scene.add(terrainMesh);
 
-  // 3. Slope Hazard Overlay Mesh
-  const hazardMaterial = new THREE.MeshBasicMaterial({
+  // Slope Hazard Overlay
+  const hazardMat = new THREE.MeshBasicMaterial({
     map: slopeTex,
     transparent: true,
-    opacity: 0.65,
+    opacity: parseInt(slopeOpacity.value, 10) / 100.0,
     depthWrite: false,
     polygonOffset: true,
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1
   });
-  hazardMesh = new THREE.Mesh(terrainGeometry, hazardMaterial);
-  hazardMesh.name = 'SlopeHazardOverlay';
-  hazardMesh.visible = toggleSlope.checked;
+  hazardMesh = new THREE.Mesh(terrainGeometry, hazardMat);
+  hazardMesh.visible = lyrSlope.checked;
   scene.add(hazardMesh);
 
-  // 4. CRISM Hydrated Minerals Mesh (Nearest Neighbour, Alpha Coverage Mask)
-  const crismHydMaterial = new THREE.MeshBasicMaterial({
+  // CRISM Hydrated Minerals
+  const crismHydMat = new THREE.MeshBasicMaterial({
     map: crismHydTex,
     transparent: true,
-    opacity: 0.80,
+    opacity: parseInt(crismHydOpacity.value, 10) / 100.0,
     depthWrite: false,
     polygonOffset: true,
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -2
   });
-  crismHydMesh = new THREE.Mesh(terrainGeometry, crismHydMaterial);
-  crismHydMesh.name = 'CRISM_Hydrated';
-  crismHydMesh.visible = toggleCrismHyd.checked;
+  crismHydMesh = new THREE.Mesh(terrainGeometry, crismHydMat);
+  crismHydMesh.visible = lyrCrismHyd.checked;
   scene.add(crismHydMesh);
 
-  // 5. CRISM Phyllosilicates Mesh (Nearest Neighbour, Alpha Coverage Mask)
-  const crismPhyMaterial = new THREE.MeshBasicMaterial({
+  // CRISM Phyllosilicates
+  const crismPhyMat = new THREE.MeshBasicMaterial({
     map: crismPhyTex,
     transparent: true,
-    opacity: 0.80,
+    opacity: parseInt(crismPhyOpacity.value, 10) / 100.0,
     depthWrite: false,
     polygonOffset: true,
     polygonOffsetFactor: -3,
     polygonOffsetUnits: -3
   });
-  crismPhyMesh = new THREE.Mesh(terrainGeometry, crismPhyMaterial);
-  crismPhyMesh.name = 'CRISM_Phyllosilicates';
-  crismPhyMesh.visible = toggleCrismPhy.checked;
+  crismPhyMesh = new THREE.Mesh(terrainGeometry, crismPhyMat);
+  crismPhyMesh.visible = lyrCrismPhy.checked;
   scene.add(crismPhyMesh);
 
-  // 6. THEMIS Thermal Brightness Mesh (100 m/px)
-  const themisMaterial = new THREE.MeshBasicMaterial({
+  // THEMIS Daytime IR
+  const themisMat = new THREE.MeshBasicMaterial({
     map: themisTex,
     transparent: true,
-    opacity: 0.75,
+    opacity: parseInt(themisOpacity.value, 10) / 100.0,
     depthWrite: false,
     polygonOffset: true,
     polygonOffsetFactor: -4,
     polygonOffsetUnits: -4
   });
-  themisMesh = new THREE.Mesh(terrainGeometry, themisMaterial);
-  themisMesh.name = 'THEMIS_Thermal';
-  themisMesh.visible = toggleThemis.checked;
+  themisMesh = new THREE.Mesh(terrainGeometry, themisMat);
+  themisMesh.visible = lyrThemis.checked;
   scene.add(themisMesh);
 }
 
-// --- Route, Glowing Trail, Rover Token & Waypoints ---
+function updateGeometryHeights(geo) {
+  const pos = geo.attributes.position;
+  const count = pos.count;
+  for (let i = 0; i < count; i++) {
+    const mx = pos.getX(i);
+    const mz = pos.getZ(i);
+    const { lx, ly } = meshToLocal(mx, mz);
+    const { col, row } = localToGrid(lx, ly);
+    const elev = sampleGridBilinear(rawHeights, col, row);
+    pos.setY(i, (elev - minElev) * currentExag);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+}
 
+// --- Route, Trail, and Rover Construction ---
 function createRouteAndRover() {
   routeGroup = new THREE.Group();
-  routeGroup.name = 'RouteGroup';
 
-  // Precompute cumulative 3D distance and cumulative climb for each route point
+  // Precompute distance and cumulative uphill climb
   let cumDist = 0.0;
   let cumClimb = 0.0;
   routePoints[0].cumDist = 0.0;
@@ -366,247 +346,189 @@ function createRouteAndRover() {
     const dx = p1.x - p0.x;
     const dy = p1.y - p0.y;
     const dz = p1.elevation - p0.elevation;
-    const stepDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    cumDist += stepDist;
+    const step = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    cumDist += step;
     if (dz > 0) cumClimb += dz;
-
     p1.cumDist = cumDist;
     p1.cumClimb = cumClimb;
   }
 
-  // Build vertex positions & colors for full route
+  // Build Route Positions & Colors
   const positions = [];
-  const activeColors = [];
-  const futureColors = [];
+  const colorsSlope = [];
+  const colorsSingle = [];
 
   for (let i = 0; i < routePoints.length; i++) {
     const pt = routePoints[i];
     const { meshX, meshZ } = localToMesh(pt.x, pt.y);
-    const meshY = (pt.elevation - minElev) * currentExag + 3.5 * currentExag;
+    const meshY = (pt.elevation - minElev) * currentExag + 6.0 * currentExag; // Drape cleanly above surface
     positions.push(meshX, meshY, meshZ);
 
-    if (pt.sol >= BOXWORK_SOL_START && pt.sol <= BOXWORK_SOL_END) {
-      activeColors.push(1.0, 0.0, 0.5); // Magenta for Boxwork
-      futureColors.push(0.4, 0.0, 0.2);
+    // Sample slope at point
+    const { col, row } = localToGrid(pt.x, pt.y);
+    const s = sampleGridBilinear(rawSlopes, col, row);
+    if (s < 15.0) {
+      colorsSlope.push(0.18, 0.8, 0.44); // Green (<15)
+    } else if (s <= 25.0) {
+      colorsSlope.push(0.95, 0.77, 0.06); // Yellow (15-25)
     } else {
-      activeColors.push(0.0, 0.9, 1.0); // Cyan for Standard Traverse
-      futureColors.push(0.0, 0.3, 0.4);
+      colorsSlope.push(0.91, 0.3, 0.24); // Red (>25)
     }
+    colorsSingle.push(0.0, 0.85, 1.0); // Cyan
   }
 
-  // Active glowing trail (drawn up to current replay sol)
-  const activeGeo = new THREE.BufferGeometry();
-  activeGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  activeGeo.setAttribute('color', new THREE.Float32BufferAttribute(activeColors, 3));
-  const activeMat = new THREE.LineBasicMaterial({
+  // 1. Full continuous route line
+  const routeGeo = new THREE.BufferGeometry();
+  routeGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  routeGeo.setAttribute('color', new THREE.Float32BufferAttribute(colorsSlope, 3));
+  routeGeo.userData = { colorsSlope, colorsSingle };
+
+  const routeMat = new THREE.LineBasicMaterial({
     vertexColors: true,
     linewidth: 3,
-    depthTest: true
+    depthTest: true,
+    depthWrite: false
   });
-  activeTrailLine = new THREE.Line(activeGeo, activeMat);
-  routeGroup.add(activeTrailLine);
+  routeLine = new THREE.Line(routeGeo, routeMat);
+  routeGroup.add(routeLine);
 
-  // Future route trail (rendered dimmed)
-  const futureGeo = new THREE.BufferGeometry();
-  futureGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  futureGeo.setAttribute('color', new THREE.Float32BufferAttribute(futureColors, 3));
-  const futureMat = new THREE.LineBasicMaterial({
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.25,
-    depthTest: true
+  // 2. Active glowing trail behind rover
+  const trailGeo = new THREE.BufferGeometry();
+  trailGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions.slice(), 3));
+  const trailMat = new THREE.LineBasicMaterial({
+    color: 0x00ffff,
+    linewidth: 4,
+    depthTest: true,
+    depthWrite: false
   });
-  futureTrailLine = new THREE.Line(futureGeo, futureMat);
-  routeGroup.add(futureTrailLine);
+  trailLine = new THREE.Line(trailGeo, trailMat);
+  trailLine.geometry.setDrawRange(0, 1);
+  routeGroup.add(trailLine);
 
-  // Rover 3D Marker Token
-  roverTokenGroup = new THREE.Group();
-  roverTokenGroup.name = 'RoverMarker';
+  // 3. 3D Rover Token
+  roverGroup = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(16, 8, 12),
+    new THREE.MeshStandardMaterial({ color: 0xf1c40f, roughness: 0.3, metalness: 0.7 })
+  );
+  body.position.y = 5;
+  roverGroup.add(body);
 
-  // Rover Chassis Body
-  const bodyGeo = new THREE.BoxGeometry(14, 7, 10);
-  const bodyMat = new THREE.MeshStandardMaterial({
-    color: 0xf1c40f,
-    metalness: 0.7,
-    roughness: 0.3,
-    emissive: 0x442200
-  });
-  const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-  bodyMesh.position.y = 4;
-  roverTokenGroup.add(bodyMesh);
+  const mast = new THREE.Mesh(
+    new THREE.CylinderGeometry(1, 1, 12, 8),
+    new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9 })
+  );
+  mast.position.set(4, 11, 0);
+  roverGroup.add(mast);
 
-  // Camera Mast
-  const mastGeo = new THREE.CylinderGeometry(0.8, 0.8, 10, 8);
-  const mastMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8 });
-  const mastMesh = new THREE.Mesh(mastGeo, mastMat);
-  mastMesh.position.set(4, 9, 0);
-  roverTokenGroup.add(mastMesh);
+  const head = new THREE.Mesh(
+    new THREE.BoxGeometry(4, 3, 5),
+    new THREE.MeshBasicMaterial({ color: 0x00d2ff })
+  );
+  head.position.set(4, 17, 0);
+  roverGroup.add(head);
 
-  // Direction Heading Arrow
-  const arrowGeo = new THREE.ConeGeometry(3, 8, 8);
-  arrowGeo.rotateX(Math.PI / 2);
-  const arrowMat = new THREE.MeshBasicMaterial({ color: 0x00d2ff });
-  const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat);
-  arrowMesh.position.set(0, 10, -8);
-  roverTokenGroup.add(arrowMesh);
-
-  // Pulsing Halo Beacon Ring
-  const beaconGeo = new THREE.RingGeometry(12, 18, 32);
-  beaconGeo.rotateX(-Math.PI / 2);
-  const beaconMat = new THREE.MeshBasicMaterial({
+  // Pulsing halo beacon
+  const ringGeo = new THREE.RingGeometry(14, 20, 32);
+  ringGeo.rotateX(-Math.PI / 2);
+  const ringMat = new THREE.MeshBasicMaterial({
     color: 0x00d2ff,
     side: THREE.DoubleSide,
     transparent: true,
     opacity: 0.85
   });
-  roverBeaconRing = new THREE.Mesh(beaconGeo, beaconMat);
-  roverBeaconRing.position.y = 1;
-  roverTokenGroup.add(roverBeaconRing);
+  roverBeacon = new THREE.Mesh(ringGeo, ringMat);
+  roverBeacon.position.y = 1.5;
+  roverGroup.add(roverBeacon);
 
-  // Rover Forward Spotlight
-  const roverLight = new THREE.PointLight(0x00d2ff, 1.8, 80);
-  roverLight.position.set(0, 8, -6);
-  roverTokenGroup.add(roverLight);
-
-  routeGroup.add(roverTokenGroup);
+  routeGroup.add(roverGroup);
   scene.add(routeGroup);
 
-  // Set initial rover position at Sol 3721
   updateTimelineReplay(3721);
 }
 
-// --- Science Milestones, Start Flag & Boxwork Core Zone ---
+function updateRouteColoring() {
+  if (!routeLine) return;
+  const isSingle = routeColorMode.value === 'single';
+  const colors = isSingle ? routeLine.geometry.userData.colorsSingle : routeLine.geometry.userData.colorsSlope;
+  routeLine.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  routeLine.geometry.attributes.color.needsUpdate = true;
+}
 
-const SCIENCE_WAYPOINTS = [
-  {
-    targetSol: 4534,
-    solLabel: 'Sol 4534',
-    title: 'Boxwork campaign begins (Phase 1)',
-    color: 0xff007f
-  },
-  {
-    targetSol: 4602,
-    solLabel: 'Sols 4602-4603',
-    title: 'Top of the ridge, start of the main boxwork region',
-    color: 0xf1c40f
-  },
-  {
-    targetSol: 4604,
-    solLabel: 'Sols 4604-4606',
-    title: 'Main exposure of boxwork structures',
-    color: 0x00d2ff
-  },
-  {
-    targetSol: 4716,
-    solLabel: 'Sols 4716-4722',
-    title: 'Nevado Sajama drill',
-    color: 0x2ecc71
-  },
-  {
-    targetSol: 4804,
-    solLabel: 'Sols 4804-4811',
-    title: 'Nevado Sajama 2 drill',
-    color: 0xe67e22
-  }
+// --- Science Waypoints, START Flag & Boxwork Core Zone ---
+const SCIENCE_TARGETS = [
+  { sol: 4534, label: 'Sol 4534', title: 'Boxwork campaign begins (Phase 1)', color: 0xff007f },
+  { sol: 4602, label: 'Sols 4602-4603', title: 'Top of the ridge, start of the main boxwork region', color: 0xf1c40f },
+  { sol: 4604, label: 'Sols 4604-4606', title: 'Main exposure of boxwork structures', color: 0x00d2ff },
+  { sol: 4716, label: 'Sols 4716-4722', title: 'Nevado Sajama drill', color: 0x2ecc71 },
+  { sol: 4804, label: 'Sols 4804-4811', title: 'Nevado Sajama 2 drill', color: 0xe67e22 }
 ];
 
 function createScienceMarkersAndFlag() {
   scienceMarkersGroup = new THREE.Group();
-  scienceMarkersGroup.name = 'ScienceMarkers';
 
-  // 1. Map START Flag (North Edge Entry, Sol 3721)
+  // START Flag at Sol 3721 (North edge entry)
   startFlagGroup = new THREE.Group();
-  startFlagGroup.name = 'StartFlag';
-  const startPt = routePoints[0];
-  const { meshX: sX, meshZ: sZ } = localToMesh(startPt.x, startPt.y);
-  const startY = (startPt.elevation - minElev) * currentExag;
+  const pStart = routePoints[0];
+  const { meshX: sx, meshZ: sz } = localToMesh(pStart.x, pStart.y);
+  const sy = (pStart.elevation - minElev) * currentExag;
 
-  // Flagpole
-  const poleGeo = new THREE.CylinderGeometry(1.2, 1.2, 48, 12);
-  const poleMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.9, roughness: 0.2 });
-  const poleMesh = new THREE.Mesh(poleGeo, poleMat);
-  poleMesh.position.set(sX, startY + 24 * currentExag, sZ);
-  startFlagGroup.add(poleMesh);
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.2, 1.2, 50, 8),
+    new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8 })
+  );
+  pole.position.set(sx, sy + 25 * currentExag, sz);
+  startFlagGroup.add(pole);
 
-  // Banner Flag
   const flagShape = new THREE.Shape();
   flagShape.moveTo(0, 0);
-  flagShape.lineTo(24, -8);
-  flagShape.lineTo(0, -16);
+  flagShape.lineTo(26, -9);
+  flagShape.lineTo(0, -18);
   flagShape.closePath();
-  const flagGeo = new THREE.ShapeGeometry(flagShape);
-  const flagMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71, side: THREE.DoubleSide });
-  const flagMesh = new THREE.Mesh(flagGeo, flagMat);
-  flagMesh.position.set(sX, startY + 44 * currentExag, sZ);
-  startFlagGroup.add(flagMesh);
-
-  // Floating START marker sphere
-  const startSphereGeo = new THREE.SphereGeometry(8, 16, 16);
-  const startSphereMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71 });
-  const startSphere = new THREE.Mesh(startSphereGeo, startSphereMat);
-  startSphere.position.set(sX, startY + 48 * currentExag, sZ);
-  startFlagGroup.add(startSphere);
+  const flag = new THREE.Mesh(
+    new THREE.ShapeGeometry(flagShape),
+    new THREE.MeshBasicMaterial({ color: 0x2ecc71, side: THREE.DoubleSide })
+  );
+  flag.position.set(sx, sy + 46 * currentExag, sz);
+  startFlagGroup.add(flag);
 
   scene.add(startFlagGroup);
 
-  // 2. Science Milestone Markers
-  SCIENCE_WAYPOINTS.forEach(item => {
-    // Find closest route point
+  // 5 Science Milestone Markers
+  SCIENCE_TARGETS.forEach(item => {
     let closestPt = routePoints[0];
-    let minDiff = Infinity;
+    let minD = Infinity;
     for (let i = 0; i < routePoints.length; i++) {
-      const diff = Math.abs(routePoints[i].sol - item.targetSol);
-      if (diff < minDiff) {
-        minDiff = diff;
+      const d = Math.abs(routePoints[i].sol - item.sol);
+      if (d < minD) {
+        minD = d;
         closestPt = routePoints[i];
       }
     }
 
     const { meshX, meshZ } = localToMesh(closestPt.x, closestPt.y);
-    const meshY = (closestPt.elevation - minElev) * currentExag + 6.0 * currentExag;
+    const my = (closestPt.elevation - minElev) * currentExag + 8.0 * currentExag;
 
-    // Diamond / Octahedron pin
-    const pinGeo = new THREE.OctahedronGeometry(12, 0);
-    const pinMat = new THREE.MeshStandardMaterial({
-      color: item.color,
-      emissive: item.color,
-      emissiveIntensity: 0.6,
-      metalness: 0.4,
-      roughness: 0.2
-    });
-    const pinMesh = new THREE.Mesh(pinGeo, pinMat);
-    pinMesh.position.set(meshX, meshY, meshZ);
-    pinMesh.userData = {
-      isSciencePin: true,
-      title: item.title,
-      solLabel: item.solLabel,
-      pt: closestPt
-    };
-    scienceMarkersGroup.add(pinMesh);
+    const pin = new THREE.Mesh(
+      new THREE.OctahedronGeometry(11, 0),
+      new THREE.MeshStandardMaterial({
+        color: item.color,
+        emissive: item.color,
+        emissiveIntensity: 0.5,
+        roughness: 0.2
+      })
+    );
+    pin.position.set(meshX, my, meshZ);
+    pin.userData = { isSciencePin: true, title: item.title, solLabel: item.label, pt: closestPt };
+    scienceMarkersGroup.add(pin);
 
-    // Vertical beacon light beam
-    const beamGeo = new THREE.CylinderGeometry(0.5, 0.5, 60, 8);
-    const beamMat = new THREE.MeshBasicMaterial({
-      color: item.color,
-      transparent: true,
-      opacity: 0.55
-    });
-    const beamMesh = new THREE.Mesh(beamGeo, beamMat);
-    beamMesh.position.set(meshX, meshY + 30, meshZ);
-    scienceMarkersGroup.add(beamMesh);
-
-    // Glowing base ring
-    const ringGeo = new THREE.RingGeometry(14, 20, 24);
-    ringGeo.rotateX(-Math.PI / 2);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: item.color,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.8
-    });
-    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-    ringMesh.position.set(meshX, meshY - 4 * currentExag, meshZ);
-    scienceMarkersGroup.add(ringMesh);
+    // Beacon beam
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.6, 0.6, 60, 8),
+      new THREE.MeshBasicMaterial({ color: item.color, transparent: true, opacity: 0.5 })
+    );
+    beam.position.set(meshX, my + 30, meshZ);
+    scienceMarkersGroup.add(beam);
   });
 
   scene.add(scienceMarkersGroup);
@@ -614,196 +536,161 @@ function createScienceMarkersAndFlag() {
 
 function createBoxworkCoreZone() {
   boxworkGroup = new THREE.Group();
-  boxworkGroup.name = 'BoxworkCoreZone';
 
-  // Exact 153 x 283 m core zone from sols 4600-4805:
+  // Exactly 153 x 283 m core zone from sols 4600-4805:
   // X: [2355.6, 2508.6] (width = 153 m)
-  // Y: [2337.5, 2620.5] (height = 283 m)
+  // Y: [2337.5, 2620.5] (length = 283 m)
   const xMin = 2355.6;
   const xMax = 2508.6;
   const yMin = 2337.5;
   const yMax = 2620.5;
 
-  const perimeterPoints = [];
-  const stepsPerSide = 25;
-
-  for (let s = 0; s < stepsPerSide; s++) {
-    const t = s / stepsPerSide;
-    perimeterPoints.push({ x: xMin + t * (xMax - xMin), y: yMin });
-  }
-  for (let s = 0; s < stepsPerSide; s++) {
-    const t = s / stepsPerSide;
-    perimeterPoints.push({ x: xMax, y: yMin + t * (yMax - yMin) });
-  }
-  for (let s = 0; s < stepsPerSide; s++) {
-    const t = s / stepsPerSide;
-    perimeterPoints.push({ x: xMax - t * (xMax - xMin), y: yMax });
-  }
-  for (let s = 0; s < stepsPerSide; s++) {
-    const t = s / stepsPerSide;
-    perimeterPoints.push({ x: xMin, y: yMax - t * (yMax - yMin) });
-  }
-  perimeterPoints.push(perimeterPoints[0]);
+  const perimeter = [];
+  const steps = 25;
+  for (let s = 0; s < steps; s++) perimeter.push({ x: xMin + (s / steps) * (xMax - xMin), y: yMin });
+  for (let s = 0; s < steps; s++) perimeter.push({ x: xMax, y: yMin + (s / steps) * (yMax - yMin) });
+  for (let s = 0; s < steps; s++) perimeter.push({ x: xMax - (s / steps) * (xMax - xMin), y: yMax });
+  for (let s = 0; s < steps; s++) perimeter.push({ x: xMin, y: yMax - (s / steps) * (yMax - yMin) });
+  perimeter.push(perimeter[0]);
 
   const positions = [];
-  perimeterPoints.forEach(p => {
+  perimeter.forEach(p => {
     const { meshX, meshZ } = localToMesh(p.x, p.y);
     const { col, row } = localToGrid(p.x, p.y);
     const elev = sampleGridBilinear(rawHeights, col, row);
-    const meshY = (elev - minElev) * currentExag + 4.0 * currentExag;
-    positions.push(meshX, meshY, meshZ);
+    positions.push(meshX, (elev - minElev) * currentExag + 5.0 * currentExag, meshZ);
   });
 
-  const boundaryGeo = new THREE.BufferGeometry();
-  boundaryGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-
-  const boundaryMat = new THREE.LineBasicMaterial({
-    color: 0xf1c40f,
-    linewidth: 2,
-    transparent: true,
-    opacity: 0.95
-  });
-
-  const boundaryLine = new THREE.Line(boundaryGeo, boundaryMat);
-  boundaryLine.name = 'BoxworkPerimeterLine';
-  boxworkGroup.add(boundaryLine);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const mat = new THREE.LineBasicMaterial({ color: 0xf1c40f, linewidth: 2, depthTest: true, depthWrite: false });
+  boxworkGroup.add(new THREE.Line(geo, mat));
 
   scene.add(boxworkGroup);
 }
 
-// --- Atmosphere: Drifting Dust Particle System ---
-
+// --- Atmosphere: Sun & Drifting Dust ---
 function createDustParticles() {
-  const DUST_COUNT = 1200;
-  const dustGeo = new THREE.BufferGeometry();
-  const dustPositions = new Float32Array(DUST_COUNT * 3);
+  if (dustParticles) {
+    scene.remove(dustParticles);
+    dustParticles.geometry.dispose();
+  }
+
+  const count = QUALITY_SETTINGS[currentQuality].dustCount;
+  const posArr = new Float32Array(count * 3);
   dustVelocities = [];
 
-  for (let i = 0; i < DUST_COUNT; i++) {
-    dustPositions[i * 3] = (Math.random() - 0.5) * 5000;
-    dustPositions[i * 3 + 1] = Math.random() * 800 + 20;
-    dustPositions[i * 3 + 2] = (Math.random() - 0.5) * 5000;
-
+  for (let i = 0; i < count; i++) {
+    posArr[i * 3] = (Math.random() - 0.5) * 5000;
+    posArr[i * 3 + 1] = Math.random() * 800 + 20;
+    posArr[i * 3 + 2] = (Math.random() - 0.5) * 5000;
     dustVelocities.push({
       vx: (Math.random() - 0.3) * 1.5,
-      vy: (Math.random() - 0.5) * 0.35,
+      vy: (Math.random() - 0.5) * 0.3,
       vz: (Math.random() - 0.5) * 1.2
     });
   }
 
-  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
-  const dustMat = new THREE.PointsMaterial({
-    color: 0xdf8858,
-    size: 4.0,
-    transparent: true,
-    opacity: 0.6,
-    depthWrite: false
-  });
-
-  dustParticles = new THREE.Points(dustGeo, dustMat);
-  dustParticles.name = 'DriftingDust';
-  dustParticles.visible = toggleDust.checked;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+  dustParticles = new THREE.Points(
+    geo,
+    new THREE.PointsMaterial({ color: 0xdf8858, size: 4.0, transparent: true, opacity: 0.55, depthWrite: false })
+  );
+  dustParticles.visible = lyrDust.checked;
   scene.add(dustParticles);
 }
 
 function updateDustParticles() {
-  if (!dustParticles || !toggleDust.checked) return;
-
+  if (!dustParticles || !lyrDust.checked) return;
   const pos = dustParticles.geometry.attributes.position;
   const count = pos.count;
-
   for (let i = 0; i < count; i++) {
     let x = pos.getX(i) + dustVelocities[i].vx;
     let y = pos.getY(i) + dustVelocities[i].vy;
     let z = pos.getZ(i) + dustVelocities[i].vz;
-
     if (x > 2500) x = -2500;
     if (x < -2500) x = 2500;
     if (z > 2500) z = -2500;
     if (z < -2500) z = 2500;
     if (y > 900) y = 20;
     if (y < 20) y = 900;
-
     pos.setXYZ(i, x, y, z);
   }
   pos.needsUpdate = true;
 }
 
-// --- Hover Cursor Markers ---
-
-function createHoverMarkers() {
-  const cursorGeo = new THREE.RingGeometry(12, 18, 32);
-  cursorGeo.rotateX(-Math.PI / 2);
-  const cursorMat = new THREE.MeshBasicMaterial({
-    color: 0x00d2ff,
-    side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.85
-  });
-  hoverCursorMesh = new THREE.Mesh(cursorGeo, cursorMat);
-  hoverCursorMesh.visible = false;
-  scene.add(hoverCursorMesh);
-
-  const solMarkerGeo = new THREE.SphereGeometry(10, 16, 16);
-  const solMarkerMat = new THREE.MeshBasicMaterial({
-    color: 0xff007f,
-    transparent: true,
-    opacity: 0.9
-  });
-  nearestSolMarker = new THREE.Mesh(solMarkerGeo, solMarkerMat);
-  nearestSolMarker.visible = false;
-  scene.add(nearestSolMarker);
-}
-
-// --- Time-of-Day Sun & Atmosphere Engine ---
-
 function updateTimeOfDay(hour) {
+  currentTimeHour = hour;
   const h = Math.floor(hour);
   const m = Math.floor((hour % 1) * 60);
-  timeValDisplay.textContent = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  timeVal.textContent = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 
-  // Solar angle: 6am = 0, 12pm = pi/2, 18pm = pi
   const solarAngle = ((hour - 6.0) / 12.0) * Math.PI;
   const sunElevation = Math.sin(solarAngle);
   const sunAzimuth = Math.cos(solarAngle);
 
-  const sunDist = 5800;
   if (sunLight) {
-    sunLight.position.set(
-      -sunAzimuth * sunDist,
-      Math.max(250, sunElevation * 4800),
-      -1500 + sunAzimuth * 1200
-    );
-
-    // Warm daylight interpolation
+    sunLight.position.set(-sunAzimuth * 5800, Math.max(200, sunElevation * 4800), -1500 + sunAzimuth * 1200);
     const t = Math.max(0.05, Math.sin(solarAngle));
-    const sunColor = new THREE.Color().lerpColors(
-      new THREE.Color(0xff6020),
-      new THREE.Color(0xfff5ea),
-      t
-    );
+    const sunColor = new THREE.Color().lerpColors(new THREE.Color(0xff6020), new THREE.Color(0xfff5ea), t);
     sunLight.color.copy(sunColor);
     sunLight.intensity = 0.6 + 2.0 * t;
 
-    // Atmospheric Fog and Sky
-    const fogColor = new THREE.Color().lerpColors(
-      new THREE.Color(0x180b06), // Twilight amber
-      new THREE.Color(0x351d14), // Noon warm Mars haze
-      t
-    );
+    const fogColor = new THREE.Color().lerpColors(new THREE.Color(0x180b06), new THREE.Color(0x351d14), t);
     scene.fog.color.copy(fogColor);
     scene.background.copy(fogColor);
   }
 }
 
-// --- Timeline Replay Engine ---
+// --- Dynamic Exaggeration ---
+function applyVerticalExaggeration(exag) {
+  currentExag = exag;
+  exagVal.textContent = `${exag.toFixed(1)}×`;
 
+  if (terrainGeometry) updateGeometryHeights(terrainGeometry);
+
+  if (routeLine) {
+    const pos = routeLine.geometry.attributes.position;
+    const tPos = trailLine.geometry.attributes.position;
+    for (let i = 0; i < routePoints.length; i++) {
+      const pt = routePoints[i];
+      const my = (pt.elevation - minElev) * currentExag + 6.0 * currentExag;
+      pos.setY(i, my);
+      tPos.setY(i, my);
+    }
+    pos.needsUpdate = true;
+    tPos.needsUpdate = true;
+  }
+
+  if (roverGroup && routePoints.length > 0) updateTimelineReplay(currentReplaySol);
+
+  if (scienceMarkersGroup) {
+    scienceMarkersGroup.children.forEach(c => {
+      if (c.userData && c.userData.pt) {
+        c.position.y = (c.userData.pt.elevation - minElev) * currentExag + 8.0 * currentExag;
+      }
+    });
+  }
+
+  if (startFlagGroup) {
+    const pStart = routePoints[0];
+    const sy = (pStart.elevation - minElev) * currentExag;
+    startFlagGroup.children[0].position.y = sy + 25 * currentExag;
+    startFlagGroup.children[1].position.y = sy + 46 * currentExag;
+  }
+
+  const meanElev = (minElev + maxElev) / 2.0;
+  controls.target.y = (meanElev - minElev) * currentExag;
+}
+
+// --- Timeline Replay Engine ---
 function updateTimelineReplay(targetSol) {
   currentReplaySol = Math.max(3721, Math.min(4868, targetSol));
-  timelineSlider.value = currentReplaySol;
-  timelineSolBadge.textContent = `SOL ${Math.floor(currentReplaySol)}`;
+  tlSlider.value = currentReplaySol;
+  tlSol.textContent = `SOL ${Math.floor(currentReplaySol)}`;
 
-  // Find latest route point index at or before currentReplaySol
+  // Find index at or before currentReplaySol
   let ptIndex = 0;
   for (let i = 0; i < routePoints.length; i++) {
     if (routePoints[i].sol <= currentReplaySol) {
@@ -815,136 +702,197 @@ function updateTimelineReplay(targetSol) {
 
   const curPt = routePoints[ptIndex];
 
-  // Update Rover Token Position and Heading
-  if (roverTokenGroup) {
+  // Move Rover Token
+  if (roverGroup) {
     const { meshX, meshZ } = localToMesh(curPt.x, curPt.y);
-    const meshY = (curPt.elevation - minElev) * currentExag + 3.0 * currentExag;
-    roverTokenGroup.position.set(meshX, meshY, meshZ);
+    const meshY = (curPt.elevation - minElev) * currentExag + 4.0 * currentExag;
+    roverGroup.position.set(meshX, meshY, meshZ);
 
-    // Rotate rover to face heading direction towards next waypoint
     if (ptIndex < routePoints.length - 1) {
       const nextPt = routePoints[ptIndex + 1];
-      const { meshX: nX, meshZ: nZ } = localToMesh(nextPt.x, nextPt.y);
-      const angle = Math.atan2(nX - meshX, nZ - meshZ);
-      roverTokenGroup.rotation.y = angle;
+      const { meshX: nx, meshZ: nz } = localToMesh(nextPt.x, nextPt.y);
+      roverGroup.rotation.y = Math.atan2(nx - meshX, nz - meshZ);
+    }
+
+    // Follow camera if enabled
+    if (tlFollow && tlFollow.checked) {
+      controls.target.set(meshX, meshY, meshZ);
     }
   }
 
-  // Update Active Trail (draw range 0 to ptIndex + 1)
-  if (activeTrailLine) {
-    activeTrailLine.geometry.setDrawRange(0, ptIndex + 1);
+  // Update glowing active trail range
+  if (trailLine) {
+    trailLine.geometry.setDrawRange(0, ptIndex + 1);
   }
 
-  // Update Future Trail (draw range ptIndex to end)
-  if (futureTrailLine) {
-    futureTrailLine.geometry.setDrawRange(ptIndex, routePoints.length - ptIndex);
-  }
-
-  // Update Telemetry HUD numbers
-  tStatSol.textContent = `${Math.floor(curPt.sol)}`;
-  tStatElev.textContent = `${curPt.elevation.toFixed(1)} m`;
-
-  const distM = curPt.cumDist;
-  tStatDist.textContent = distM >= 1000 ? `${(distM / 1000).toFixed(2)} km` : `${distM.toFixed(1)} m`;
-  tStatClimb.textContent = `+${curPt.cumClimb.toFixed(1)} m`;
+  // Update bottom telemetry bar
+  tsSol.textContent = `${Math.floor(curPt.sol)}`;
+  tsElev.textContent = `${curPt.elevation.toFixed(1)} m`;
+  tsDist.textContent = curPt.cumDist >= 1000 ? `${(curPt.cumDist / 1000).toFixed(2)} km` : `${curPt.cumDist.toFixed(1)} m`;
+  tsClimb.textContent = `+${curPt.cumClimb.toFixed(1)} m`;
+  const net = curPt.elevation - routePoints[0].elevation;
+  tsNet.textContent = `${net >= 0 ? '+' : ''}${net.toFixed(1)} m`;
 }
 
-// --- Dynamic Vertical Exaggeration ---
-
-function applyVerticalExaggeration(exag) {
-  currentExag = exag;
-  exagValueDisplay.textContent = `${exag.toFixed(1)}×`;
-
-  if (!terrainGeometry || !rawHeights) return;
-
-  // 1. Terrain Mesh
-  const posAttr = terrainGeometry.attributes.position;
-  for (let i = 0; i < posAttr.count; i++) {
-    const elev = rawHeights[i];
-    posAttr.setY(i, (elev - minElev) * currentExag);
-  }
-  posAttr.needsUpdate = true;
-  terrainGeometry.computeVertexNormals();
-
-  // 2. Active and Future Route Trails
-  [activeTrailLine, futureTrailLine].forEach(line => {
-    if (line) {
-      const linePosAttr = line.geometry.attributes.position;
-      for (let i = 0; i < routePoints.length; i++) {
-        const pt = routePoints[i];
-        const meshY = (pt.elevation - minElev) * currentExag + 3.5 * currentExag;
-        linePosAttr.setY(i, meshY);
-      }
-      linePosAttr.needsUpdate = true;
-    }
-  });
-
-  // 3. Rover Marker
-  if (roverTokenGroup && routePoints.length > 0) {
-    updateTimelineReplay(currentReplaySol);
-  }
-
-  // 4. Science Markers & Start Flag
-  if (scienceMarkersGroup) {
-    scienceMarkersGroup.children.forEach(child => {
-      if (child.userData && child.userData.pt) {
-        const pt = child.userData.pt;
-        const meshY = (pt.elevation - minElev) * currentExag + 6.0 * currentExag;
-        child.position.y = meshY;
-      }
-    });
-  }
-
-  if (startFlagGroup) {
-    const startPt = routePoints[0];
-    const sY = (startPt.elevation - minElev) * currentExag;
-    startFlagGroup.children[0].position.y = sY + 24 * currentExag; // pole
-    startFlagGroup.children[1].position.y = sY + 44 * currentExag; // flag
-    startFlagGroup.children[2].position.y = sY + 48 * currentExag; // sphere
-  }
-
-  // 5. Boxwork Perimeter
-  if (boxworkGroup) {
-    const boundaryLine = boxworkGroup.getObjectByName('BoxworkPerimeterLine');
-    if (boundaryLine) {
-      const boundaryPosAttr = boundaryLine.geometry.attributes.position;
-      const count = boundaryPosAttr.count;
-      for (let i = 0; i < count; i++) {
-        const mx = boundaryPosAttr.getX(i);
-        const mz = boundaryPosAttr.getZ(i);
-        const { lx, ly } = meshToLocal(mx, mz);
-        const { col, row } = localToGrid(lx, ly);
-        const elev = sampleGridBilinear(rawHeights, col, row);
-        boundaryPosAttr.setY(i, (elev - minElev) * currentExag + 4.0 * currentExag);
-      }
-      boundaryPosAttr.needsUpdate = true;
-    }
-  }
-
-  // Update OrbitControls target height
-  const meanElev = (minElev + maxElev) / 2.0;
-  controls.target.y = (meanElev - minElev) * currentExag;
+// --- Hover & Click Point Inspector ---
+function samplePixelFromContext(ctx, width, height, lx, ly) {
+  if (!ctx) return null;
+  const px = Math.floor((lx / TERRAIN_WIDTH_M) * width);
+  const py = Math.floor((1.0 - ly / TERRAIN_HEIGHT_M) * height);
+  const cx = Math.max(0, Math.min(width - 1, px));
+  const cy = Math.max(0, Math.min(height - 1, py));
+  const data = ctx.getImageData(cx, cy, 1, 1).data;
+  return { r: data[0], g: data[1], b: data[2], a: data[3] };
 }
 
-// --- Cinematic 4-Second Fly-in ---
+function updatePointInspector(lx, ly) {
+  const { col, row } = localToGrid(lx, ly);
+  const elev = sampleGridBilinear(rawHeights, col, row);
+  const slope = sampleGridBilinear(rawSlopes, col, row);
+  const { lon, lat } = localToMarsGeo(lx, ly);
+
+  // Slope tier
+  let tierLabel = '< 15° Easy';
+  let tierClass = 'tier-easy';
+  if (slope >= 25.0) {
+    tierLabel = '> 25° Hazardous';
+    tierClass = 'tier-haz';
+  } else if (slope >= 15.0) {
+    tierLabel = '15°–25° Moderate';
+    tierClass = 'tier-mod';
+  }
+
+  // Nearest rover Sol
+  let minD2 = Infinity;
+  let nearestPt = null;
+  for (let i = 0; i < routePoints.length; i++) {
+    const p = routePoints[i];
+    const dx = p.x - lx;
+    const dy = p.y - ly;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < minD2) {
+      minD2 = d2;
+      nearestPt = p;
+    }
+  }
+  const distM = Math.sqrt(minD2);
+
+  // Real CRISM & THEMIS values
+  const hyd = samplePixelFromContext(crismHydCtx, 27, 28, lx, ly);
+  const phy = samplePixelFromContext(crismPhyCtx, 27, 28, lx, ly);
+  const th = samplePixelFromContext(themisCtx, 50, 50, lx, ly);
+
+  // Update DOM Measured
+  iElev.textContent = `${elev.toFixed(1)} m`;
+  iSlope.textContent = `${slope.toFixed(1)}°`;
+  iTier.textContent = tierLabel;
+  iTier.className = `iv ${tierClass}`;
+  iXy.textContent = `X ${lx.toFixed(0)} m, Y ${ly.toFixed(0)} m`;
+  iLonlat.textContent = `${lon.toFixed(4)}°E, ${Math.abs(lat).toFixed(4)}°S`;
+
+  if (nearestPt) {
+    const distStr = distM < 8 ? 'At rover waypoint' : `${Math.round(distM)} m away`;
+    iSol.textContent = `Sol ${nearestPt.sol} (${distStr})`;
+  }
+
+  if (hyd) {
+    iCrismHyd.textContent = hyd.a > 0 ? `R:${hyd.r} G:${hyd.g} B:${hyd.b} (Covered)` : 'No coverage';
+  } else {
+    iCrismHyd.textContent = 'Loading…';
+  }
+
+  if (phy) {
+    iCrismPhy.textContent = phy.a > 0 ? `R:${phy.r} G:${phy.g} B:${phy.b} (Covered)` : 'No coverage';
+  } else {
+    iCrismPhy.textContent = 'Loading…';
+  }
+
+  if (th) {
+    iThemis.textContent = `${th.r} DN (relative)`;
+  } else {
+    iThemis.textContent = 'Loading…';
+  }
+
+  // Simulated Game Values (deterministic functions from docs/SIMULATED_DATA.md)
+  const baseRate = 20.0;
+  const elevFactor = 1.0 + (elev - (-4131.74)) / 3000.0 * 0.15;
+  const timeFactor = 1.0 + 0.08 * Math.cos((currentTimeHour - 14.0) * Math.PI / 12.0);
+  const doseRate = baseRate * elevFactor * timeFactor;
+  iRad.textContent = `${doseRate.toFixed(1)} µSv/h`;
+
+  const baseTau = 0.60;
+  const spatialWave = 0.15 * Math.sin(lx / 800.0) * Math.cos(ly / 600.0);
+  const elevEffect = 0.05 * (elev - (-4131.74)) / 700.0;
+  const tau = baseTau + spatialWave + elevEffect;
+  const visKm = 15.0 / Math.max(tau, 0.1);
+  iDust.textContent = `τ = ${tau.toFixed(2)} (${visKm.toFixed(1)} km)`;
+
+  const noonTemp = -15.0;
+  const diurnalAmp = 45.0;
+  const diurnalPhase = Math.cos((currentTimeHour - 14.0) * Math.PI / 12.0);
+  const surfaceTemp = noonTemp + diurnalAmp * diurnalPhase - 0.3 * slope - 0.005 * (elev - (-4131.74));
+  iTemp.textContent = `${surfaceTemp.toFixed(1)} °C`;
+
+  const baseWind = 5.0 + 3.0 * Math.abs(Math.sin((currentTimeHour - 12.0) * Math.PI / 12.0)) + 1.5 * Math.sin(slope * Math.PI / 60.0);
+  const windDir = Math.round(((lx * 7.3 + ly * 13.1) % 360 + 360) % 360);
+  iWind.textContent = `${baseWind.toFixed(1)} m/s, ${windDir}°`;
+
+  const sigStrength = -70.0 + 3.0 * (elev - (-4131.74)) / 700.0 - 0.15 * slope;
+  iSignal.textContent = `${sigStrength.toFixed(1)} dBm`;
+
+  const slopeCost = Math.min(slope / 35.0 * 60.0, 60.0);
+  const roughnessCost = Math.min(slope * slope / 900.0 * 25.0, 25.0);
+  const elevCost = 15.0 * (elev - (-4131.74)) / 700.0;
+  const mobCost = Math.min(100.0, Math.max(0.0, slopeCost + roughnessCost + elevCost));
+  iMobility.textContent = `${Math.round(mobCost)} / 100`;
+
+  // Make sure inspector panel is open
+  if (!inspectorPanel.classList.contains('open')) {
+    inspectorPanel.classList.add('open');
+  }
+}
+
+// Raycaster & Mouse Handling
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2(-9999, -9999);
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const rayHit = new THREE.Vector3();
+
+function handlePointerInspection() {
+  if (isPinned) return;
+  const now = performance.now();
+  if (now - lastRaycastTime < 33) return; // Throttle to 30 FPS
+  lastRaycastTime = now;
+
+  raycaster.setFromCamera(mouse, camera);
+
+  // Fast mathematical ray intersection with horizontal ground bounds
+  if (raycaster.ray.intersectPlane(groundPlane, rayHit)) {
+    if (Math.abs(rayHit.x) <= 2500 && Math.abs(rayHit.z) <= 2500) {
+      const { lx, ly } = meshToLocal(rayHit.x, rayHit.z);
+      updatePointInspector(lx, ly);
+    }
+  }
+}
+
+// --- Cinematic Fly-in Intro ---
+let isIntroActive = false;
+let introStartTime = 0;
+const INTRO_DURATION = 4000;
 
 function startCinematicIntro() {
   isIntroActive = true;
   btnSkipIntro.style.display = 'block';
 
-  // High altitude overhead starting camera pose
-  const startCamPos = new THREE.Vector3(0, 8000, 4800);
-  const startLookAt = new THREE.Vector3(0, 300, 0);
+  const startCam = new THREE.Vector3(0, 7500, 4500);
+  const startTarget = new THREE.Vector3(0, 200, 0);
 
-  // Focus destination: close-up on Boxwork core zone
   const { meshX, meshZ } = localToMesh(2430, 2480);
-  const boxworkElev = -3613.0;
-  const boxworkMeshY = (boxworkElev - minElev) * currentExag;
-  const endCamPos = new THREE.Vector3(meshX + 180, boxworkMeshY + 750, meshZ + 950);
-  const endLookAt = new THREE.Vector3(meshX, boxworkMeshY, meshZ);
+  const endTarget = new THREE.Vector3(meshX, (-3613.0 - minElev) * currentExag, meshZ);
+  const endCam = new THREE.Vector3(meshX + 180, endTarget.y + 700, meshZ + 900);
 
-  camera.position.copy(startCamPos);
-  controls.target.copy(startLookAt);
+  camera.position.copy(startCam);
+  controls.target.copy(startTarget);
   controls.update();
 
   introStartTime = performance.now();
@@ -952,20 +900,19 @@ function startCinematicIntro() {
   function animateIntro(now) {
     if (!isIntroActive) return;
     const elapsed = now - introStartTime;
-    const progress = Math.min(1.0, elapsed / INTRO_DURATION);
-    const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+    const p = Math.min(1.0, elapsed / INTRO_DURATION);
+    const ease = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
 
-    camera.position.lerpVectors(startCamPos, endCamPos, ease);
-    controls.target.lerpVectors(startLookAt, endLookAt, ease);
+    camera.position.lerpVectors(startCam, endCam, ease);
+    controls.target.lerpVectors(startTarget, endTarget, ease);
     controls.update();
 
-    if (progress < 1.0) {
+    if (p < 1.0) {
       requestAnimationFrame(animateIntro);
     } else {
       endCinematicIntro();
     }
   }
-
   requestAnimationFrame(animateIntro);
 }
 
@@ -975,328 +922,184 @@ function endCinematicIntro() {
   btnSkipIntro.style.display = 'none';
 
   const { meshX, meshZ } = localToMesh(2430, 2480);
-  const boxworkElev = -3613.0;
-  const boxworkMeshY = (boxworkElev - minElev) * currentExag;
-  camera.position.set(meshX + 180, boxworkMeshY + 750, meshZ + 950);
-  controls.target.set(meshX, boxworkMeshY, meshZ);
+  const targetY = (-3613.0 - minElev) * currentExag;
+  camera.position.set(meshX + 180, targetY + 700, meshZ + 900);
+  controls.target.set(meshX, targetY, meshZ);
   controls.update();
 }
 
-// --- Hover Readout & Click Handler for Science Markers ---
-
-function updateHoverReadout() {
-  if (!isMouseOverCanvas || !terrainMesh || !rawHeights || !rawSlopes) {
-    resetReadoutDisplay();
-    if (hoverCursorMesh) hoverCursorMesh.visible = false;
-    if (nearestSolMarker) nearestSolMarker.visible = false;
-    return;
-  }
-
-  raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObject(terrainMesh);
-
-  if (intersects.length > 0) {
-    const hit = intersects[0];
-    const hitPoint = hit.point;
-
-    const { lx, ly } = meshToLocal(hitPoint.x, hitPoint.z);
-    const { col, row } = localToGrid(lx, ly);
-
-    const elev = sampleGridBilinear(rawHeights, col, row);
-    const slopeDeg = sampleGridBilinear(rawSlopes, col, row);
-
-    let hazardClass = 'Easy (< 15°)';
-    let hazardStyleClass = 'hazard-easy';
-    if (slopeDeg >= 25.0) {
-      hazardClass = 'Hazardous (> 25°)';
-      hazardStyleClass = 'hazard-hazardous';
-    } else if (slopeDeg >= 15.0) {
-      hazardClass = 'Moderate (15°–25°)';
-      hazardStyleClass = 'hazard-moderate';
-    }
-
-    let minD2 = Infinity;
-    let nearestPt = null;
-    for (let i = 0; i < routePoints.length; i++) {
-      const p = routePoints[i];
-      const dx = p.x - lx;
-      const dy = p.y - ly;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < minD2) {
-        minD2 = d2;
-        nearestPt = p;
-      }
-    }
-
-    const distM = Math.sqrt(minD2);
-    const { lon, lat } = localToMarsGeo(lx, ly);
-
-    readoutElev.textContent = `${elev.toFixed(1)} m`;
-    readoutSlope.textContent = `${slopeDeg.toFixed(1)}°`;
-    readoutHazard.textContent = hazardClass;
-    readoutHazard.className = `cell-val ${hazardStyleClass}`;
-
-    if (nearestPt) {
-      const distStr = distM < 8 ? '(At rover waypoint)' : `(${Math.round(distM)} m away)`;
-      readoutSol.textContent = `Sol ${nearestPt.sol} ${distStr}`;
-
-      if (nearestSolMarker) {
-        const { meshX: solX, meshZ: solZ } = localToMesh(nearestPt.x, nearestPt.y);
-        const solY = (nearestPt.elevation - minElev) * currentExag + 5.0 * currentExag;
-        nearestSolMarker.position.set(solX, solY, solZ);
-        nearestSolMarker.visible = true;
-      }
-    }
-
-    readoutLocalCoords.textContent = `X: ${lx.toFixed(0)} m | Y: ${ly.toFixed(0)} m`;
-    readoutGeoCoords.textContent = `${lon.toFixed(4)}° E, ${Math.abs(lat).toFixed(4)}° S`;
-
-    hoverStateBadge.textContent = 'SURFACE TELEMETRY ACTIVE';
-    hoverStateBadge.classList.add('active');
-
-    if (hoverCursorMesh) {
-      hoverCursorMesh.position.set(hitPoint.x, hitPoint.y + 1.5, hitPoint.z);
-      hoverCursorMesh.visible = true;
-    }
-  } else {
-    resetReadoutDisplay();
-    if (hoverCursorMesh) hoverCursorMesh.visible = false;
-    if (nearestSolMarker) nearestSolMarker.visible = false;
-  }
-}
-
-function resetReadoutDisplay() {
-  readoutElev.textContent = '—';
-  readoutSlope.textContent = '—';
-  readoutHazard.textContent = '—';
-  readoutHazard.className = 'cell-val';
-  readoutSol.textContent = '—';
-  readoutLocalCoords.textContent = '—';
-  readoutGeoCoords.textContent = '—';
-  hoverStateBadge.textContent = 'HOVER OVER TERRAIN';
-  hoverStateBadge.classList.remove('active');
-}
-
-// --- Camera Navigation Shortcuts ---
-
-function animateCameraTo(targetCamPos, targetLookAt, duration = 1200) {
-  const startCamPos = camera.position.clone();
-  const startLookAt = controls.target.clone();
-  const startTime = performance.now();
-
-  function updateCam() {
-    const elapsed = performance.now() - startTime;
-    const t = Math.min(1.0, elapsed / duration);
-    const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-
-    camera.position.lerpVectors(startCamPos, targetCamPos, ease);
-    controls.target.lerpVectors(startLookAt, targetLookAt, ease);
-    controls.update();
-
-    if (t < 1.0) {
-      cameraAnimId = requestAnimationFrame(updateCam);
-    } else {
-      cameraAnimId = null;
-    }
-  }
-
-  if (cameraAnimId) cancelAnimationFrame(cameraAnimId);
-  cameraAnimId = requestAnimationFrame(updateCam);
-}
-
-function resetCameraView() {
-  const meanElev = (minElev + maxElev) / 2.0;
-  const targetLookAt = new THREE.Vector3(0, (meanElev - minElev) * currentExag, 0);
-  const targetCamPos = new THREE.Vector3(0, 3400, 3900);
-  animateCameraTo(targetCamPos, targetLookAt, 1400);
-}
-
-function focusBoxworkView() {
-  const { meshX, meshZ } = localToMesh(2430, 2480);
-  const boxworkElev = -3613.0;
-  const boxworkMeshY = (boxworkElev - minElev) * currentExag;
-
-  const targetLookAt = new THREE.Vector3(meshX, boxworkMeshY, meshZ);
-  const targetCamPos = new THREE.Vector3(
-    meshX + 180,
-    boxworkMeshY + 700 * Math.max(1.0, currentExag * 0.75),
-    meshZ + 900
-  );
-
-  animateCameraTo(targetCamPos, targetLookAt, 1600);
-}
-
 // --- UI Event Listeners ---
-
 function bindUIEvents() {
-  // Exaggeration Slider
-  exagSlider.addEventListener('input', (e) => {
-    applyVerticalExaggeration(parseFloat(e.target.value));
-  });
-
-  // Time of Day Slider
-  timeSlider.addEventListener('input', (e) => {
-    updateTimeOfDay(parseFloat(e.target.value));
-  });
-
-  // Dust Particles Toggle
-  toggleDust.addEventListener('change', () => {
-    if (dustParticles) dustParticles.visible = toggleDust.checked;
-  });
-
-  // Skip Intro Button
-  btnSkipIntro.addEventListener('click', endCinematicIntro);
-
-  // Satellite Layer Toggle
-  toggleSatellite.addEventListener('change', () => {
-    if (terrainMesh) {
-      if (toggleSatellite.checked) {
-        terrainMesh.material.map = satelliteTexRef;
-        terrainMesh.material.color.set(0xffffff);
-      } else {
-        terrainMesh.material.map = null;
-        terrainMesh.material.color.set(0xb8684a);
-      }
-      terrainMesh.material.needsUpdate = true;
-    }
-  });
-
-  // Slope Hazard Overlay Toggle & Opacity Slider
-  toggleSlope.addEventListener('change', () => {
-    if (hazardMesh) hazardMesh.visible = toggleSlope.checked;
-  });
-  slopeOpacitySlider.addEventListener('input', (e) => {
-    const val = parseInt(e.target.value, 10);
-    slopeOpacityVal.textContent = `${val}%`;
-    if (hazardMesh) hazardMesh.material.opacity = val / 100.0;
-  });
-
-  // CRISM Hydrated Minerals Toggle & Opacity Slider
-  toggleCrismHyd.addEventListener('change', () => {
-    if (crismHydMesh) crismHydMesh.visible = toggleCrismHyd.checked;
-  });
-  crismHydOpacitySlider.addEventListener('input', (e) => {
-    const val = parseInt(e.target.value, 10);
-    crismHydOpacityVal.textContent = `${val}%`;
-    if (crismHydMesh) crismHydMesh.material.opacity = val / 100.0;
-  });
-
-  // CRISM Phyllosilicates Toggle & Opacity Slider
-  toggleCrismPhy.addEventListener('change', () => {
-    if (crismPhyMesh) crismPhyMesh.visible = toggleCrismPhy.checked;
-  });
-  crismPhyOpacitySlider.addEventListener('input', (e) => {
-    const val = parseInt(e.target.value, 10);
-    crismPhyOpacityVal.textContent = `${val}%`;
-    if (crismPhyMesh) crismPhyMesh.material.opacity = val / 100.0;
-  });
-
-  // THEMIS Thermal Brightness Toggle & Opacity Slider
-  toggleThemis.addEventListener('change', () => {
-    if (themisMesh) themisMesh.visible = toggleThemis.checked;
-  });
-  themisOpacitySlider.addEventListener('input', (e) => {
-    const val = parseInt(e.target.value, 10);
-    themisOpacityVal.textContent = `${val}%`;
-    if (themisMesh) themisMesh.material.opacity = val / 100.0;
-  });
-
-  // Trajectory & Boxwork Toggles
-  toggleRoute.addEventListener('change', () => {
-    if (routeGroup) routeGroup.visible = toggleRoute.checked;
-    if (scienceMarkersGroup) scienceMarkersGroup.visible = toggleRoute.checked;
-    if (startFlagGroup) startFlagGroup.visible = toggleRoute.checked;
-  });
-
-  toggleBoxwork.addEventListener('change', () => {
-    if (boxworkGroup) boxworkGroup.visible = toggleBoxwork.checked;
-  });
-
-  // Camera Action Buttons
-  btnResetCam.addEventListener('click', resetCameraView);
-  btnFocusBoxwork.addEventListener('click', focusBoxworkView);
-
-  // Timeline Play / Pause
-  btnPlayPause.addEventListener('click', () => {
-    isPlaying = !isPlaying;
-    btnPlayPause.textContent = isPlaying ? '⏸ PAUSE' : '▶ PLAY';
-    lastReplayTime = performance.now();
-  });
-
-  // Timeline Slider Drag
-  timelineSlider.addEventListener('input', (e) => {
-    isPlaying = false;
-    btnPlayPause.textContent = '▶ PLAY';
-    updateTimelineReplay(parseFloat(e.target.value));
-  });
-
-  // Speed Buttons
-  speedButtons.forEach(btn => {
+  // Panel Toggles
+  document.querySelectorAll('.panel-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
-      speedButtons.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      replaySpeed = parseFloat(btn.dataset.speed);
+      const targetId = btn.dataset.target;
+      const panel = document.getElementById(targetId);
+      if (panel) {
+        panel.classList.toggle('open');
+        btn.textContent = panel.classList.contains('open')
+          ? (panel.classList.contains('right') ? '▶' : '◀')
+          : (panel.classList.contains('right') ? '◀' : '▶');
+      }
     });
   });
 
-  // Science Popup Close Button
-  popupCloseBtn.addEventListener('click', () => {
-    sciencePopup.classList.add('hidden');
+  // Layer Toggles & Opacity Sliders
+  if (lyrSat) lyrSat.addEventListener('change', () => { if (terrainMesh) terrainMesh.visible = lyrSat.checked; });
+  if (exagSlider) exagSlider.addEventListener('input', e => applyVerticalExaggeration(parseFloat(e.target.value)));
+
+  if (lyrSlope) lyrSlope.addEventListener('change', () => { if (hazardMesh) hazardMesh.visible = lyrSlope.checked; });
+  if (slopeOpacity) slopeOpacity.addEventListener('input', e => {
+    slopeOv.textContent = `${e.target.value} %`;
+    if (hazardMesh) hazardMesh.material.opacity = parseInt(e.target.value, 10) / 100.0;
   });
 
-  // Canvas Click: Raycast to detect click on Science Waypoints
+  if (lyrCrismHyd) lyrCrismHyd.addEventListener('change', () => { if (crismHydMesh) crismHydMesh.visible = lyrCrismHyd.checked; });
+  if (crismHydOpacity) crismHydOpacity.addEventListener('input', e => {
+    crismHydOv.textContent = `${e.target.value} %`;
+    if (crismHydMesh) crismHydMesh.material.opacity = parseInt(e.target.value, 10) / 100.0;
+  });
+
+  if (lyrCrismPhy) lyrCrismPhy.addEventListener('change', () => { if (crismPhyMesh) crismPhyMesh.visible = lyrCrismPhy.checked; });
+  if (crismPhyOpacity) crismPhyOpacity.addEventListener('input', e => {
+    crismPhyOv.textContent = `${e.target.value} %`;
+    if (crismPhyMesh) crismPhyMesh.material.opacity = parseInt(e.target.value, 10) / 100.0;
+  });
+
+  if (lyrThemis) lyrThemis.addEventListener('change', () => { if (themisMesh) themisMesh.visible = lyrThemis.checked; });
+  if (themisOpacity) themisOpacity.addEventListener('input', e => {
+    themisOv.textContent = `${e.target.value} %`;
+    if (themisMesh) themisMesh.material.opacity = parseInt(e.target.value, 10) / 100.0;
+  });
+
+  if (lyrRoute) lyrRoute.addEventListener('change', () => {
+    if (routeGroup) routeGroup.visible = lyrRoute.checked;
+    if (scienceMarkersGroup) scienceMarkersGroup.visible = lyrRoute.checked;
+    if (startFlagGroup) startFlagGroup.visible = lyrRoute.checked;
+  });
+
+  if (lyrBoxwork) lyrBoxwork.addEventListener('change', () => {
+    if (boxworkGroup) boxworkGroup.visible = lyrBoxwork.checked;
+  });
+
+  if (routeColorMode) routeColorMode.addEventListener('change', updateRouteColoring);
+
+  if (timeSlider) timeSlider.addEventListener('input', e => updateTimeOfDay(parseFloat(e.target.value)));
+  if (lyrDust) lyrDust.addEventListener('change', () => { if (dustParticles) dustParticles.visible = lyrDust.checked; });
+
+  if (qualityPreset) qualityPreset.addEventListener('change', e => {
+    currentQuality = e.target.value;
+    const cfg = QUALITY_SETTINGS[currentQuality];
+    renderer.setPixelRatio(cfg.pixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (satTexture) createTerrainLayers(satTexture, hazardMesh.material.map, crismHydMesh.material.map, crismPhyMesh.material.map, themisMesh.material.map);
+    createDustParticles();
+  });
+
+  if (btnReset) btnReset.addEventListener('click', () => {
+    controls.target.set(0, ((-3772.0 - minElev) * currentExag), 0);
+    camera.position.set(0, 3400, 3900);
+    controls.update();
+  });
+
+  if (btnBoxwork) btnBoxwork.addEventListener('click', () => {
+    const { meshX, meshZ } = localToMesh(2430, 2480);
+    const targetY = (-3613.0 - minElev) * currentExag;
+    controls.target.set(meshX, targetY, meshZ);
+    camera.position.set(meshX + 180, targetY + 700, meshZ + 900);
+    controls.update();
+  });
+
+  if (btnSkipIntro) btnSkipIntro.addEventListener('click', endCinematicIntro);
+  controls.addEventListener('start', () => { if (isIntroActive) endCinematicIntro(); });
+
+  // Timeline Controls
+  if (btnPlay) btnPlay.addEventListener('click', () => {
+    isPlaying = !isPlaying;
+    btnPlay.textContent = isPlaying ? '⏸' : '▶';
+    lastReplayTime = performance.now();
+  });
+
+  if (tlSlider) tlSlider.addEventListener('input', e => {
+    isPlaying = false;
+    if (btnPlay) btnPlay.textContent = '▶';
+    updateTimelineReplay(parseFloat(e.target.value));
+  });
+
+  speedBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      speedBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      replaySpeed = parseFloat(btn.dataset.sp);
+    });
+  });
+
+  // Inspector Pin / Unpin
+  if (inspectorUnpin) inspectorUnpin.addEventListener('click', () => {
+    isPinned = false;
+    inspectorMode.textContent = '(hover)';
+    inspectorUnpin.style.display = 'none';
+  });
+
+  // Canvas Click: Pin point or open Science Marker
   renderer.domElement.addEventListener('click', () => {
-    if (!scienceMarkersGroup) return;
-
     raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(scienceMarkersGroup.children, false);
 
-    if (intersects.length > 0) {
-      const hitObj = intersects[0].object;
-      if (hitObj.userData && hitObj.userData.isSciencePin) {
-        popupTitle.textContent = hitObj.userData.title;
-        popupSol.textContent = hitObj.userData.solLabel;
+    // 1. Check Science Markers
+    if (scienceMarkersGroup) {
+      const hits = raycaster.intersectObjects(scienceMarkersGroup.children, false);
+      if (hits.length > 0 && hits[0].object.userData.isSciencePin) {
+        const u = hits[0].object.userData;
+        popupTitle.textContent = u.title;
+        popupSol.textContent = u.solLabel;
         sciencePopup.classList.remove('hidden');
+        return;
+      }
+    }
+
+    // 2. Pin clicked terrain point
+    if (raycaster.ray.intersectPlane(groundPlane, rayHit)) {
+      if (Math.abs(rayHit.x) <= 2500 && Math.abs(rayHit.z) <= 2500) {
+        const { lx, ly } = meshToLocal(rayHit.x, rayHit.z);
+        isPinned = true;
+        pinnedPoint = { lx, ly };
+        inspectorMode.textContent = '(pinned)';
+        inspectorUnpin.style.display = 'block';
+        updatePointInspector(lx, ly);
       }
     }
   });
 
+  if (popupClose) popupClose.addEventListener('click', () => sciencePopup.classList.add('hidden'));
+
   // Pointer Move
-  window.addEventListener('pointermove', (e) => {
+  window.addEventListener('pointermove', e => {
     const rect = renderer.domElement.getBoundingClientRect();
-    if (
-      e.clientX >= rect.left &&
-      e.clientX <= rect.right &&
-      e.clientY >= rect.top &&
-      e.clientY <= rect.bottom
-    ) {
-      isMouseOverCanvas = true;
+    if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-    } else {
-      isMouseOverCanvas = false;
-      mouse.x = -9999;
-      mouse.y = -9999;
+      handlePointerInspection();
     }
   });
 
-  window.addEventListener('pointerleave', () => {
-    isMouseOverCanvas = false;
-    mouse.x = -9999;
-    mouse.y = -9999;
-  });
-
-  // Window Resize
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   });
 }
 
-// --- Asset Loader & Initialization ---
+// Helper to draw image into an offscreen canvas for instantaneous pixel sampling
+function createOffscreenContext(image) {
+  const c = document.createElement('canvas');
+  c.width = image.width || image.videoWidth || 27;
+  c.height = image.height || image.videoHeight || 28;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(image, 0, 0);
+  return ctx;
+}
 
+// --- Asset Loader & Application Entry ---
 async function loadAssetsAndInit() {
   try {
     setupLights();
@@ -1304,8 +1107,8 @@ async function loadAssetsAndInit() {
     updateTimeOfDay(14.0);
 
     // 1. Manifest
-    loadingStatus.textContent = 'Reading topography metadata...';
-    progressBar.style.width = '12%';
+    loadingStatus.textContent = 'Reading terrain metadata…';
+    progressBar.style.width = '15%';
     const manifestResp = await fetch('/data/manifest.json');
     const manifest = await manifestResp.json();
     if (manifest.elevation_summary) {
@@ -1313,89 +1116,78 @@ async function loadAssetsAndInit() {
       maxElev = manifest.elevation_summary.max_elevation_m;
     }
 
-    // 2. Terrain Height Binary
-    loadingStatus.textContent = 'Loading 1025x1025 elevation mesh binary...';
-    progressBar.style.width = '28%';
-    const heightResp = await fetch('/data/terrain_height.bin');
-    const heightBuffer = await heightResp.arrayBuffer();
-    rawHeights = new Float32Array(heightBuffer);
+    // 2. Heightmap Binary
+    loadingStatus.textContent = 'Downloading 1025×1025 elevation grid…';
+    progressBar.style.width = '35%';
+    const hResp = await fetch('/data/terrain_height.bin');
+    rawHeights = new Float32Array(await hResp.arrayBuffer());
 
     // 3. Slope Binary
-    loadingStatus.textContent = 'Loading 5m slope gradient grid...';
-    progressBar.style.width = '42%';
-    const slopeResp = await fetch('/data/slope_5m.bin');
-    const slopeBuffer = await slopeResp.arrayBuffer();
-    rawSlopes = new Float32Array(slopeBuffer);
+    loadingStatus.textContent = 'Downloading 5 m slope baseline grid…';
+    progressBar.style.width = '55%';
+    const sResp = await fetch('/data/slope_5m.bin');
+    rawSlopes = new Float32Array(await sResp.arrayBuffer());
 
     // 4. Route JSON
-    loadingStatus.textContent = 'Parsing Curiosity traverse telemetry...';
-    progressBar.style.width = '55%';
-    const routeResp = await fetch('/data/route.json');
-    routeData = await routeResp.json();
-    routePoints = routeData.points;
+    loadingStatus.textContent = 'Loading Curiosity traverse route…';
+    progressBar.style.width = '70%';
+    const rResp = await fetch('/data/route.json');
+    const rData = await rResp.json();
+    routePoints = rData.points;
 
-    // 5. Load Textures
-    loadingStatus.textContent = 'Downloading HiRISE, CRISM & THEMIS textures...';
-    progressBar.style.width = '75%';
-
+    // 5. Textures (HiRISE, Slope, CRISM Hyd, CRISM Phy, THEMIS)
+    loadingStatus.textContent = 'Downloading multi-spectral layers…';
+    progressBar.style.width = '85%';
     const texLoader = new THREE.TextureLoader();
 
-    function loadNearestTex(url) {
-      return new Promise((resolve, reject) => {
-        texLoader.load(url, tex => {
-          tex.magFilter = THREE.NearestFilter;
-          tex.minFilter = THREE.NearestFilter;
-          tex.generateMipmaps = false;
-          tex.colorSpace = THREE.SRGBColorSpace;
-          resolve(tex);
-        }, undefined, reject);
+    function loadNearest(url) {
+      return new Promise((res, rej) => {
+        texLoader.load(url, t => {
+          t.magFilter = THREE.NearestFilter;
+          t.minFilter = THREE.NearestFilter;
+          t.generateMipmaps = false;
+          t.colorSpace = THREE.SRGBColorSpace;
+          res(t);
+        }, undefined, rej);
       });
     }
 
     const [satTex, slopeTex, crismHydTex, crismPhyTex, themisTex] = await Promise.all([
-      new Promise((resolve, reject) => {
-        texLoader.load('/data/terrain_texture.png', tex => {
-          tex.colorSpace = THREE.SRGBColorSpace;
-          tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-          resolve(tex);
-        }, undefined, reject);
-      }),
-      loadNearestTex('/data/slope_5m_classified.png'),
-      loadNearestTex('/data/crism_hyd_crop.png'),
-      loadNearestTex('/data/crism_phy_crop.png'),
-      loadNearestTex('/data/themis_crop.png')
+      new Promise((res, rej) => texLoader.load('/data/terrain_texture.png', t => { t.colorSpace = THREE.SRGBColorSpace; res(t); }, undefined, rej)),
+      loadNearest('/data/slope_5m_classified.png'),
+      loadNearest('/data/crism_hyd_crop.png'),
+      loadNearest('/data/crism_phy_crop.png'),
+      loadNearest('/data/themis_crop.png')
     ]);
 
-    // 6. Build Scene Entities
-    loadingStatus.textContent = 'Draping multi-spectral layers & science markers...';
-    progressBar.style.width = '90%';
+    // Create offscreen contexts for pixel inspection
+    crismHydCtx = createOffscreenContext(crismHydTex.image);
+    crismPhyCtx = createOffscreenContext(crismPhyTex.image);
+    themisCtx = createOffscreenContext(themisTex.image);
 
-    createTerrainAndDrapedLayers(satTex, slopeTex, crismHydTex, crismPhyTex, themisTex);
+    // 6. Build Scene Objects
+    loadingStatus.textContent = 'Building 3D terrain and layers…';
+    progressBar.style.width = '95%';
+
+    createTerrainLayers(satTex, slopeTex, crismHydTex, crismPhyTex, themisTex);
     createRouteAndRover();
     createScienceMarkersAndFlag();
     createBoxworkCoreZone();
     createDustParticles();
-    createHoverMarkers();
 
-    // Set initial center height for controls target
-    const meanElev = (minElev + maxElev) / 2.0;
-    controls.target.set(0, (meanElev - minElev) * currentExag, 0);
-
-    // 7. Finish Loading
+    // 7. Complete Loading
     progressBar.style.width = '100%';
-    const totalLoadTimeMs = Math.round(performance.now() - appStartTime);
-    loadValDisplay.textContent = `${totalLoadTimeMs} ms`;
+    const totalLoadTime = Math.round(performance.now() - appStartTime);
+    perfReadout.textContent = `FPS 60 | Load ${totalLoadTime} ms`;
 
     setTimeout(() => {
       loadingOverlay.style.opacity = '0';
       setTimeout(() => {
         loadingOverlay.style.display = 'none';
-        // Launch 4-second cinematic fly-in
         startCinematicIntro();
       }, 500);
-    }, 400);
+    }, 300);
 
-    // Start Render Loop
     lastReplayTime = performance.now();
     animate();
 
@@ -1406,57 +1198,48 @@ async function loadAssetsAndInit() {
   }
 }
 
-// --- Main Animation Loop ---
-
+// --- Animation Loop ---
 function animate() {
   requestAnimationFrame(animate);
 
   const now = performance.now();
 
-  // 1. Frame Rate Tracking
+  // FPS Counter
   frameCount++;
   if (now - lastFpsUpdateTime >= 1000) {
     currentFps = Math.round((frameCount * 1000) / (now - lastFpsUpdateTime));
-    fpsValDisplay.textContent = `${currentFps}`;
+    const loadStr = perfReadout.textContent.split('|')[1] || '';
+    perfReadout.textContent = `FPS ${currentFps} |${loadStr}`;
     frameCount = 0;
     lastFpsUpdateTime = now;
   }
 
-  // 2. Timeline Replay Playback
+  // Timeline Playback
   if (isPlaying) {
     const deltaSec = (now - lastReplayTime) / 1000.0;
     let nextSol = currentReplaySol + deltaSec * replaySpeed;
     if (nextSol > 4868) {
       nextSol = 4868;
       isPlaying = false;
-      btnPlayPause.textContent = '▶ PLAY';
+      if (btnPlay) btnPlay.textContent = '▶';
     }
     updateTimelineReplay(nextSol);
   }
   lastReplayTime = now;
 
-  // 3. Rover Beacon Pulsing Ring
-  if (roverBeaconRing) {
-    const scale = 1.0 + 0.3 * Math.sin(now * 0.007);
-    roverBeaconRing.scale.set(scale, scale, scale);
-    roverBeaconRing.material.opacity = 0.5 + 0.4 * Math.cos(now * 0.007);
+  // Pulsing Rover Beacon
+  if (roverBeacon) {
+    const s = 1.0 + 0.3 * Math.sin(now * 0.007);
+    roverBeacon.scale.set(s, s, s);
+    roverBeacon.material.opacity = 0.5 + 0.4 * Math.cos(now * 0.007);
   }
 
-  // 4. Update Dust Drift Particles
+  // Dust Particle drift
   updateDustParticles();
 
-  // 5. Controls & Hover Readout
   controls.update();
-  updateHoverReadout();
-
-  // 6. Nearest Sol Hover Marker Pulse
-  if (nearestSolMarker && nearestSolMarker.visible) {
-    const s = 1.0 + 0.25 * Math.sin(now * 0.008);
-    nearestSolMarker.scale.set(s, s, s);
-  }
-
   renderer.render(scene, camera);
 }
 
-// Start Application
+// Start application
 loadAssetsAndInit();
