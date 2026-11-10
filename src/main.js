@@ -105,6 +105,19 @@ const popupTitle = document.getElementById('popup-title');
 const popupSol = document.getElementById('popup-sol');
 const popupClose = document.getElementById('popup-close');
 
+// Route Planner DOM Elements
+const plannerPanel = document.getElementById('planner-panel');
+const plannerStatus = document.getElementById('planner-status');
+const plannerTbody = document.getElementById('planner-tbody');
+const btnSetStart = document.getElementById('btn-set-start');
+const btnSetGoal = document.getElementById('btn-set-goal');
+const btnResetPlan = document.getElementById('btn-reset-plan');
+const btnTogglePlanner = document.getElementById('btn-toggle-planner');
+const profileRouteName = document.getElementById('profile-route-name');
+const profileHoverInfo = document.getElementById('profile-hover-info');
+const elevationChart = document.getElementById('elevation-chart');
+const plannerToast = document.getElementById('planner-toast');
+
 // Global Data
 let rawHeights = null;
 let rawSlopes = null;
@@ -172,6 +185,21 @@ let dustVelocities = [];
 let hoverCursor = null;
 let cursorReticle = null;
 let pinnedReticle = null;
+
+// Route Planner State & Objects
+let routeWorker = null;
+let plannerGroup = null;
+let candidateLines = {};
+let startMarker = null;
+let goalMarker = null;
+let profileMarker = null;
+let plannerStart = { x: 3467.35, y: 4999.58 };
+let plannerGoal = { x: 2432.1, y: 2479.0 };
+let isSettingStart = false;
+let isSettingGoal = false;
+let plannerCandidates = [];
+let selectedCandidateId = 'safest';
+let lastComputeTimeMs = 0;
 
 // Lights
 let sunLight = null;
@@ -360,6 +388,7 @@ function createRouteAndRover() {
   const positions = [];
   const colorsSlope = [];
   const colorsSingle = [];
+  const colorsNeutral = [];
 
   for (let i = 0; i < routePoints.length; i++) {
     const pt = routePoints[i];
@@ -378,13 +407,14 @@ function createRouteAndRover() {
       colorsSlope.push(0.91, 0.3, 0.24); // Red (>25)
     }
     colorsSingle.push(0.0, 0.85, 1.0); // Cyan
+    colorsNeutral.push(0.65, 0.70, 0.75); // Neutral slate (reference)
   }
 
   // 1. Full continuous route line
   const routeGeo = new THREE.BufferGeometry();
   routeGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  routeGeo.setAttribute('color', new THREE.Float32BufferAttribute(colorsSlope, 3));
-  routeGeo.userData = { colorsSlope, colorsSingle };
+  routeGeo.setAttribute('color', new THREE.Float32BufferAttribute(colorsNeutral, 3));
+  routeGeo.userData = { colorsSlope, colorsSingle, colorsNeutral };
 
   const routeMat = new THREE.LineBasicMaterial({
     vertexColors: true,
@@ -452,8 +482,15 @@ function createRouteAndRover() {
 
 function updateRouteColoring() {
   if (!routeLine) return;
-  const isSingle = routeColorMode.value === 'single';
-  const colors = isSingle ? routeLine.geometry.userData.colorsSingle : routeLine.geometry.userData.colorsSlope;
+  const mode = routeColorMode ? routeColorMode.value : 'neutral';
+  let colors;
+  if (mode === 'neutral') {
+    colors = routeLine.geometry.userData.colorsNeutral;
+  } else if (mode === 'single') {
+    colors = routeLine.geometry.userData.colorsSingle;
+  } else {
+    colors = routeLine.geometry.userData.colorsSlope;
+  }
   routeLine.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   routeLine.geometry.attributes.color.needsUpdate = true;
 }
@@ -694,6 +731,21 @@ function applyVerticalExaggeration(exag) {
     const { col, row } = localToGrid(lx, ly);
     const elev = sampleGridBilinear(rawHeights, col, row);
     cursorReticle.position.y = (elev - minElev) * currentExag + 2.0;
+  }
+
+  updateStartAndGoalMarkerPositions();
+
+  if (candidateLines) {
+    Object.values(candidateLines).forEach(line => {
+      if (line.userData && line.userData.waypoints) {
+        const pos = line.geometry.attributes.position;
+        const wps = line.userData.waypoints;
+        for (let i = 0; i < wps.length; i++) {
+          pos.setY(i, (wps[i].z - minElev) * currentExag + 8.5 * currentExag);
+        }
+        pos.needsUpdate = true;
+      }
+    });
   }
 
   const meanElev = (minElev + maxElev) / 2.0;
@@ -1155,6 +1207,21 @@ function resetCustomizationToStandard() {
   camera.position.set(0, 3400, 3900);
   controls.update();
 
+  // 11. Reset Route Planner
+  plannerStart = { x: 3467.35, y: 4999.58 };
+  plannerGoal = { x: 2432.1, y: 2479.0 };
+  isSettingStart = false;
+  isSettingGoal = false;
+  if (btnSetStart) btnSetStart.classList.remove('active');
+  if (btnSetGoal) btnSetGoal.classList.remove('active');
+  updateStartAndGoalMarkerPositions();
+  requestRouteComputation();
+  selectCandidate('safest');
+  if (plannerPanel && plannerPanel.classList.contains('collapsed')) {
+    plannerPanel.classList.remove('collapsed');
+    if (btnTogglePlanner) btnTogglePlanner.textContent = '▼ Collapse';
+  }
+
   // Button feedback animation
   if (btnResetCustom) {
     const origText = btnResetCustom.innerHTML;
@@ -1169,6 +1236,446 @@ function resetCustomizationToStandard() {
       btnResetCustom.style.color = '';
     }, 1200);
   }
+}
+
+// --- Route Planner Engine & UI ---
+let toastTimeout = null;
+function showPlannerToast(message) {
+  if (!plannerToast) return;
+  plannerToast.textContent = message;
+  plannerToast.classList.remove('hidden');
+  plannerToast.style.display = 'block';
+  plannerToast.style.opacity = '1';
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => {
+    plannerToast.style.opacity = '0';
+    setTimeout(() => {
+      plannerToast.classList.add('hidden');
+      plannerToast.style.display = 'none';
+    }, 250);
+  }, 3500);
+}
+
+function createStartAndGoalMarkers() {
+  plannerGroup = new THREE.Group();
+  scene.add(plannerGroup);
+
+  // 1. START Marker (Green theme)
+  startMarker = new THREE.Group();
+  const sRingGeo = new THREE.RingGeometry(16, 22, 32);
+  sRingGeo.rotateX(-Math.PI / 2);
+  const sRingMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71, side: THREE.DoubleSide, depthWrite: false });
+  startMarker.add(new THREE.Mesh(sRingGeo, sRingMat));
+
+  const sPole = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.2, 1.2, 55, 8),
+    new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.8, roughness: 0.2 })
+  );
+  sPole.position.y = 27.5;
+  startMarker.add(sPole);
+
+  const sFlagShape = new THREE.Shape();
+  sFlagShape.moveTo(0, 0);
+  sFlagShape.lineTo(28, -10);
+  sFlagShape.lineTo(0, -20);
+  sFlagShape.closePath();
+  const sFlag = new THREE.Mesh(
+    new THREE.ShapeGeometry(sFlagShape),
+    new THREE.MeshBasicMaterial({ color: 0x2ecc71, side: THREE.DoubleSide })
+  );
+  sFlag.position.set(0, 52, 0);
+  startMarker.add(sFlag);
+
+  const sBeacon = new THREE.Mesh(
+    new THREE.OctahedronGeometry(6.5, 0),
+    new THREE.MeshStandardMaterial({ color: 0x2ecc71, emissive: 0x2ecc71, emissiveIntensity: 0.6 })
+  );
+  sBeacon.position.y = 57;
+  startMarker.add(sBeacon);
+  plannerGroup.add(startMarker);
+
+  // 2. GOAL Marker (Gold theme)
+  goalMarker = new THREE.Group();
+  const gRingGeo1 = new THREE.RingGeometry(10, 16, 32);
+  gRingGeo1.rotateX(-Math.PI / 2);
+  const gRingMat = new THREE.MeshBasicMaterial({ color: 0xf1c40f, side: THREE.DoubleSide, depthWrite: false });
+  goalMarker.add(new THREE.Mesh(gRingGeo1, gRingMat));
+
+  const gRingGeo2 = new THREE.RingGeometry(22, 27, 32);
+  gRingGeo2.rotateX(-Math.PI / 2);
+  goalMarker.add(new THREE.Mesh(gRingGeo2, gRingMat));
+
+  const gNeedle = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.2, 1.2, 60, 8),
+    new THREE.MeshStandardMaterial({ color: 0xf1c40f, metalness: 0.8 })
+  );
+  gNeedle.position.y = 30;
+  goalMarker.add(gNeedle);
+
+  const gBeacon = new THREE.Mesh(
+    new THREE.OctahedronGeometry(8, 0),
+    new THREE.MeshStandardMaterial({ color: 0xf1c40f, emissive: 0xf1c40f, emissiveIntensity: 0.8 })
+  );
+  gBeacon.position.y = 64;
+  goalMarker.add(gBeacon);
+  plannerGroup.add(goalMarker);
+
+  // 3. Profile Hover Marker (slides along route in 3D when hovering chart)
+  profileMarker = new THREE.Group();
+  const pRingGeo = new THREE.RingGeometry(14, 18, 32);
+  pRingGeo.rotateX(-Math.PI / 2);
+  const pRingMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide, depthWrite: false });
+  profileMarker.add(new THREE.Mesh(pRingGeo, pRingMat));
+  const pSphere = new THREE.Mesh(
+    new THREE.SphereGeometry(6, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0x00ffff })
+  );
+  pSphere.position.y = 6;
+  profileMarker.add(pSphere);
+  profileMarker.visible = false;
+  plannerGroup.add(profileMarker);
+
+  updateStartAndGoalMarkerPositions();
+}
+
+function updateStartAndGoalMarkerPositions() {
+  if (!rawHeights) return;
+  if (startMarker) {
+    const { meshX, meshZ } = localToMesh(plannerStart.x, plannerStart.y);
+    const { col, row } = localToGrid(plannerStart.x, plannerStart.y);
+    const elev = sampleGridBilinear(rawHeights, col, row);
+    startMarker.position.set(meshX, (elev - minElev) * currentExag, meshZ);
+  }
+  if (goalMarker) {
+    const { meshX, meshZ } = localToMesh(plannerGoal.x, plannerGoal.y);
+    const { col, row } = localToGrid(plannerGoal.x, plannerGoal.y);
+    const elev = sampleGridBilinear(rawHeights, col, row);
+    goalMarker.position.set(meshX, (elev - minElev) * currentExag, meshZ);
+  }
+}
+
+function requestRouteComputation() {
+  if (!routeWorker) return;
+  if (plannerStatus) plannerStatus.textContent = 'Computing optimal routes (A*)…';
+  routeWorker.postMessage({
+    type: 'compute',
+    start: plannerStart,
+    goal: plannerGoal
+  });
+}
+
+function buildCandidateRouteLines(candidates) {
+  if (!plannerGroup) return;
+
+  candidates.forEach(c => {
+    if (c.error || !c.waypoints || c.waypoints.length === 0) {
+      if (candidateLines[c.id]) {
+        candidateLines[c.id].visible = false;
+      }
+      return;
+    }
+
+    const positions = [];
+    c.waypoints.forEach(wp => {
+      const { meshX, meshZ } = localToMesh(wp.x, wp.y);
+      const meshY = (wp.z - minElev) * currentExag + 8.5 * currentExag;
+      positions.push(meshX, meshY, meshZ);
+    });
+
+    if (candidateLines[c.id]) {
+      const line = candidateLines[c.id];
+      line.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      line.geometry.attributes.position.needsUpdate = true;
+      line.userData.waypoints = c.waypoints;
+      line.visible = true;
+    } else {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const mat = new THREE.LineBasicMaterial({
+        color: new THREE.Color(c.color),
+        linewidth: c.id === selectedCandidateId ? 4 : 2,
+        transparent: true,
+        opacity: c.id === selectedCandidateId ? 1.0 : 0.35,
+        depthTest: true,
+        depthWrite: false
+      });
+      const line = new THREE.Line(geo, mat);
+      line.userData = { isCandidateLine: true, id: c.id, waypoints: c.waypoints, color: c.color };
+      plannerGroup.add(line);
+      candidateLines[c.id] = line;
+    }
+  });
+
+  selectCandidate(selectedCandidateId);
+}
+
+function selectCandidate(id) {
+  selectedCandidateId = id;
+
+  // 1. Highlight selected 3D line, dim others
+  Object.keys(candidateLines).forEach(candId => {
+    const line = candidateLines[candId];
+    if (candId === id) {
+      line.material.opacity = 1.0;
+      line.material.linewidth = 4;
+      line.renderOrder = 10;
+    } else {
+      line.material.opacity = 0.35;
+      line.material.linewidth = 2;
+      line.renderOrder = 5;
+    }
+  });
+
+  // 2. Highlight table row
+  document.querySelectorAll('#planner-tbody tr').forEach(tr => {
+    tr.classList.toggle('selected', tr.dataset.id === id);
+  });
+
+  // 3. Update Elevation Profile
+  const cand = plannerCandidates.find(c => c.id === id);
+  if (cand && !cand.error) {
+    if (profileRouteName) {
+      profileRouteName.textContent = cand.name.toUpperCase();
+      profileRouteName.style.color = cand.color;
+    }
+    drawElevationChart(cand);
+  }
+}
+
+function drawElevationChart(candidate) {
+  if (!elevationChart || !candidate || !candidate.elevationProfile) return;
+  const ctx = elevationChart.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const width = elevationChart.clientWidth || 940;
+  const height = elevationChart.clientHeight || 70;
+
+  elevationChart.width = width * dpr;
+  elevationChart.height = height * dpr;
+  ctx.scale(dpr, dpr);
+
+  const profile = candidate.elevationProfile;
+  if (profile.length < 2) return;
+
+  const padLeft = 46;
+  const padRight = 18;
+  const padTop = 10;
+  const padBottom = 16;
+  const plotW = width - padLeft - padRight;
+  const plotH = height - padTop - padBottom;
+
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  profile.forEach(p => {
+    if (p.elev < minZ) minZ = p.elev;
+    if (p.elev > maxZ) maxZ = p.elev;
+  });
+  minZ = Math.floor(minZ / 50) * 50 - 10;
+  maxZ = Math.ceil(maxZ / 50) * 50 + 10;
+  const maxDist = profile[profile.length - 1].distKm;
+
+  // Background
+  ctx.fillStyle = 'rgba(8, 12, 18, 0.85)';
+  ctx.fillRect(0, 0, width, height);
+
+  // Horizontal Grid Lines & Elevation Labels
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.lineWidth = 1;
+  ctx.fillStyle = '#778899';
+  ctx.font = '8.5px monospace';
+  ctx.textAlign = 'right';
+
+  const zStep = 50;
+  for (let z = minZ + 10; z <= maxZ; z += zStep) {
+    const y = padTop + (1.0 - (z - minZ) / (maxZ - minZ)) * plotH;
+    ctx.beginPath();
+    ctx.moveTo(padLeft, y);
+    ctx.lineTo(width - padRight, y);
+    ctx.stroke();
+    ctx.fillText(`${Math.round(z)}m`, padLeft - 4, y + 3);
+  }
+
+  // Distance X labels
+  ctx.textAlign = 'center';
+  const distSteps = 4;
+  for (let s = 0; s <= distSteps; s++) {
+    const d = (s / distSteps) * maxDist;
+    const x = padLeft + (s / distSteps) * plotW;
+    ctx.fillText(`${d.toFixed(1)}km`, x, height - 3);
+  }
+
+  // Draw filled gradient under curve
+  ctx.save();
+  ctx.beginPath();
+  const getX = p => padLeft + (p.distKm / maxDist) * plotW;
+  const getY = p => padTop + (1.0 - (p.elev - minZ) / (maxZ - minZ)) * plotH;
+
+  ctx.moveTo(getX(profile[0]), getY(profile[0]));
+  for (let i = 1; i < profile.length; i++) {
+    ctx.lineTo(getX(profile[i]), getY(profile[i]));
+  }
+  ctx.lineTo(getX(profile[profile.length - 1]), padTop + plotH);
+  ctx.lineTo(padLeft, padTop + plotH);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
+  grad.addColorStop(0, 'rgba(0, 210, 255, 0.22)');
+  grad.addColorStop(1, 'rgba(0, 210, 255, 0.01)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.restore();
+
+  // Draw polyline segments colored by slope tier
+  ctx.lineWidth = 2.5;
+  for (let i = 1; i < profile.length; i++) {
+    const p0 = profile[i - 1];
+    const p1 = profile[i];
+    ctx.beginPath();
+    ctx.moveTo(getX(p0), getY(p0));
+    ctx.lineTo(getX(p1), getY(p1));
+    if (p1.tier === 'easy') ctx.strokeStyle = '#2ecc71';
+    else if (p1.tier === 'mod') ctx.strokeStyle = '#f1c40f';
+    else ctx.strokeStyle = '#e74c3c';
+    ctx.stroke();
+  }
+}
+
+function bindElevationChartHover() {
+  if (!elevationChart) return;
+
+  elevationChart.addEventListener('mousemove', e => {
+    const cand = plannerCandidates.find(c => c.id === selectedCandidateId);
+    if (!cand || !cand.elevationProfile || cand.elevationProfile.length < 2) return;
+
+    const rect = elevationChart.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const width = elevationChart.clientWidth;
+    const padLeft = 46;
+    const padRight = 18;
+    const plotW = width - padLeft - padRight;
+
+    const clampedX = Math.max(padLeft, Math.min(width - padRight, mouseX));
+    const fraction = (clampedX - padLeft) / plotW;
+    const profile = cand.elevationProfile;
+    const maxDist = profile[profile.length - 1].distKm;
+    const targetDist = fraction * maxDist;
+
+    let closest = profile[0];
+    let minD = Infinity;
+    profile.forEach(p => {
+      const d = Math.abs(p.distKm - targetDist);
+      if (d < minD) { minD = d; closest = p; }
+    });
+
+    drawElevationChart(cand);
+
+    const ctx = elevationChart.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    const height = elevationChart.clientHeight;
+    const padTop = 10;
+    const padBottom = 16;
+    const plotH = height - padTop - padBottom;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    profile.forEach(p => {
+      if (p.elev < minZ) minZ = p.elev;
+      if (p.elev > maxZ) maxZ = p.elev;
+    });
+    minZ = Math.floor(minZ / 50) * 50 - 10;
+    maxZ = Math.ceil(maxZ / 50) * 50 + 10;
+
+    const cx = padLeft + (closest.distKm / maxDist) * plotW;
+    const cy = padTop + (1.0 - (closest.elev - minZ) / (maxZ - minZ)) * plotH;
+
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx, padTop);
+    ctx.lineTo(cx, height - padBottom);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#00ffff';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+    ctx.restore();
+
+    const tierStr = closest.tier === 'easy' ? '<15° Easy' : (closest.tier === 'mod' ? '15°–25° Mod' : '>25° Haz');
+    if (profileHoverInfo) {
+      profileHoverInfo.textContent = `${closest.distKm.toFixed(2)} km | Elev ${closest.elev.toFixed(1)} m | Slope ${closest.slope.toFixed(1)}° (${tierStr})`;
+    }
+
+    if (profileMarker && rawHeights) {
+      const { meshX, meshZ } = localToMesh(closest.x, closest.y);
+      const meshY = (closest.elev - minElev) * currentExag + 8.5 * currentExag;
+      profileMarker.position.set(meshX, meshY, meshZ);
+      profileMarker.visible = true;
+    }
+  });
+
+  elevationChart.addEventListener('mouseleave', () => {
+    const cand = plannerCandidates.find(c => c.id === selectedCandidateId);
+    if (cand) drawElevationChart(cand);
+    if (profileHoverInfo) {
+      profileHoverInfo.textContent = 'Hover chart to inspect elevation & map location';
+    }
+    if (profileMarker) profileMarker.visible = false;
+  });
+}
+
+function renderPlannerTable(candidates) {
+  if (!plannerTbody) return;
+  plannerTbody.innerHTML = '';
+
+  candidates.forEach(c => {
+    const tr = document.createElement('tr');
+    tr.className = `route-row ${c.id === selectedCandidateId ? 'selected' : ''}`;
+    tr.dataset.id = c.id;
+
+    if (c.error) {
+      tr.innerHTML = `
+        <td><div class="route-cell"><span class="route-swatch" style="background:${c.color}"></span>${c.name}</div></td>
+        <td><span class="badge-best ${c.id}">${c.bestFor}</span></td>
+        <td colspan="10" style="color:#e74c3c;font-style:italic;">No safe route found</td>
+      `;
+    } else {
+      tr.innerHTML = `
+        <td><div class="route-cell"><span class="route-swatch" style="background:${c.color}"></span>${c.name}</div></td>
+        <td><span class="badge-best ${c.id}">${c.bestFor}</span></td>
+        <td>${c.distKm.toFixed(2)}</td>
+        <td>+${c.ascentM.toFixed(1)} / ${c.netElevM >= 0 ? '+' : ''}${c.netElevM.toFixed(1)}</td>
+        <td>${c.maxSlopeDeg.toFixed(1)}°</td>
+        <td><span class="tier-easy">${c.pctEasy.toFixed(1)}%</span> / <span class="tier-mod">${c.pctMod.toFixed(1)}%</span> / <span class="tier-haz">${c.pctHaz.toFixed(1)}%</span></td>
+        <td>${c.timeHours.toFixed(1)} h</td>
+        <td>${c.energyKwh.toFixed(2)} kWh</td>
+        <td>${Math.round(c.radDoseUsv)} µSv</td>
+        <td><strong>${c.sciScore}</strong></td>
+        <td>${c.riskScore.toFixed(1)} <small>/ 100</small></td>
+        <td style="text-align:center;"><input type="checkbox" class="cb-route-vis" data-id="${c.id}" checked></td>
+      `;
+    }
+
+    tr.addEventListener('click', e => {
+      if (e.target.tagName === 'INPUT') return;
+      selectCandidate(c.id);
+    });
+
+    const cb = tr.querySelector('.cb-route-vis');
+    if (cb) {
+      cb.addEventListener('change', e => {
+        if (candidateLines[c.id]) {
+          candidateLines[c.id].visible = e.target.checked;
+        }
+      });
+    }
+
+    plannerTbody.appendChild(tr);
+  });
 }
 
 // --- UI Event Listeners ---
@@ -1279,6 +1786,66 @@ function bindUIEvents() {
     });
   });
 
+  // Route Planner Controls
+  if (btnSetStart) {
+    btnSetStart.addEventListener('click', () => {
+      isSettingStart = !isSettingStart;
+      isSettingGoal = false;
+      btnSetStart.classList.toggle('active', isSettingStart);
+      if (btnSetGoal) btnSetGoal.classList.remove('active');
+      if (isSettingStart) {
+        showPlannerToast('📍 Click anywhere on terrain to set custom START (Esc to cancel)');
+      }
+    });
+  }
+
+  if (btnSetGoal) {
+    btnSetGoal.addEventListener('click', () => {
+      isSettingGoal = !isSettingGoal;
+      isSettingStart = false;
+      btnSetGoal.classList.toggle('active', isSettingGoal);
+      if (btnSetStart) btnSetStart.classList.remove('active');
+      if (isSettingGoal) {
+        showPlannerToast('🎯 Click anywhere on terrain to set custom GOAL (Esc to cancel)');
+      }
+    });
+  }
+
+  if (btnResetPlan) {
+    btnResetPlan.addEventListener('click', () => {
+      plannerStart = { x: 3467.35, y: 4999.58 };
+      plannerGoal = { x: 2432.1, y: 2479.0 };
+      isSettingStart = false;
+      isSettingGoal = false;
+      if (btnSetStart) btnSetStart.classList.remove('active');
+      if (btnSetGoal) btnSetGoal.classList.remove('active');
+      updateStartAndGoalMarkerPositions();
+      requestRouteComputation();
+      showPlannerToast('↺ Start and Goal reset to default locations');
+    });
+  }
+
+  if (btnTogglePlanner && plannerPanel) {
+    btnTogglePlanner.addEventListener('click', () => {
+      plannerPanel.classList.toggle('collapsed');
+      btnTogglePlanner.textContent = plannerPanel.classList.contains('collapsed') ? '▲ Expand' : '▼ Collapse';
+    });
+  }
+
+  bindElevationChartHover();
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (isSettingStart || isSettingGoal) {
+        isSettingStart = false;
+        isSettingGoal = false;
+        if (btnSetStart) btnSetStart.classList.remove('active');
+        if (btnSetGoal) btnSetGoal.classList.remove('active');
+        showPlannerToast('Cancelled endpoint selection');
+      }
+    }
+  });
+
   // Inspector Pin / Unpin
   if (inspectorUnpin) inspectorUnpin.addEventListener('click', () => {
     isPinned = false;
@@ -1288,11 +1855,56 @@ function bindUIEvents() {
     if (pinnedReticle) pinnedReticle.visible = false;
   });
 
-  // Canvas Click: Pin point or open Science Marker
+  // Canvas Click: Pin point, set start/goal, or select route
   renderer.domElement.addEventListener('click', () => {
     raycaster.setFromCamera(mouse, camera);
 
-    // 1. Check Science Markers
+    // 0. Setting START or GOAL
+    if (isSettingStart || isSettingGoal) {
+      const hit = getTerrainIntersection(raycaster.ray);
+      if (hit) {
+        const { col, row } = localToGrid(hit.lx, hit.ly);
+        const slope = sampleGridBilinear(rawSlopes, col, row);
+
+        if (slope > 25.0) {
+          showPlannerToast(`⚠️ Cannot place ${isSettingStart ? 'START' : 'GOAL'} on hazardous terrain (${slope.toFixed(1)}° slope). Choose a safe cell (<25°).`);
+          return;
+        }
+
+        if (isSettingStart) {
+          plannerStart = { x: hit.lx, y: hit.ly };
+          isSettingStart = false;
+          if (btnSetStart) btnSetStart.classList.remove('active');
+          showPlannerToast(`✓ START placed at X: ${Math.round(hit.lx)} m, Y: ${Math.round(hit.ly)} m`);
+        } else {
+          plannerGoal = { x: hit.lx, y: hit.ly };
+          isSettingGoal = false;
+          if (btnSetGoal) btnSetGoal.classList.remove('active');
+          showPlannerToast(`✓ GOAL placed at X: ${Math.round(hit.lx)} m, Y: ${Math.round(hit.ly)} m`);
+        }
+
+        updateStartAndGoalMarkerPositions();
+        requestRouteComputation();
+      }
+      return;
+    }
+
+    // 1. Check clicking on Candidate Route Lines
+    if (plannerGroup) {
+      const hits = raycaster.intersectObjects(plannerGroup.children, true);
+      for (let i = 0; i < hits.length; i++) {
+        let obj = hits[i].object;
+        while (obj && obj !== plannerGroup) {
+          if (obj.userData && obj.userData.isCandidateLine) {
+            selectCandidate(obj.userData.id);
+            return;
+          }
+          obj = obj.parent;
+        }
+      }
+    }
+
+    // 2. Check Science Markers
     if (scienceMarkersGroup) {
       const hits = raycaster.intersectObjects(scienceMarkersGroup.children, false);
       if (hits.length > 0 && hits[0].object.userData.isSciencePin) {
@@ -1304,7 +1916,7 @@ function bindUIEvents() {
       }
     }
 
-    // 2. Pin clicked terrain point
+    // 3. Pin clicked terrain point
     const hit = getTerrainIntersection(raycaster.ray);
     if (hit) {
       isPinned = true;
@@ -1353,8 +1965,85 @@ function createOffscreenContext(image) {
   return ctx;
 }
 
+function initRouteWorker() {
+  console.log('--- initRouteWorker called ---');
+  routeWorker = new Worker(new URL('./routeWorker.js', import.meta.url), { type: 'module' });
+
+  // Subsample 1025x1025 to 257x257 (factor of 4, ~19.5m step)
+  const N = 257;
+  const subH = new Float32Array(N * N);
+  const subS = new Float32Array(N * N);
+  for (let r = 0; r < N; r++) {
+    const origR = r * 4;
+    for (let c = 0; c < N; c++) {
+      const origC = c * 4;
+      subH[r * N + c] = rawHeights[origR * 1025 + origC];
+      subS[r * N + c] = rawSlopes[origR * 1025 + origC];
+    }
+  }
+
+  // Precompute CRISM pixel centers (27x28)
+  const crismPixels = [];
+  for (let cy = 0; cy < 28; cy++) {
+    for (let cx = 0; cx < 27; cx++) {
+      const lx = (cx + 0.5) * (TERRAIN_WIDTH_M / 27.0);
+      const ly = (28 - 1 - cy + 0.5) * (TERRAIN_HEIGHT_M / 28.0);
+      crismPixels.push({ x: lx, y: ly });
+    }
+  }
+
+  // Precompute science marker positions from SCIENCE_TARGETS
+  const sciMarkers = SCIENCE_TARGETS.map(t => {
+    let closestPt = routePoints[0];
+    let minD = Infinity;
+    for (let i = 0; i < routePoints.length; i++) {
+      const d = Math.abs(routePoints[i].sol - t.sol);
+      if (d < minD) { minD = d; closestPt = routePoints[i]; }
+    }
+    return { x: closestPt.x, y: closestPt.y, sol: t.sol, title: t.title };
+  });
+
+  routeWorker.onmessage = function (e) {
+    console.log('--- routeWorker onmessage ---', e.data.type);
+    if (e.data.type === 'initialized') {
+      requestRouteComputation();
+    } else if (e.data.type === 'result') {
+      plannerCandidates = e.data.candidates;
+      lastComputeTimeMs = e.data.computeTimeMs;
+      if (plannerStatus) {
+        plannerStatus.textContent = `Generated 4 routes in ${lastComputeTimeMs} ms (A*)`;
+      }
+      renderPlannerTable(plannerCandidates);
+      buildCandidateRouteLines(plannerCandidates);
+    }
+  };
+
+  routeWorker.onerror = function (err) {
+    console.error('RouteWorker error:', err);
+    if (plannerStatus) plannerStatus.textContent = 'Error computing routes';
+  };
+
+  try {
+    console.log('Posting init message to worker...', { N, sciCount: sciMarkers.length, crismCount: crismPixels.length });
+    routeWorker.postMessage({
+      type: 'init',
+      gridSize: N,
+      heights: subH.buffer,
+      slopes: subS.buffer,
+      sciMarkers,
+      crismPixels,
+      start: plannerStart,
+      goal: plannerGoal
+    }, [subH.buffer, subS.buffer]);
+    console.log('Init message successfully dispatched to worker');
+  } catch (postErr) {
+    console.error('Error posting to routeWorker:', postErr);
+  }
+}
+
 // --- Asset Loader & Application Entry ---
 async function loadAssetsAndInit() {
+  console.log('--- START loadAssetsAndInit ---');
   try {
     setupLights();
     bindUIEvents();
@@ -1429,6 +2118,8 @@ async function loadAssetsAndInit() {
     createBoxworkCoreZone();
     createDustParticles();
     createReticles();
+    createStartAndGoalMarkers();
+    initRouteWorker();
 
     // 7. Complete Loading
     progressBar.style.width = '100%';
@@ -1505,6 +2196,16 @@ function animate() {
     if (pinnedReticle.children[2]) {
       pinnedReticle.children[2].rotation.y += 0.02;
     }
+  }
+
+  // Animated Start and Goal Markers
+  if (startMarker && startMarker.children[3]) {
+    startMarker.children[3].rotation.y += 0.02;
+  }
+  if (goalMarker && goalMarker.children[3]) {
+    goalMarker.children[3].rotation.y += 0.025;
+    const pulseG = 1.0 + 0.08 * Math.sin(now * 0.007);
+    if (goalMarker.children[0]) goalMarker.children[0].scale.set(pulseG, pulseG, pulseG);
   }
 
   // Dust Particle drift

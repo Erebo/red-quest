@@ -102,3 +102,83 @@ mobilityCost = min(slopeCost + roughnessCost + elevCost, 100.0)
 - 0–30: Easy traverse
 - 30–60: Moderate, reduced speed
 - 60–100: Difficult or impassable
+
+## 7. Route Planner: Estimated Walking / Drive Time (hours)
+
+Estimated rover drive duration modeled from nominal cruise speed, terrain slope slowing factor, and climbing ascent rate.
+
+```
+baseSpeed_kmh = 0.10   // 100 m/h nominal cruise speed on flat terrain
+
+for each route segment i (length d_i, slope s_i in degrees, elevation change dz_i):
+    // Slope slowing factor: reduces speed as terrain inclination increases
+    slopeRad = s_i * PI / 180.0
+    modReduction = clamp((s_i - 15.0) / 10.0, 0.0, 1.0)
+    eta_slope = max(0.20, cos(slopeRad) * (1.0 - 0.40 * modReduction))
+    
+    speed_i = baseSpeed_kmh * 1000.0 * eta_slope   // m/h
+    dt_flat = d_i / speed_i                        // hours
+    
+    // Vertical climb delay for uphill segments (ascent dz > 0)
+    ascent_i = max(0.0, dz_i)
+    dt_climb = ascent_i / 20.0                     // 20 m/h vertical climbing limit
+    
+    dt_i = dt_flat + dt_climb
+    totalTime_h += dt_i
+```
+
+**Range:** ~30–60 hours for typical 3–4 km traverses depending on slope and ascent.
+
+## 8. Route Planner: Energy Expenditure (kWh)
+
+Total electrical and mechanical energy consumed by the rover along the candidate route. Combines vehicle baseline housekeeping load, electric drive motor consumption on terrain, and gravitational work done on uphill ascents.
+
+```
+roverMass_kg = 899.0          // Curiosity MSL rover mass
+gravityMars = 3.72            // m/s^2
+driveEfficiency = 0.60        // mechanical transmission and motor efficiency
+powerBaseline_kW = 0.11       // 110 W avionics, thermal loop, science idle
+powerDrive_kW = 0.14          // 140 W wheel actuators and motor controllers
+
+for each route segment i (time dt_i in hours, ascent dz_i in metres):
+    // Hotel and motor electrical energy
+    e_electrical = (powerBaseline_kW + powerDrive_kW) * dt_i   // kWh
+    
+    // Mechanical work against Martian gravity on ascent
+    ascent_i = max(0.0, dz_i)
+    w_gravity = (roverMass_kg * gravityMars * ascent_i) / (driveEfficiency * 3.6e6) // kWh
+    
+    totalEnergy_kWh += (e_electrical + w_gravity)
+```
+
+**Range:** ~9–16 kWh per candidate route.
+
+## 9. Route Planner: Cumulative Radiation Exposure (µSv)
+
+Integrates the position- and elevation-dependent radiation dose rate (from Section 1) over travel time along the route:
+
+```
+for each route segment i (time dt_i in hours, waypoint elevation z_i):
+    doseRate_i = 20.0 * (1.0 + (z_i - (-4131.74)) / 3000.0 * 0.15) // µSv/h
+    totalRadiation_uSv += doseRate_i * dt_i
+```
+
+**Range:** ~700–1200 µSv depending on duration and elevation profile.
+
+## 10. Route Planner: Risk Score (0–100)
+
+Composite safety metric evaluating overall route difficulty, wheel slip risk on moderate inclines, and total vertical climbing exposure:
+
+```
+riskScore = min(100.0, (
+    0.40 * pct_moderate +
+    2.00 * pct_hazardous +
+    0.35 * (max_slope_deg / 25.0) * 100.0 +
+    0.25 * (total_ascent_m / 300.0) * 100.0
+) * 0.35)
+```
+
+**Scale:**
+- 0–15: Low risk (predominantly flat, gentle grades)
+- 15–30: Moderate risk (requires careful wheel steering across moderate slopes)
+- 30–100: High risk (steep passes, extensive climb, terrain hazards)

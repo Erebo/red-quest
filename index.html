@@ -119,11 +119,12 @@
       <!-- Route & markers -->
       <details class="layer-group" open>
         <summary>Route &amp; markers</summary>
-        <label class="lrow"><input type="checkbox" id="lyr-route" checked><span>Curiosity traverse</span></label>
+        <label class="lrow"><input type="checkbox" id="lyr-route" checked><span>Reference: Curiosity actual traverse (not a plan)</span></label>
         <label class="lrow"><input type="checkbox" id="lyr-boxwork" checked><span>Boxwork core zone (153 × 283 m, sols 4600–4805)</span></label>
         <div class="slider-row">
-          <label>Route colour</label>
+          <label>Curiosity line</label>
           <select id="route-color-mode">
+            <option value="neutral">Neutral slate (reference)</option>
             <option value="slope">By slope class</option>
             <option value="single">Single colour (cyan)</option>
           </select>
@@ -187,12 +188,12 @@
       </div>
 
       <div class="insp-section env-section">
-        <h4>Atmospheric &amp; Environmental Telemetry <small>(REMS / RAD)</small></h4>
-        <div class="ig"><span class="il">Radiation dose rate <small>(RAD)</small></span><span class="iv" id="i-rad">—</span></div>
-        <div class="ig"><span class="il">Dust opacity (τ) / visibility <small>(Mastcam)</small></span><span class="iv" id="i-dust">—</span></div>
-        <div class="ig"><span class="il">Surface temperature <small>(REMS)</small></span><span class="iv" id="i-temp">—</span></div>
-        <div class="ig"><span class="il">Wind speed &amp; direction <small>(REMS)</small></span><span class="iv" id="i-wind">—</span></div>
-        <div class="ig"><span class="il">Orbiter comm signal <small>(UHF Link)</small></span><span class="iv" id="i-signal">—</span></div>
+        <h4>Environment</h4>
+        <div class="ig"><span class="il">Radiation dose rate</span><span class="iv" id="i-rad">—</span></div>
+        <div class="ig"><span class="il">Dust opacity (τ) / visibility</span><span class="iv" id="i-dust">—</span></div>
+        <div class="ig"><span class="il">Surface temperature</span><span class="iv" id="i-temp">—</span></div>
+        <div class="ig"><span class="il">Wind speed &amp; direction</span><span class="iv" id="i-wind">—</span></div>
+        <div class="ig"><span class="il">Orbiter comm signal</span><span class="iv" id="i-signal">—</span></div>
         <div class="ig"><span class="il">Traversability index</span><span class="iv" id="i-mobility">—</span></div>
       </div>
     </div>
@@ -205,6 +206,70 @@
     <div class="popup-sol" id="popup-sol"></div>
     <div class="popup-src">Source: NASA Curiosity blog</div>
   </div>
+
+  <!-- ===== ROUTE PLANNER COMPARISON PANEL ===== -->
+  <aside id="planner-panel" class="planner-panel open">
+    <div class="planner-header">
+      <div class="ph-left">
+        <span class="badge-plan">ROUTE PLANNER</span>
+        <strong>Candidate Traverses</strong>
+        <span id="planner-status" class="planner-status">Optimal routes computed (A*)</span>
+      </div>
+      <div class="ph-center">
+        <button id="btn-set-start" class="btn-planner-tool" title="Click then click terrain to set custom START">📍 Set Start</button>
+        <button id="btn-set-goal" class="btn-planner-tool" title="Click then click terrain to set custom GOAL">🎯 Set Goal</button>
+        <button id="btn-reset-plan" class="btn-planner-tool" title="Reset start &amp; goal to default locations">↺ Reset Endpoints</button>
+      </div>
+      <div class="ph-right">
+        <button id="btn-toggle-planner" class="planner-toggle-btn" title="Toggle route planner panel">▼ Collapse</button>
+      </div>
+    </div>
+
+    <div class="planner-body">
+      <div class="table-wrap">
+        <table class="planner-table">
+          <thead>
+            <tr>
+              <th style="width: 135px;">Candidate Route</th>
+              <th style="width: 95px;">Best For</th>
+              <th title="Total 3D route distance">Distance (km)</th>
+              <th title="Cumulative uphill ascent / net elevation change">Ascent / Net (m)</th>
+              <th title="Maximum terrain gradient encountered">Max Slope</th>
+              <th title="Percent of route along Easy (<15°), Moderate (15°-25°), and Hazardous (>25°)">Slope Tiers (% E / M / H)</th>
+              <th title="Estimated drive time based on slope slowdown and climbing speed">Est. Time <span class="sim-badge">sim</span></th>
+              <th title="Electrical housekeeping, wheel motor work, and gravitational ascent work">Energy <span class="sim-badge">sim</span></th>
+              <th title="Cumulative radiation dose integrated over traverse time">Radiation <span class="sim-badge">sim</span></th>
+              <th title="Count of CRISM hydrated coverage pixels (≤100m) + science targets (≤100m)">Science</th>
+              <th title="Composite safety and terrain difficulty score (0-100)">Risk <span class="sim-badge">sim</span></th>
+              <th style="width: 45px; text-align: center;">View</th>
+            </tr>
+          </thead>
+          <tbody id="planner-tbody">
+            <!-- Dynamically populated rows -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Elevation Profile of Selected Route -->
+      <div class="elevation-profile-container">
+        <div class="profile-head">
+          <span class="profile-title">ELEVATION PROFILE — <strong id="profile-route-name">SAFEST</strong></span>
+          <div class="profile-legend">
+            <span class="leg-pill easy">■ &lt;15° Easy</span>
+            <span class="leg-pill mod">■ 15°–25° Moderate</span>
+            <span class="leg-pill haz">■ &gt;25° Hazardous</span>
+          </div>
+          <span id="profile-hover-info" class="profile-hover-info">Hover chart to inspect elevation &amp; map location</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="elevation-chart" width="940" height="70"></canvas>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Notification Toast -->
+  <div id="planner-toast" class="planner-toast hidden"></div>
 
   <!-- ===== BOTTOM TIMELINE ===== -->
   <nav id="timeline-bar">

@@ -31,7 +31,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 
 /* Side panels */
 .side-panel{position:absolute;top:36px;width:280px;z-index:15;pointer-events:auto;transition:transform .25s ease}
-.side-panel.right{right:0;transform:translateX(280px)}
+.side-panel.right{right:0;width:300px;transform:translateX(300px)}
 .side-panel.right.open{transform:translateX(0)}
 .side-panel.left{left:0;transform:translateX(-280px)}
 .side-panel.left.open{transform:translateX(0)}
@@ -52,10 +52,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 .lrow{display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:3px 0}
 .lrow input[type="checkbox"]{accent-color:var(--accent);width:14px;height:14px;cursor:pointer}
 .slider-row{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);padding:2px 0}
-.slider-row label{min-width:60px;flex-shrink:0}
-.slider-row input[type="range"]{flex:1;accent-color:var(--accent);height:4px}
-.slider-row span{min-width:32px;text-align:right;font-family:var(--mono);color:var(--accent);font-size:10px}
-.slider-row select{flex:1;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);font-size:10px;padding:2px 4px;border-radius:3px}
+.slider-row label{min-width:55px;flex-shrink:0}
+.slider-row input[type="range"]{flex:1;min-width:40px;accent-color:var(--accent);height:4px}
+.slider-row span{min-width:34px;flex-shrink:0;text-align:right;font-family:var(--mono);color:var(--accent);font-size:10px}
+.slider-row select{flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);font-size:10px;padding:2px 4px;border-radius:3px}
 
 /* Legend collapsible */
 .legend-details{margin:2px 0}
@@ -116,3 +116,61 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 .tier-easy{color:#2ecc71}
 .tier-mod{color:#f1c40f}
 .tier-haz{color:#e74c3c}
+
+/* ===== Route Planner Panel ===== */
+.planner-panel{position:absolute;bottom:54px;left:50%;transform:translateX(-50%);width:min(980px,calc(100vw - 24px));background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--border);border-radius:6px;z-index:25;pointer-events:auto;box-shadow:0 8px 32px rgba(0,0,0,.6);transition:max-height .25s ease,opacity .2s ease;overflow:hidden}
+.planner-panel.collapsed .planner-body{display:none}
+
+.planner-header{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:rgba(255,255,255,.025);border-bottom:1px solid var(--border);gap:8px}
+.ph-left{display:flex;align-items:center;gap:8px}
+.badge-plan{background:rgba(0,210,255,.15);border:1px solid rgba(0,210,255,.4);color:#00d2ff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:1px}
+.planner-status{font-size:10px;color:var(--muted);font-style:italic}
+
+.ph-center{display:flex;align-items:center;gap:6px}
+.btn-planner-tool{background:rgba(255,255,255,.06);border:1px solid var(--border);color:#ddd;font-size:10px;font-weight:600;padding:3px 8px;border-radius:3px;cursor:pointer;display:flex;align-items:center;gap:4px;transition:all .15s}
+.btn-planner-tool:hover{background:rgba(255,255,255,.12);color:#fff}
+.btn-planner-tool.active{background:rgba(230,126,34,.3);border-color:#e67e22;color:#ff9955;animation:pulseActive 1.2s infinite ease-in-out}
+@keyframes pulseActive{0%,100%{box-shadow:0 0 4px rgba(230,126,34,.4)}50%{box-shadow:0 0 10px rgba(230,126,34,.8)}}
+
+.ph-right{display:flex;align-items:center}
+.planner-toggle-btn{background:none;border:1px solid var(--border);color:var(--muted);font-size:10px;padding:2px 8px;border-radius:3px;cursor:pointer}
+.planner-toggle-btn:hover{color:#fff;border-color:#777}
+
+.planner-body{padding:6px 10px 8px}
+.table-wrap{overflow-x:auto;max-width:100%;margin-bottom:6px}
+.table-wrap::-webkit-scrollbar{height:4px}
+.table-wrap::-webkit-scrollbar-thumb{background:rgba(230,126,34,.3);border-radius:2px}
+
+.planner-table{width:100%;border-collapse:collapse;font-size:10.5px;text-align:left}
+.planner-table th{background:rgba(255,255,255,.03);color:var(--muted);padding:4px 6px;font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px}
+.planner-table td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.04);white-space:nowrap;font-family:var(--mono);color:#eee}
+.planner-table tbody tr{cursor:pointer;transition:background .15s}
+.planner-table tbody tr:hover{background:rgba(255,255,255,.04)}
+.planner-table tbody tr.selected{background:rgba(0,210,255,.1);border-left:3px solid #00d2ff}
+
+.sim-badge{display:inline-block;background:rgba(230,126,34,.2);border:1px solid rgba(230,126,34,.4);color:#ff9955;font-size:8px;font-weight:700;padding:0 3px;border-radius:2px;vertical-align:middle;margin-left:2px;font-family:var(--sans);text-transform:uppercase}
+
+.route-cell{display:flex;align-items:center;gap:6px;font-family:var(--sans);font-weight:700}
+.route-swatch{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.badge-best{display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;text-transform:uppercase;font-family:var(--sans)}
+.badge-best.safest{background:rgba(46,204,113,.15);border:1px solid rgba(46,204,113,.4);color:#2ecc71}
+.badge-best.fastest{background:rgba(0,210,255,.15);border:1px solid rgba(0,210,255,.4);color:#00d2ff}
+.badge-best.science{background:rgba(224,86,253,.15);border:1px solid rgba(224,86,253,.4);color:#e056fd}
+.badge-best.energy{background:rgba(243,156,18,.15);border:1px solid rgba(243,156,18,.4);color:#f39c12}
+
+/* Elevation Profile Chart */
+.elevation-profile-container{background:rgba(0,0,0,.35);border:1px solid var(--border);border-radius:4px;padding:4px 8px}
+.profile-head{display:flex;align-items:center;justify-content:space-between;font-size:10px;margin-bottom:3px;flex-wrap:wrap;gap:4px}
+.profile-title{font-size:10px;letter-spacing:.5px;color:var(--muted);text-transform:uppercase}
+.profile-title strong{color:#fff}
+.profile-legend{display:flex;gap:8px;font-size:9.5px}
+.leg-pill.easy{color:#2ecc71}
+.leg-pill.mod{color:#f1c40f}
+.leg-pill.haz{color:#e74c3c}
+.profile-hover-info{font-family:var(--mono);font-size:9.5px;color:#80b3ff}
+.canvas-wrap{width:100%;height:70px;position:relative}
+#elevation-chart{width:100%;height:100%;display:block;cursor:crosshair}
+
+/* Toast */
+.planner-toast{position:absolute;top:46px;left:50%;transform:translateX(-50%);background:rgba(231,76,60,.92);color:#fff;padding:6px 14px;border-radius:4px;font-size:11px;font-weight:600;z-index:90;box-shadow:0 4px 16px rgba(0,0,0,.5);pointer-events:none;transition:opacity .25s ease}
+.planner-toast.hidden{opacity:0;pointer-events:none;display:none}
