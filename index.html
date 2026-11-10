@@ -23,6 +23,20 @@
     </div>
   </div>
 
+  <!-- Cinematic Fly-in Skip Button -->
+  <button id="btn-skip-intro" class="skip-intro-btn">SKIP INTRO ⏭</button>
+
+  <!-- Science Marker Popup -->
+  <div id="science-popup" class="science-popup-card hidden">
+    <div class="popup-header">
+      <span class="popup-tag">SCIENCE TARGET</span>
+      <button id="popup-close" class="popup-close-btn" title="Close">&times;</button>
+    </div>
+    <h3 id="popup-title">Title</h3>
+    <div class="popup-sol" id="popup-sol">Sol ----</div>
+    <div class="popup-source">Source: NASA Curiosity blog</div>
+  </div>
+
   <!-- Top Left Header Info -->
   <header class="hud-panel hud-header">
     <div class="badge-tag">NASA SPACE APPS</div>
@@ -31,12 +45,14 @@
     <div class="meta-row">
       <span><strong>Area:</strong> 5 km &times; 5 km</span>
       <span><strong>Sols:</strong> 3721 &ndash; 4868</span>
+      <span class="perf-metric">FPS: <strong id="fps-val">--</strong></span>
+      <span class="perf-metric">Load: <strong id="load-val">--</strong></span>
     </div>
   </header>
 
   <!-- Top Right Controls Panel -->
   <aside class="hud-panel hud-controls">
-    <h3>MAP CONTROLS</h3>
+    <h3>MAP &amp; LAYER CONTROLS</h3>
 
     <!-- Exaggeration Slider -->
     <div class="control-group">
@@ -52,32 +68,108 @@
       </div>
     </div>
 
-    <!-- Layer Toggles -->
+    <!-- Atmosphere & Lighting -->
     <div class="control-group">
-      <span class="control-title">Display Layers</span>
-      <label class="toggle-row">
-        <input type="checkbox" id="toggle-satellite" checked />
+      <span class="control-title">Martian Atmosphere</span>
+      <div class="control-label">
+        <span>Time of Day (Sun Angle)</span>
+        <span id="time-val" class="highlight-val">14:00</span>
+      </div>
+      <input type="range" id="time-slider" min="6.0" max="18.0" step="0.25" value="14.0" />
+      <div class="slider-marks">
+        <span>06:00 Dawn</span>
+        <span>12:00 Noon</span>
+        <span>18:00 Dusk</span>
+      </div>
+      <label class="toggle-row" style="margin-top: 8px;">
+        <input type="checkbox" id="toggle-dust" checked />
         <span class="custom-check"></span>
-        <span class="toggle-text">Satellite Texture (HiRISE 2m)</span>
+        <span class="toggle-text">Drifting Dust Particles</span>
       </label>
+    </div>
 
-      <label class="toggle-row">
-        <input type="checkbox" id="toggle-slope" />
-        <span class="custom-check"></span>
-        <span class="toggle-text">Slope Hazard Overlay (5m)</span>
-      </label>
+    <!-- Display Layers & Opacity Sliders -->
+    <div class="control-group">
+      <span class="control-title">Draped Surface Layers</span>
 
-      <label class="toggle-row">
-        <input type="checkbox" id="toggle-route" checked />
-        <span class="custom-check"></span>
-        <span class="toggle-text">Curiosity Route</span>
-      </label>
+      <!-- Satellite Layer -->
+      <div class="layer-control-block">
+        <label class="toggle-row">
+          <input type="checkbox" id="toggle-satellite" checked />
+          <span class="custom-check"></span>
+          <span class="toggle-text">Satellite Texture (HiRISE 2m)</span>
+        </label>
+      </div>
 
-      <label class="toggle-row">
-        <input type="checkbox" id="toggle-boxwork" checked />
-        <span class="custom-check"></span>
-        <span class="toggle-text">Boxwork Science Zone</span>
-      </label>
+      <!-- Slope Hazard Layer -->
+      <div class="layer-control-block">
+        <div class="layer-row-flex">
+          <label class="toggle-row">
+            <input type="checkbox" id="toggle-slope" />
+            <span class="custom-check"></span>
+            <span class="toggle-text">Slope Hazard Map (5m)</span>
+          </label>
+          <span id="slope-opacity-val" class="opacity-val">65%</span>
+        </div>
+        <input type="range" id="slope-opacity-slider" min="0" max="100" value="65" class="opacity-slider" />
+      </div>
+
+      <!-- CRISM Hydrated Minerals -->
+      <div class="layer-control-block">
+        <div class="layer-row-flex">
+          <label class="toggle-row">
+            <input type="checkbox" id="toggle-crism-hyd" />
+            <span class="custom-check"></span>
+            <span class="toggle-text">CRISM Hydrated Minerals</span>
+          </label>
+          <span id="crism-hyd-opacity-val" class="opacity-val">80%</span>
+        </div>
+        <input type="range" id="crism-hyd-opacity-slider" min="0" max="100" value="80" class="opacity-slider" />
+      </div>
+
+      <!-- CRISM Phyllosilicates -->
+      <div class="layer-control-block">
+        <div class="layer-row-flex">
+          <label class="toggle-row">
+            <input type="checkbox" id="toggle-crism-phy" />
+            <span class="custom-check"></span>
+            <span class="toggle-text">CRISM Phyllosilicates</span>
+          </label>
+          <span id="crism-phy-opacity-val" class="opacity-val">80%</span>
+        </div>
+        <input type="range" id="crism-phy-opacity-slider" min="0" max="100" value="80" class="opacity-slider" />
+      </div>
+
+      <!-- THEMIS Thermal Brightness -->
+      <div class="layer-control-block">
+        <div class="layer-row-flex">
+          <label class="toggle-row">
+            <input type="checkbox" id="toggle-themis" />
+            <span class="custom-check"></span>
+            <span class="toggle-text">THEMIS Thermal Brightness</span>
+          </label>
+          <span id="themis-opacity-val" class="opacity-val">75%</span>
+        </div>
+        <input type="range" id="themis-opacity-slider" min="0" max="100" value="75" class="opacity-slider" />
+      </div>
+
+      <!-- Trajectory & Landmarks -->
+      <div class="layer-control-block">
+        <label class="toggle-row">
+          <input type="checkbox" id="toggle-route" checked />
+          <span class="custom-check"></span>
+          <span class="toggle-text">Curiosity Route &amp; Milestones</span>
+        </label>
+      </div>
+
+      <!-- Boxwork Outline -->
+      <div class="layer-control-block">
+        <label class="toggle-row">
+          <input type="checkbox" id="toggle-boxwork" checked />
+          <span class="custom-check"></span>
+          <span class="toggle-text">Boxwork Core Zone (153&times;283 m)</span>
+        </label>
+      </div>
     </div>
 
     <!-- Camera Actions -->
@@ -86,6 +178,56 @@
       <button id="btn-focus-boxwork" class="hud-btn secondary">Focus Boxwork</button>
     </div>
   </aside>
+
+  <!-- Bottom Timeline Replay HUD -->
+  <nav class="hud-panel hud-timeline" id="hud-timeline">
+    <div class="timeline-row-main">
+      <button id="btn-play-pause" class="timeline-play-btn">▶ PLAY</button>
+      
+      <div class="timeline-slider-container">
+        <div class="timeline-header-meta">
+          <span class="timeline-title">MISSION TIMELINE REPLAY</span>
+          <span id="timeline-sol-badge" class="sol-badge">SOL 3721</span>
+        </div>
+        <input type="range" id="timeline-slider" min="3721" max="4868" step="1" value="3721" />
+        <div class="timeline-ticks">
+          <span>Sol 3721 (Entry)</span>
+          <span>Sol 4534 (Phase 1)</span>
+          <span>Sol 4600 (Boxwork)</span>
+          <span>Sol 4868 (Latest)</span>
+        </div>
+      </div>
+
+      <div class="speed-selector">
+        <span class="speed-title">SPEED</span>
+        <div class="speed-btns">
+          <button class="speed-btn" data-speed="1">1&times;</button>
+          <button class="speed-btn active" data-speed="5">5&times;</button>
+          <button class="speed-btn" data-speed="15">15&times;</button>
+          <button class="speed-btn" data-speed="30">30&times;</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline-telemetry-row">
+      <div class="t-stat">
+        <span class="t-label">CURRENT SOL</span>
+        <span class="t-value" id="t-stat-sol">3721</span>
+      </div>
+      <div class="t-stat">
+        <span class="t-label">SURFACE ELEVATION</span>
+        <span class="t-value" id="t-stat-elev">-3857 m</span>
+      </div>
+      <div class="t-stat">
+        <span class="t-label">DISTANCE DRIVEN SO FAR</span>
+        <span class="t-value" id="t-stat-dist">0.0 m</span>
+      </div>
+      <div class="t-stat">
+        <span class="t-label">CLIMB SO FAR</span>
+        <span class="t-value" id="t-stat-climb">+0.0 m</span>
+      </div>
+    </div>
+  </nav>
 
   <!-- Bottom Left Hover Telemetry Readout -->
   <section class="hud-panel hud-readout" id="hud-readout">
@@ -130,24 +272,61 @@
 
   <!-- Bottom Right Legend & Navigation Help -->
   <aside class="hud-panel hud-legend">
-    <div class="legend-section">
-      <h4>SLOPE HAZARD CLASSES</h4>
-      <div class="legend-item"><span class="swatch easy"></span>&lt; 15&deg; Easy (Safe Traversability)</div>
-      <div class="legend-item"><span class="swatch moderate"></span>15&deg;&ndash;25&deg; Moderate (Caution / Slip)</div>
-      <div class="legend-item"><span class="swatch hazardous"></span>&gt; 25&deg; Hazardous (Steep / Incline)</div>
-      <div class="legend-note">* Game design tiers, not NASA rover limits.</div>
-    </div>
+    <div class="legend-scroll">
+      <!-- Science Milestones & Core Zone -->
+      <div class="legend-section">
+        <h4>LANDMARKS &amp; BOUNDARIES</h4>
+        <div class="legend-item"><span class="swatch start-flag"></span><strong>START:</strong> Route entry at north edge (Sol 3721)</div>
+        <div class="legend-item"><span class="swatch gold-box"></span><strong>Boxwork:</strong> the 153 &times; 283 m core zone from sols 4600-4805</div>
+        <div class="legend-item"><span class="swatch science-pin"></span><strong>Science Waypoint:</strong> Click for NASA blog briefing</div>
+      </div>
 
-    <div class="legend-section">
-      <h4>ROVER TRAVERSE</h4>
-      <div class="legend-item"><span class="line-swatch standard"></span>Traverse (Sols 3721&ndash;4868)</div>
-      <div class="legend-item"><span class="line-swatch boxwork"></span>Boxwork Campaign (Sols 4600&ndash;4805)</div>
-    </div>
+      <!-- Rover Traverse Colors -->
+      <div class="legend-section">
+        <h4>ROVER TRAVERSE</h4>
+        <div class="legend-item"><span class="line-swatch standard"></span>Standard Traverse (Sols 3721&ndash;4599, 4806&ndash;4868)</div>
+        <div class="legend-item"><span class="line-swatch boxwork"></span>Boxwork Campaign Traverse (Sols 4600&ndash;4805)</div>
+      </div>
 
-    <div class="nav-help">
-      <span><strong>Rotate:</strong> Left Click + Drag</span>
-      <span><strong>Pan:</strong> Right Click / Shift + Drag</span>
-      <span><strong>Zoom:</strong> Scroll Wheel</span>
+      <!-- Slope Hazard Classes -->
+      <div class="legend-section">
+        <h4>SLOPE HAZARD CLASSES</h4>
+        <div class="legend-item"><span class="swatch easy"></span>&lt; 15&deg; Easy (Safe Traversability)</div>
+        <div class="legend-item"><span class="swatch moderate"></span>15&deg;&ndash;25&deg; Moderate (Caution / Slip)</div>
+        <div class="legend-item"><span class="swatch hazardous"></span>&gt; 25&deg; Hazardous (Steep / Incline)</div>
+        <div class="legend-note">* Game design tiers, not NASA rover limits.</div>
+      </div>
+
+      <!-- CRISM Hydrated Minerals -->
+      <div class="legend-section">
+        <h4>CRISM HYDRATED MINERALS (~181 m/px)</h4>
+        <div class="legend-sub">Channel Meanings from CRISM Labels:</div>
+        <div class="legend-item"><span class="swatch crism-red"></span><strong>R:</strong> SINDEX2 hydrated sulfate</div>
+        <div class="legend-item"><span class="swatch crism-green"></span><strong>G:</strong> BD2100_2 monohydrated sulfate</div>
+        <div class="legend-item"><span class="swatch crism-blue"></span><strong>B:</strong> BD1900_2 H2O band depth</div>
+      </div>
+
+      <!-- CRISM Phyllosilicates -->
+      <div class="legend-section">
+        <h4>CRISM PHYLLOSILICATES (~181 m/px)</h4>
+        <div class="legend-sub">Channel Meanings from CRISM Labels:</div>
+        <div class="legend-item"><span class="swatch crism-red"></span><strong>R:</strong> D2300 Fe/Mg phyllosilicates</div>
+        <div class="legend-item"><span class="swatch crism-green"></span><strong>G:</strong> D2200 Al phyllosilicates</div>
+        <div class="legend-item"><span class="swatch crism-blue"></span><strong>B:</strong> BD1900R2 H2O band depth</div>
+      </div>
+
+      <!-- THEMIS -->
+      <div class="legend-section">
+        <h4>THEMIS DAYTIME INFRARED (100 m/px)</h4>
+        <div class="legend-item"><span class="swatch themis-gray"></span>Thermal brightness (not calibrated temperature)</div>
+      </div>
+
+      <!-- Navigation Help -->
+      <div class="nav-help">
+        <span><strong>Rotate:</strong> Left Click + Drag</span>
+        <span><strong>Pan:</strong> Right Click / Shift + Drag</span>
+        <span><strong>Zoom:</strong> Scroll Wheel</span>
+      </div>
     </div>
   </aside>
 

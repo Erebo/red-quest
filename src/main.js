@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// --- Performance & Timing Metrics ---
+const appStartTime = performance.now();
+let lastFpsUpdateTime = performance.now();
+let frameCount = 0;
+let currentFps = 60;
+
 // --- Global Constants & Coordinate Bounds ---
 const GRID_SIZE = 1025;
 const TERRAIN_WIDTH_M = 5000.0;
@@ -16,18 +22,56 @@ const BOXWORK_SOL_END = 4805;
 const loadingOverlay = document.getElementById('loading-overlay');
 const loadingStatus = document.getElementById('loading-status');
 const progressBar = document.getElementById('progress-bar');
+const btnSkipIntro = document.getElementById('btn-skip-intro');
 
+const fpsValDisplay = document.getElementById('fps-val');
+const loadValDisplay = document.getElementById('load-val');
+
+// Controls
 const exagSlider = document.getElementById('exag-slider');
 const exagValueDisplay = document.getElementById('exag-value');
 
+const timeSlider = document.getElementById('time-slider');
+const timeValDisplay = document.getElementById('time-val');
+const toggleDust = document.getElementById('toggle-dust');
+
+// Layer Toggles & Opacity Sliders
 const toggleSatellite = document.getElementById('toggle-satellite');
+
 const toggleSlope = document.getElementById('toggle-slope');
+const slopeOpacitySlider = document.getElementById('slope-opacity-slider');
+const slopeOpacityVal = document.getElementById('slope-opacity-val');
+
+const toggleCrismHyd = document.getElementById('toggle-crism-hyd');
+const crismHydOpacitySlider = document.getElementById('crism-hyd-opacity-slider');
+const crismHydOpacityVal = document.getElementById('crism-hyd-opacity-val');
+
+const toggleCrismPhy = document.getElementById('toggle-crism-phy');
+const crismPhyOpacitySlider = document.getElementById('crism-phy-opacity-slider');
+const crismPhyOpacityVal = document.getElementById('crism-phy-opacity-val');
+
+const toggleThemis = document.getElementById('toggle-themis');
+const themisOpacitySlider = document.getElementById('themis-opacity-slider');
+const themisOpacityVal = document.getElementById('themis-opacity-val');
+
 const toggleRoute = document.getElementById('toggle-route');
 const toggleBoxwork = document.getElementById('toggle-boxwork');
 
 const btnResetCam = document.getElementById('btn-reset-cam');
 const btnFocusBoxwork = document.getElementById('btn-focus-boxwork');
 
+// Timeline Replay Controls
+const btnPlayPause = document.getElementById('btn-play-pause');
+const timelineSlider = document.getElementById('timeline-slider');
+const timelineSolBadge = document.getElementById('timeline-sol-badge');
+const speedButtons = document.querySelectorAll('.speed-btn');
+
+const tStatSol = document.getElementById('t-stat-sol');
+const tStatElev = document.getElementById('t-stat-elev');
+const tStatDist = document.getElementById('t-stat-dist');
+const tStatClimb = document.getElementById('t-stat-climb');
+
+// Hover Readout Elements
 const readoutElev = document.getElementById('readout-elev');
 const readoutSlope = document.getElementById('readout-slope');
 const readoutHazard = document.getElementById('readout-hazard');
@@ -35,6 +79,12 @@ const readoutSol = document.getElementById('readout-sol');
 const readoutLocalCoords = document.getElementById('readout-local-coords');
 const readoutGeoCoords = document.getElementById('readout-geo-coords');
 const hoverStateBadge = document.getElementById('hover-state');
+
+// Science Popup
+const sciencePopup = document.getElementById('science-popup');
+const popupTitle = document.getElementById('popup-title');
+const popupSol = document.getElementById('popup-sol');
+const popupCloseBtn = document.getElementById('popup-close');
 
 // State Variables
 let currentExag = 1.0;
@@ -45,30 +95,53 @@ let rawSlopes = null;
 let routeData = null;
 let routePoints = [];
 
+// Replay State
+let isPlaying = false;
+let replaySpeed = 5.0; // sols per real second
+let currentReplaySol = 3721;
+let lastReplayTime = 0;
+
+// Meshes & Layers
 let terrainGeometry = null;
 let terrainMesh = null;
 let hazardMesh = null;
-let routeLine = null;
-let routePointsGroup = null;
+let crismHydMesh = null;
+let crismPhyMesh = null;
+let themisMesh = null;
+
+let routeGroup = null;
+let activeTrailLine = null;
+let futureTrailLine = null;
+let roverTokenGroup = null;
+let roverBeaconRing = null;
 let boxworkGroup = null;
+let scienceMarkersGroup = null;
+let startFlagGroup = null;
+let dustParticles = null;
+let dustVelocities = [];
+
 let hoverCursorMesh = null;
 let nearestSolMarker = null;
 
+// Camera & Lighting State
 let cameraAnimId = null;
+let isIntroActive = false;
+let introStartTime = 0;
+const INTRO_DURATION = 4000;
 
 // Three.js Core Objects
 const container = document.getElementById('canvas-container');
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x080a0f);
-scene.fog = new THREE.FogExp2(0x120c0a, 0.00007);
+const initialFogColor = new THREE.Color(0x2a160e);
+scene.background = initialFogColor;
+scene.fog = new THREE.FogExp2(initialFogColor, 0.000075);
 
 const camera = new THREE.PerspectiveCamera(
   45,
   window.innerWidth / window.innerHeight,
   10,
-  40000
+  50000
 );
-// Initial panoramic angle overlooking Gale Crater box from south-southeast
 const initialCamPos = new THREE.Vector3(0, 3400, 3900);
 const initialTarget = new THREE.Vector3(0, 360, 0);
 camera.position.copy(initialCamPos);
@@ -84,46 +157,50 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.target.copy(initialTarget);
-controls.maxPolarAngle = Math.PI / 2 - 0.04; // Don't clip under ground
-controls.minDistance = 150;
-controls.maxDistance = 18000;
+controls.maxPolarAngle = Math.PI / 2 - 0.03;
+controls.minDistance = 80;
+controls.maxDistance = 22000;
+
 controls.addEventListener('start', () => {
   if (cameraAnimId) {
     cancelAnimationFrame(cameraAnimId);
     cameraAnimId = null;
   }
+  if (isIntroActive) {
+    endCinematicIntro();
+  }
 });
 
-// Raycasting for Hover Readout
+// Raycasting for Hover Readout & Markers
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2(-9999, -9999);
 let isMouseOverCanvas = false;
 
-// --- Lighting Setup ---
+// Lights
+let sunLight = null;
+let fillLight = null;
+let ambientLight = null;
+let hemiLight = null;
+
 function setupLights() {
-  const ambientLight = new THREE.AmbientLight(0x5a443b, 1.2);
+  ambientLight = new THREE.AmbientLight(0x5a443b, 1.1);
   scene.add(ambientLight);
 
-  const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x1f140e, 0.8);
+  hemiLight = new THREE.HemisphereLight(0xffeedd, 0x1f140e, 0.7);
   scene.add(hemiLight);
 
-  // Directional Mars Sun: northwest azimuth to match HiRISE shadow directions
-  const sunLight = new THREE.DirectionalLight(0xfff5ea, 2.4);
-  sunLight.position.set(-3000, 4500, -3500);
+  // Directional Mars Sun
+  sunLight = new THREE.DirectionalLight(0xfff5ea, 2.4);
+  sunLight.position.set(-3200, 4200, -3200);
   scene.add(sunLight);
 
-  // Subtle rim light from opposite side
-  const fillLight = new THREE.DirectionalLight(0xb08870, 0.7);
-  fillLight.position.set(3500, 2000, 3000);
+  fillLight = new THREE.DirectionalLight(0xb08870, 0.6);
+  fillLight.position.set(3500, 1800, 3000);
   scene.add(fillLight);
 }
 
-// --- Helper Functions for Coordinate Mapping & Sampling ---
+// --- Coordinate Mapping & Bilinear Sampling Helpers ---
 
-/**
- * Bilinear sampling from row-major Float32Array (1025 x 1025)
- * row 0 is North edge, row 1024 is South edge
- */
 function sampleGridBilinear(data, col, row) {
   const c = Math.max(0, Math.min(GRID_SIZE - 1, col));
   const r = Math.max(0, Math.min(GRID_SIZE - 1, row));
@@ -146,27 +223,18 @@ function sampleGridBilinear(data, col, row) {
   return (1.0 - fr) * top + fr * bot;
 }
 
-/**
- * Converts local (x, y) metres to heightmap grid (col, row)
- */
 function localToGrid(lx, ly) {
   const col = (lx / TERRAIN_WIDTH_M) * (GRID_SIZE - 1);
   const row = (1.0 - (ly / TERRAIN_HEIGHT_M)) * (GRID_SIZE - 1);
   return { col, row };
 }
 
-/**
- * Converts local (x, y) metres to Three.js mesh space (x, z)
- */
 function localToMesh(lx, ly) {
   const meshX = lx - TERRAIN_WIDTH_M / 2.0;
   const meshZ = TERRAIN_HEIGHT_M / 2.0 - ly;
   return { meshX, meshZ };
 }
 
-/**
- * Converts Three.js mesh space (x, z) to local (x, y) metres
- */
 function meshToLocal(mx, mz) {
   const lx = mx + TERRAIN_WIDTH_M / 2.0;
   const ly = TERRAIN_HEIGHT_M / 2.0 - mz;
@@ -176,9 +244,6 @@ function meshToLocal(mx, mz) {
   };
 }
 
-/**
- * Converts local metres to Mars Easting/Northing and Longitude/Latitude
- */
 function localToMarsGeo(lx, ly) {
   const easting = WEST_EDGE_EASTING + lx;
   const northing = SOUTH_EDGE_NORTHING + ly;
@@ -187,17 +252,20 @@ function localToMarsGeo(lx, ly) {
   return { easting, northing, lon, lat };
 }
 
-// --- Terrain & Route Construction ---
+// --- Terrain & Draped Overlay Layers ---
 
-function createTerrainMesh(satelliteTex, slopeTex) {
-  // PlaneGeometry(width, height, widthSegments, heightSegments)
+let satelliteTexRef = null;
+
+function createTerrainAndDrapedLayers(satTex, slopeTex, crismHydTex, crismPhyTex, themisTex) {
+  satelliteTexRef = satTex;
+
+  // 1. Shared Base Geometry (1025 x 1025 vertices)
   terrainGeometry = new THREE.PlaneGeometry(
     TERRAIN_WIDTH_M,
     TERRAIN_HEIGHT_M,
     GRID_SIZE - 1,
     GRID_SIZE - 1
   );
-  // Rotate plane so X is East, -Z is North, +Z is South
   terrainGeometry.rotateX(-Math.PI / 2);
 
   const posAttr = terrainGeometry.attributes.position;
@@ -208,19 +276,18 @@ function createTerrainMesh(satelliteTex, slopeTex) {
   posAttr.needsUpdate = true;
   terrainGeometry.computeVertexNormals();
 
-  // Primary Material: High-resolution HiRISE Satellite texture
+  // 2. Base Satellite Mesh
   const terrainMaterial = new THREE.MeshStandardMaterial({
-    map: satelliteTex,
+    map: satTex,
     roughness: 0.88,
     metalness: 0.08,
     flatShading: false
   });
-
   terrainMesh = new THREE.Mesh(terrainGeometry, terrainMaterial);
   terrainMesh.name = 'MarsTerrain';
   scene.add(terrainMesh);
 
-  // Slope Hazard Overlay Mesh: shares exact same geometry
+  // 3. Slope Hazard Overlay Mesh
   const hazardMaterial = new THREE.MeshBasicMaterial({
     map: slopeTex,
     transparent: true,
@@ -230,19 +297,87 @@ function createTerrainMesh(satelliteTex, slopeTex) {
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1
   });
-
   hazardMesh = new THREE.Mesh(terrainGeometry, hazardMaterial);
   hazardMesh.name = 'SlopeHazardOverlay';
   hazardMesh.visible = toggleSlope.checked;
   scene.add(hazardMesh);
+
+  // 4. CRISM Hydrated Minerals Mesh (Nearest Neighbour, Alpha Coverage Mask)
+  const crismHydMaterial = new THREE.MeshBasicMaterial({
+    map: crismHydTex,
+    transparent: true,
+    opacity: 0.80,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2
+  });
+  crismHydMesh = new THREE.Mesh(terrainGeometry, crismHydMaterial);
+  crismHydMesh.name = 'CRISM_Hydrated';
+  crismHydMesh.visible = toggleCrismHyd.checked;
+  scene.add(crismHydMesh);
+
+  // 5. CRISM Phyllosilicates Mesh (Nearest Neighbour, Alpha Coverage Mask)
+  const crismPhyMaterial = new THREE.MeshBasicMaterial({
+    map: crismPhyTex,
+    transparent: true,
+    opacity: 0.80,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -3,
+    polygonOffsetUnits: -3
+  });
+  crismPhyMesh = new THREE.Mesh(terrainGeometry, crismPhyMaterial);
+  crismPhyMesh.name = 'CRISM_Phyllosilicates';
+  crismPhyMesh.visible = toggleCrismPhy.checked;
+  scene.add(crismPhyMesh);
+
+  // 6. THEMIS Thermal Brightness Mesh (100 m/px)
+  const themisMaterial = new THREE.MeshBasicMaterial({
+    map: themisTex,
+    transparent: true,
+    opacity: 0.75,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4
+  });
+  themisMesh = new THREE.Mesh(terrainGeometry, themisMaterial);
+  themisMesh.name = 'THEMIS_Thermal';
+  themisMesh.visible = toggleThemis.checked;
+  scene.add(themisMesh);
 }
 
-function createRoute() {
-  routePointsGroup = new THREE.Group();
-  routePointsGroup.name = 'CuriosityRouteGroup';
+// --- Route, Glowing Trail, Rover Token & Waypoints ---
 
+function createRouteAndRover() {
+  routeGroup = new THREE.Group();
+  routeGroup.name = 'RouteGroup';
+
+  // Precompute cumulative 3D distance and cumulative climb for each route point
+  let cumDist = 0.0;
+  let cumClimb = 0.0;
+  routePoints[0].cumDist = 0.0;
+  routePoints[0].cumClimb = 0.0;
+
+  for (let i = 1; i < routePoints.length; i++) {
+    const p0 = routePoints[i - 1];
+    const p1 = routePoints[i];
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const dz = p1.elevation - p0.elevation;
+    const stepDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    cumDist += stepDist;
+    if (dz > 0) cumClimb += dz;
+
+    p1.cumDist = cumDist;
+    p1.cumClimb = cumClimb;
+  }
+
+  // Build vertex positions & colors for full route
   const positions = [];
-  const colors = [];
+  const activeColors = [];
+  const futureColors = [];
 
   for (let i = 0; i < routePoints.length; i++) {
     const pt = routePoints[i];
@@ -251,95 +386,263 @@ function createRoute() {
     positions.push(meshX, meshY, meshZ);
 
     if (pt.sol >= BOXWORK_SOL_START && pt.sol <= BOXWORK_SOL_END) {
-      // Magenta (#ff007f) for Boxwork campaign
-      colors.push(1.0, 0.0, 0.5);
+      activeColors.push(1.0, 0.0, 0.5); // Magenta for Boxwork
+      futureColors.push(0.4, 0.0, 0.2);
     } else {
-      // Electric Cyan (#00e5ff) for standard traverse
-      colors.push(0.0, 0.9, 1.0);
+      activeColors.push(0.0, 0.9, 1.0); // Cyan for Standard Traverse
+      futureColors.push(0.0, 0.3, 0.4);
     }
   }
 
-  const routeGeo = new THREE.BufferGeometry();
-  routeGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  routeGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-  const routeMat = new THREE.LineBasicMaterial({
+  // Active glowing trail (drawn up to current replay sol)
+  const activeGeo = new THREE.BufferGeometry();
+  activeGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  activeGeo.setAttribute('color', new THREE.Float32BufferAttribute(activeColors, 3));
+  const activeMat = new THREE.LineBasicMaterial({
     vertexColors: true,
     linewidth: 3,
     depthTest: true
   });
+  activeTrailLine = new THREE.Line(activeGeo, activeMat);
+  routeGroup.add(activeTrailLine);
 
-  routeLine = new THREE.Line(routeGeo, routeMat);
-  routePointsGroup.add(routeLine);
-
-  // Add Landmark waypoint markers
-  const landmarkDefs = [
-    { sol: routePoints[0].sol, label: 'Entry (Sol 3721)', color: 0x2ecc71, pt: routePoints[0] },
-    { sol: 4600, label: 'Boxwork Start (Sol 4600)', color: 0xf1c40f, pt: routePoints.find(p => p.sol >= 4600) },
-    { sol: 4805, label: 'Boxwork End (Sol 4805)', color: 0xff007f, pt: routePoints.find(p => p.sol >= 4805) },
-    { sol: routePoints[routePoints.length - 1].sol, label: 'Latest (Sol 4868)', color: 0x00e5ff, pt: routePoints[routePoints.length - 1] }
-  ];
-
-  landmarkDefs.forEach(item => {
-    if (!item.pt) return;
-    const { meshX, meshZ } = localToMesh(item.pt.x, item.pt.y);
-    const meshY = (item.pt.elevation - minElev) * currentExag + 5.0 * currentExag;
-
-    const sphereGeo = new THREE.SphereGeometry(14, 16, 16);
-    const sphereMat = new THREE.MeshBasicMaterial({ color: item.color });
-    const sphere = new THREE.Mesh(sphereGeo, sphereMat);
-    sphere.position.set(meshX, meshY, meshZ);
-    sphere.userData = { pt: item.pt, isLandmark: true, label: item.label };
-    routePointsGroup.add(sphere);
-
-    // Glowing halo ring around landmark
-    const ringGeo = new THREE.RingGeometry(18, 24, 32);
-    ringGeo.rotateX(-Math.PI / 2);
-    const ringMat = new THREE.MeshBasicMaterial({ color: item.color, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.position.set(meshX, meshY + 1, meshZ);
-    routePointsGroup.add(ring);
+  // Future route trail (rendered dimmed)
+  const futureGeo = new THREE.BufferGeometry();
+  futureGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  futureGeo.setAttribute('color', new THREE.Float32BufferAttribute(futureColors, 3));
+  const futureMat = new THREE.LineBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.25,
+    depthTest: true
   });
+  futureTrailLine = new THREE.Line(futureGeo, futureMat);
+  routeGroup.add(futureTrailLine);
 
-  scene.add(routePointsGroup);
+  // Rover 3D Marker Token
+  roverTokenGroup = new THREE.Group();
+  roverTokenGroup.name = 'RoverMarker';
+
+  // Rover Chassis Body
+  const bodyGeo = new THREE.BoxGeometry(14, 7, 10);
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: 0xf1c40f,
+    metalness: 0.7,
+    roughness: 0.3,
+    emissive: 0x442200
+  });
+  const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+  bodyMesh.position.y = 4;
+  roverTokenGroup.add(bodyMesh);
+
+  // Camera Mast
+  const mastGeo = new THREE.CylinderGeometry(0.8, 0.8, 10, 8);
+  const mastMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8 });
+  const mastMesh = new THREE.Mesh(mastGeo, mastMat);
+  mastMesh.position.set(4, 9, 0);
+  roverTokenGroup.add(mastMesh);
+
+  // Direction Heading Arrow
+  const arrowGeo = new THREE.ConeGeometry(3, 8, 8);
+  arrowGeo.rotateX(Math.PI / 2);
+  const arrowMat = new THREE.MeshBasicMaterial({ color: 0x00d2ff });
+  const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat);
+  arrowMesh.position.set(0, 10, -8);
+  roverTokenGroup.add(arrowMesh);
+
+  // Pulsing Halo Beacon Ring
+  const beaconGeo = new THREE.RingGeometry(12, 18, 32);
+  beaconGeo.rotateX(-Math.PI / 2);
+  const beaconMat = new THREE.MeshBasicMaterial({
+    color: 0x00d2ff,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.85
+  });
+  roverBeaconRing = new THREE.Mesh(beaconGeo, beaconMat);
+  roverBeaconRing.position.y = 1;
+  roverTokenGroup.add(roverBeaconRing);
+
+  // Rover Forward Spotlight
+  const roverLight = new THREE.PointLight(0x00d2ff, 1.8, 80);
+  roverLight.position.set(0, 8, -6);
+  roverTokenGroup.add(roverLight);
+
+  routeGroup.add(roverTokenGroup);
+  scene.add(routeGroup);
+
+  // Set initial rover position at Sol 3721
+  updateTimelineReplay(3721);
 }
 
-function createBoxworkZone() {
-  boxworkGroup = new THREE.Group();
-  boxworkGroup.name = 'BoxworkScienceZone';
+// --- Science Milestones, Start Flag & Boxwork Core Zone ---
 
-  // Local bounding bounds for Boxwork campaign:
-  // Sols 4600-4805 span X: [2355, 2508], Y: [2338, 2620]
-  const pad = 65.0;
-  const xMin = 2355.0 - pad;
-  const xMax = 2508.0 + pad;
-  const yMin = 2338.0 - pad;
-  const yMax = 2620.0 + pad;
+const SCIENCE_WAYPOINTS = [
+  {
+    targetSol: 4534,
+    solLabel: 'Sol 4534',
+    title: 'Boxwork campaign begins (Phase 1)',
+    color: 0xff007f
+  },
+  {
+    targetSol: 4602,
+    solLabel: 'Sols 4602-4603',
+    title: 'Top of the ridge, start of the main boxwork region',
+    color: 0xf1c40f
+  },
+  {
+    targetSol: 4604,
+    solLabel: 'Sols 4604-4606',
+    title: 'Main exposure of boxwork structures',
+    color: 0x00d2ff
+  },
+  {
+    targetSol: 4716,
+    solLabel: 'Sols 4716-4722',
+    title: 'Nevado Sajama drill',
+    color: 0x2ecc71
+  },
+  {
+    targetSol: 4804,
+    solLabel: 'Sols 4804-4811',
+    title: 'Nevado Sajama 2 drill',
+    color: 0xe67e22
+  }
+];
+
+function createScienceMarkersAndFlag() {
+  scienceMarkersGroup = new THREE.Group();
+  scienceMarkersGroup.name = 'ScienceMarkers';
+
+  // 1. Map START Flag (North Edge Entry, Sol 3721)
+  startFlagGroup = new THREE.Group();
+  startFlagGroup.name = 'StartFlag';
+  const startPt = routePoints[0];
+  const { meshX: sX, meshZ: sZ } = localToMesh(startPt.x, startPt.y);
+  const startY = (startPt.elevation - minElev) * currentExag;
+
+  // Flagpole
+  const poleGeo = new THREE.CylinderGeometry(1.2, 1.2, 48, 12);
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.9, roughness: 0.2 });
+  const poleMesh = new THREE.Mesh(poleGeo, poleMat);
+  poleMesh.position.set(sX, startY + 24 * currentExag, sZ);
+  startFlagGroup.add(poleMesh);
+
+  // Banner Flag
+  const flagShape = new THREE.Shape();
+  flagShape.moveTo(0, 0);
+  flagShape.lineTo(24, -8);
+  flagShape.lineTo(0, -16);
+  flagShape.closePath();
+  const flagGeo = new THREE.ShapeGeometry(flagShape);
+  const flagMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71, side: THREE.DoubleSide });
+  const flagMesh = new THREE.Mesh(flagGeo, flagMat);
+  flagMesh.position.set(sX, startY + 44 * currentExag, sZ);
+  startFlagGroup.add(flagMesh);
+
+  // Floating START marker sphere
+  const startSphereGeo = new THREE.SphereGeometry(8, 16, 16);
+  const startSphereMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71 });
+  const startSphere = new THREE.Mesh(startSphereGeo, startSphereMat);
+  startSphere.position.set(sX, startY + 48 * currentExag, sZ);
+  startFlagGroup.add(startSphere);
+
+  scene.add(startFlagGroup);
+
+  // 2. Science Milestone Markers
+  SCIENCE_WAYPOINTS.forEach(item => {
+    // Find closest route point
+    let closestPt = routePoints[0];
+    let minDiff = Infinity;
+    for (let i = 0; i < routePoints.length; i++) {
+      const diff = Math.abs(routePoints[i].sol - item.targetSol);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestPt = routePoints[i];
+      }
+    }
+
+    const { meshX, meshZ } = localToMesh(closestPt.x, closestPt.y);
+    const meshY = (closestPt.elevation - minElev) * currentExag + 6.0 * currentExag;
+
+    // Diamond / Octahedron pin
+    const pinGeo = new THREE.OctahedronGeometry(12, 0);
+    const pinMat = new THREE.MeshStandardMaterial({
+      color: item.color,
+      emissive: item.color,
+      emissiveIntensity: 0.6,
+      metalness: 0.4,
+      roughness: 0.2
+    });
+    const pinMesh = new THREE.Mesh(pinGeo, pinMat);
+    pinMesh.position.set(meshX, meshY, meshZ);
+    pinMesh.userData = {
+      isSciencePin: true,
+      title: item.title,
+      solLabel: item.solLabel,
+      pt: closestPt
+    };
+    scienceMarkersGroup.add(pinMesh);
+
+    // Vertical beacon light beam
+    const beamGeo = new THREE.CylinderGeometry(0.5, 0.5, 60, 8);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: item.color,
+      transparent: true,
+      opacity: 0.55
+    });
+    const beamMesh = new THREE.Mesh(beamGeo, beamMat);
+    beamMesh.position.set(meshX, meshY + 30, meshZ);
+    scienceMarkersGroup.add(beamMesh);
+
+    // Glowing base ring
+    const ringGeo = new THREE.RingGeometry(14, 20, 24);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: item.color,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.8
+    });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.position.set(meshX, meshY - 4 * currentExag, meshZ);
+    scienceMarkersGroup.add(ringMesh);
+  });
+
+  scene.add(scienceMarkersGroup);
+}
+
+function createBoxworkCoreZone() {
+  boxworkGroup = new THREE.Group();
+  boxworkGroup.name = 'BoxworkCoreZone';
+
+  // Exact 153 x 283 m core zone from sols 4600-4805:
+  // X: [2355.6, 2508.6] (width = 153 m)
+  // Y: [2337.5, 2620.5] (height = 283 m)
+  const xMin = 2355.6;
+  const xMax = 2508.6;
+  const yMin = 2337.5;
+  const yMax = 2620.5;
 
   const perimeterPoints = [];
-  const stepsPerSide = 24;
+  const stepsPerSide = 25;
 
-  // Bottom edge: (xMin, yMin) to (xMax, yMin)
   for (let s = 0; s < stepsPerSide; s++) {
     const t = s / stepsPerSide;
     perimeterPoints.push({ x: xMin + t * (xMax - xMin), y: yMin });
   }
-  // Right edge: (xMax, yMin) to (xMax, yMax)
   for (let s = 0; s < stepsPerSide; s++) {
     const t = s / stepsPerSide;
     perimeterPoints.push({ x: xMax, y: yMin + t * (yMax - yMin) });
   }
-  // Top edge: (xMax, yMax) to (xMin, yMax)
   for (let s = 0; s < stepsPerSide; s++) {
     const t = s / stepsPerSide;
     perimeterPoints.push({ x: xMax - t * (xMax - xMin), y: yMax });
   }
-  // Left edge: (xMin, yMax) to (xMin, yMin)
   for (let s = 0; s < stepsPerSide; s++) {
     const t = s / stepsPerSide;
     perimeterPoints.push({ x: xMin, y: yMax - t * (yMax - yMin) });
   }
-  // Close loop
   perimeterPoints.push(perimeterPoints[0]);
 
   const positions = [];
@@ -362,14 +665,73 @@ function createBoxworkZone() {
   });
 
   const boundaryLine = new THREE.Line(boundaryGeo, boundaryMat);
-  boundaryLine.name = 'BoxworkPerimeter';
+  boundaryLine.name = 'BoxworkPerimeterLine';
   boxworkGroup.add(boundaryLine);
 
   scene.add(boxworkGroup);
 }
 
+// --- Atmosphere: Drifting Dust Particle System ---
+
+function createDustParticles() {
+  const DUST_COUNT = 1200;
+  const dustGeo = new THREE.BufferGeometry();
+  const dustPositions = new Float32Array(DUST_COUNT * 3);
+  dustVelocities = [];
+
+  for (let i = 0; i < DUST_COUNT; i++) {
+    dustPositions[i * 3] = (Math.random() - 0.5) * 5000;
+    dustPositions[i * 3 + 1] = Math.random() * 800 + 20;
+    dustPositions[i * 3 + 2] = (Math.random() - 0.5) * 5000;
+
+    dustVelocities.push({
+      vx: (Math.random() - 0.3) * 1.5,
+      vy: (Math.random() - 0.5) * 0.35,
+      vz: (Math.random() - 0.5) * 1.2
+    });
+  }
+
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+  const dustMat = new THREE.PointsMaterial({
+    color: 0xdf8858,
+    size: 4.0,
+    transparent: true,
+    opacity: 0.6,
+    depthWrite: false
+  });
+
+  dustParticles = new THREE.Points(dustGeo, dustMat);
+  dustParticles.name = 'DriftingDust';
+  dustParticles.visible = toggleDust.checked;
+  scene.add(dustParticles);
+}
+
+function updateDustParticles() {
+  if (!dustParticles || !toggleDust.checked) return;
+
+  const pos = dustParticles.geometry.attributes.position;
+  const count = pos.count;
+
+  for (let i = 0; i < count; i++) {
+    let x = pos.getX(i) + dustVelocities[i].vx;
+    let y = pos.getY(i) + dustVelocities[i].vy;
+    let z = pos.getZ(i) + dustVelocities[i].vz;
+
+    if (x > 2500) x = -2500;
+    if (x < -2500) x = 2500;
+    if (z > 2500) z = -2500;
+    if (z < -2500) z = 2500;
+    if (y > 900) y = 20;
+    if (y < 20) y = 900;
+
+    pos.setXYZ(i, x, y, z);
+  }
+  pos.needsUpdate = true;
+}
+
+// --- Hover Cursor Markers ---
+
 function createHoverMarkers() {
-  // 3D cursor dot on surface
   const cursorGeo = new THREE.RingGeometry(12, 18, 32);
   cursorGeo.rotateX(-Math.PI / 2);
   const cursorMat = new THREE.MeshBasicMaterial({
@@ -382,7 +744,6 @@ function createHoverMarkers() {
   hoverCursorMesh.visible = false;
   scene.add(hoverCursorMesh);
 
-  // Marker for nearest rover sol
   const solMarkerGeo = new THREE.SphereGeometry(10, 16, 16);
   const solMarkerMat = new THREE.MeshBasicMaterial({
     color: 0xff007f,
@@ -394,7 +755,101 @@ function createHoverMarkers() {
   scene.add(nearestSolMarker);
 }
 
-// --- Exaggeration Update Handler ---
+// --- Time-of-Day Sun & Atmosphere Engine ---
+
+function updateTimeOfDay(hour) {
+  const h = Math.floor(hour);
+  const m = Math.floor((hour % 1) * 60);
+  timeValDisplay.textContent = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+
+  // Solar angle: 6am = 0, 12pm = pi/2, 18pm = pi
+  const solarAngle = ((hour - 6.0) / 12.0) * Math.PI;
+  const sunElevation = Math.sin(solarAngle);
+  const sunAzimuth = Math.cos(solarAngle);
+
+  const sunDist = 5800;
+  if (sunLight) {
+    sunLight.position.set(
+      -sunAzimuth * sunDist,
+      Math.max(250, sunElevation * 4800),
+      -1500 + sunAzimuth * 1200
+    );
+
+    // Warm daylight interpolation
+    const t = Math.max(0.05, Math.sin(solarAngle));
+    const sunColor = new THREE.Color().lerpColors(
+      new THREE.Color(0xff6020),
+      new THREE.Color(0xfff5ea),
+      t
+    );
+    sunLight.color.copy(sunColor);
+    sunLight.intensity = 0.6 + 2.0 * t;
+
+    // Atmospheric Fog and Sky
+    const fogColor = new THREE.Color().lerpColors(
+      new THREE.Color(0x180b06), // Twilight amber
+      new THREE.Color(0x351d14), // Noon warm Mars haze
+      t
+    );
+    scene.fog.color.copy(fogColor);
+    scene.background.copy(fogColor);
+  }
+}
+
+// --- Timeline Replay Engine ---
+
+function updateTimelineReplay(targetSol) {
+  currentReplaySol = Math.max(3721, Math.min(4868, targetSol));
+  timelineSlider.value = currentReplaySol;
+  timelineSolBadge.textContent = `SOL ${Math.floor(currentReplaySol)}`;
+
+  // Find latest route point index at or before currentReplaySol
+  let ptIndex = 0;
+  for (let i = 0; i < routePoints.length; i++) {
+    if (routePoints[i].sol <= currentReplaySol) {
+      ptIndex = i;
+    } else {
+      break;
+    }
+  }
+
+  const curPt = routePoints[ptIndex];
+
+  // Update Rover Token Position and Heading
+  if (roverTokenGroup) {
+    const { meshX, meshZ } = localToMesh(curPt.x, curPt.y);
+    const meshY = (curPt.elevation - minElev) * currentExag + 3.0 * currentExag;
+    roverTokenGroup.position.set(meshX, meshY, meshZ);
+
+    // Rotate rover to face heading direction towards next waypoint
+    if (ptIndex < routePoints.length - 1) {
+      const nextPt = routePoints[ptIndex + 1];
+      const { meshX: nX, meshZ: nZ } = localToMesh(nextPt.x, nextPt.y);
+      const angle = Math.atan2(nX - meshX, nZ - meshZ);
+      roverTokenGroup.rotation.y = angle;
+    }
+  }
+
+  // Update Active Trail (draw range 0 to ptIndex + 1)
+  if (activeTrailLine) {
+    activeTrailLine.geometry.setDrawRange(0, ptIndex + 1);
+  }
+
+  // Update Future Trail (draw range ptIndex to end)
+  if (futureTrailLine) {
+    futureTrailLine.geometry.setDrawRange(ptIndex, routePoints.length - ptIndex);
+  }
+
+  // Update Telemetry HUD numbers
+  tStatSol.textContent = `${Math.floor(curPt.sol)}`;
+  tStatElev.textContent = `${curPt.elevation.toFixed(1)} m`;
+
+  const distM = curPt.cumDist;
+  tStatDist.textContent = distM >= 1000 ? `${(distM / 1000).toFixed(2)} km` : `${distM.toFixed(1)} m`;
+  tStatClimb.textContent = `+${curPt.cumClimb.toFixed(1)} m`;
+}
+
+// --- Dynamic Vertical Exaggeration ---
 
 function applyVerticalExaggeration(exag) {
   currentExag = exag;
@@ -402,7 +857,7 @@ function applyVerticalExaggeration(exag) {
 
   if (!terrainGeometry || !rawHeights) return;
 
-  // 1. Update terrain mesh positions
+  // 1. Terrain Mesh
   const posAttr = terrainGeometry.attributes.position;
   for (let i = 0; i < posAttr.count; i++) {
     const elev = rawHeights[i];
@@ -411,31 +866,46 @@ function applyVerticalExaggeration(exag) {
   posAttr.needsUpdate = true;
   terrainGeometry.computeVertexNormals();
 
-  // 2. Update route line positions
-  if (routeLine) {
-    const routePosAttr = routeLine.geometry.attributes.position;
-    for (let i = 0; i < routePoints.length; i++) {
-      const pt = routePoints[i];
-      const meshY = (pt.elevation - minElev) * currentExag + 3.5 * currentExag;
-      routePosAttr.setY(i, meshY);
+  // 2. Active and Future Route Trails
+  [activeTrailLine, futureTrailLine].forEach(line => {
+    if (line) {
+      const linePosAttr = line.geometry.attributes.position;
+      for (let i = 0; i < routePoints.length; i++) {
+        const pt = routePoints[i];
+        const meshY = (pt.elevation - minElev) * currentExag + 3.5 * currentExag;
+        linePosAttr.setY(i, meshY);
+      }
+      linePosAttr.needsUpdate = true;
     }
-    routePosAttr.needsUpdate = true;
+  });
+
+  // 3. Rover Marker
+  if (roverTokenGroup && routePoints.length > 0) {
+    updateTimelineReplay(currentReplaySol);
   }
 
-  // 3. Update route landmark waypoint spheres
-  if (routePointsGroup) {
-    routePointsGroup.children.forEach(child => {
+  // 4. Science Markers & Start Flag
+  if (scienceMarkersGroup) {
+    scienceMarkersGroup.children.forEach(child => {
       if (child.userData && child.userData.pt) {
         const pt = child.userData.pt;
-        const meshY = (pt.elevation - minElev) * currentExag + 5.0 * currentExag;
+        const meshY = (pt.elevation - minElev) * currentExag + 6.0 * currentExag;
         child.position.y = meshY;
       }
     });
   }
 
-  // 4. Update Boxwork boundary perimeter
+  if (startFlagGroup) {
+    const startPt = routePoints[0];
+    const sY = (startPt.elevation - minElev) * currentExag;
+    startFlagGroup.children[0].position.y = sY + 24 * currentExag; // pole
+    startFlagGroup.children[1].position.y = sY + 44 * currentExag; // flag
+    startFlagGroup.children[2].position.y = sY + 48 * currentExag; // sphere
+  }
+
+  // 5. Boxwork Perimeter
   if (boxworkGroup) {
-    const boundaryLine = boxworkGroup.getObjectByName('BoxworkPerimeter');
+    const boundaryLine = boxworkGroup.getObjectByName('BoxworkPerimeterLine');
     if (boundaryLine) {
       const boundaryPosAttr = boundaryLine.geometry.attributes.position;
       const count = boundaryPosAttr.count;
@@ -451,12 +921,68 @@ function applyVerticalExaggeration(exag) {
     }
   }
 
-  // 5. Update OrbitControls target height
+  // Update OrbitControls target height
   const meanElev = (minElev + maxElev) / 2.0;
   controls.target.y = (meanElev - minElev) * currentExag;
 }
 
-// --- Hover Readout & Raycasting ---
+// --- Cinematic 4-Second Fly-in ---
+
+function startCinematicIntro() {
+  isIntroActive = true;
+  btnSkipIntro.style.display = 'block';
+
+  // High altitude overhead starting camera pose
+  const startCamPos = new THREE.Vector3(0, 8000, 4800);
+  const startLookAt = new THREE.Vector3(0, 300, 0);
+
+  // Focus destination: close-up on Boxwork core zone
+  const { meshX, meshZ } = localToMesh(2430, 2480);
+  const boxworkElev = -3613.0;
+  const boxworkMeshY = (boxworkElev - minElev) * currentExag;
+  const endCamPos = new THREE.Vector3(meshX + 180, boxworkMeshY + 750, meshZ + 950);
+  const endLookAt = new THREE.Vector3(meshX, boxworkMeshY, meshZ);
+
+  camera.position.copy(startCamPos);
+  controls.target.copy(startLookAt);
+  controls.update();
+
+  introStartTime = performance.now();
+
+  function animateIntro(now) {
+    if (!isIntroActive) return;
+    const elapsed = now - introStartTime;
+    const progress = Math.min(1.0, elapsed / INTRO_DURATION);
+    const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+    camera.position.lerpVectors(startCamPos, endCamPos, ease);
+    controls.target.lerpVectors(startLookAt, endLookAt, ease);
+    controls.update();
+
+    if (progress < 1.0) {
+      requestAnimationFrame(animateIntro);
+    } else {
+      endCinematicIntro();
+    }
+  }
+
+  requestAnimationFrame(animateIntro);
+}
+
+function endCinematicIntro() {
+  if (!isIntroActive) return;
+  isIntroActive = false;
+  btnSkipIntro.style.display = 'none';
+
+  const { meshX, meshZ } = localToMesh(2430, 2480);
+  const boxworkElev = -3613.0;
+  const boxworkMeshY = (boxworkElev - minElev) * currentExag;
+  camera.position.set(meshX + 180, boxworkMeshY + 750, meshZ + 950);
+  controls.target.set(meshX, boxworkMeshY, meshZ);
+  controls.update();
+}
+
+// --- Hover Readout & Click Handler for Science Markers ---
 
 function updateHoverReadout() {
   if (!isMouseOverCanvas || !terrainMesh || !rawHeights || !rawSlopes) {
@@ -473,15 +999,12 @@ function updateHoverReadout() {
     const hit = intersects[0];
     const hitPoint = hit.point;
 
-    // Convert hit position to local box coordinates (0 to 5000 m)
     const { lx, ly } = meshToLocal(hitPoint.x, hitPoint.z);
     const { col, row } = localToGrid(lx, ly);
 
-    // Sample continuous elevation and slope
     const elev = sampleGridBilinear(rawHeights, col, row);
     const slopeDeg = sampleGridBilinear(rawSlopes, col, row);
 
-    // Hazard tier classification
     let hazardClass = 'Easy (< 15°)';
     let hazardStyleClass = 'hazard-easy';
     if (slopeDeg >= 25.0) {
@@ -492,7 +1015,6 @@ function updateHoverReadout() {
       hazardStyleClass = 'hazard-moderate';
     }
 
-    // Find nearest rover sol waypoint
     let minD2 = Infinity;
     let nearestPt = null;
     for (let i = 0; i < routePoints.length; i++) {
@@ -509,7 +1031,6 @@ function updateHoverReadout() {
     const distM = Math.sqrt(minD2);
     const { lon, lat } = localToMarsGeo(lx, ly);
 
-    // Update DOM readout
     readoutElev.textContent = `${elev.toFixed(1)} m`;
     readoutSlope.textContent = `${slopeDeg.toFixed(1)}°`;
     readoutHazard.textContent = hazardClass;
@@ -519,7 +1040,6 @@ function updateHoverReadout() {
       const distStr = distM < 8 ? '(At rover waypoint)' : `(${Math.round(distM)} m away)`;
       readoutSol.textContent = `Sol ${nearestPt.sol} ${distStr}`;
 
-      // Update nearest sol marker position
       if (nearestSolMarker) {
         const { meshX: solX, meshZ: solZ } = localToMesh(nearestPt.x, nearestPt.y);
         const solY = (nearestPt.elevation - minElev) * currentExag + 5.0 * currentExag;
@@ -534,7 +1054,6 @@ function updateHoverReadout() {
     hoverStateBadge.textContent = 'SURFACE TELEMETRY ACTIVE';
     hoverStateBadge.classList.add('active');
 
-    // Position 3D hover ring cursor
     if (hoverCursorMesh) {
       hoverCursorMesh.position.set(hitPoint.x, hitPoint.y + 1.5, hitPoint.z);
       hoverCursorMesh.visible = true;
@@ -558,7 +1077,7 @@ function resetReadoutDisplay() {
   hoverStateBadge.classList.remove('active');
 }
 
-// --- Camera Navigation & Focus Animations ---
+// --- Camera Navigation Shortcuts ---
 
 function animateCameraTo(targetCamPos, targetLookAt, duration = 1200) {
   const startCamPos = camera.position.clone();
@@ -568,7 +1087,6 @@ function animateCameraTo(targetCamPos, targetLookAt, duration = 1200) {
   function updateCam() {
     const elapsed = performance.now() - startTime;
     const t = Math.min(1.0, elapsed / duration);
-    // Smooth easeInOutCubic curve
     const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
     camera.position.lerpVectors(startCamPos, targetCamPos, ease);
@@ -594,23 +1112,21 @@ function resetCameraView() {
 }
 
 function focusBoxworkView() {
-  // Boxwork centroid in local coordinates: X=2420m, Y=2450m, Elev=-3613m
-  const { meshX, meshZ } = localToMesh(2420, 2450);
+  const { meshX, meshZ } = localToMesh(2430, 2480);
   const boxworkElev = -3613.0;
   const boxworkMeshY = (boxworkElev - minElev) * currentExag;
 
   const targetLookAt = new THREE.Vector3(meshX, boxworkMeshY, meshZ);
-  // Dramatic close-up oblique angle from south
   const targetCamPos = new THREE.Vector3(
-    meshX + 120,
-    boxworkMeshY + 650 * Math.max(1.0, currentExag * 0.75),
+    meshX + 180,
+    boxworkMeshY + 700 * Math.max(1.0, currentExag * 0.75),
     meshZ + 900
   );
 
   animateCameraTo(targetCamPos, targetLookAt, 1600);
 }
 
-// --- Event Listeners & UI Binding ---
+// --- UI Event Listeners ---
 
 function bindUIEvents() {
   // Exaggeration Slider
@@ -618,48 +1134,134 @@ function bindUIEvents() {
     applyVerticalExaggeration(parseFloat(e.target.value));
   });
 
-  // Layer Toggles
+  // Time of Day Slider
+  timeSlider.addEventListener('input', (e) => {
+    updateTimeOfDay(parseFloat(e.target.value));
+  });
+
+  // Dust Particles Toggle
+  toggleDust.addEventListener('change', () => {
+    if (dustParticles) dustParticles.visible = toggleDust.checked;
+  });
+
+  // Skip Intro Button
+  btnSkipIntro.addEventListener('click', endCinematicIntro);
+
+  // Satellite Layer Toggle
   toggleSatellite.addEventListener('change', () => {
     if (terrainMesh) {
       if (toggleSatellite.checked) {
-        terrainMesh.material.map = satelliteTextureRef;
+        terrainMesh.material.map = satelliteTexRef;
         terrainMesh.material.color.set(0xffffff);
       } else {
         terrainMesh.material.map = null;
-        terrainMesh.material.color.set(0xb8684a); // Clean Martian terra-cotta
+        terrainMesh.material.color.set(0xb8684a);
       }
       terrainMesh.material.needsUpdate = true;
     }
-
-    if (hazardMesh) {
-      // Adjust hazard overlay opacity depending on satellite layer state
-      hazardMesh.material.opacity = toggleSatellite.checked ? 0.65 : 0.95;
-    }
   });
 
+  // Slope Hazard Overlay Toggle & Opacity Slider
   toggleSlope.addEventListener('change', () => {
-    if (hazardMesh) {
-      hazardMesh.visible = toggleSlope.checked;
-    }
+    if (hazardMesh) hazardMesh.visible = toggleSlope.checked;
+  });
+  slopeOpacitySlider.addEventListener('input', (e) => {
+    const val = parseInt(e.target.value, 10);
+    slopeOpacityVal.textContent = `${val}%`;
+    if (hazardMesh) hazardMesh.material.opacity = val / 100.0;
   });
 
+  // CRISM Hydrated Minerals Toggle & Opacity Slider
+  toggleCrismHyd.addEventListener('change', () => {
+    if (crismHydMesh) crismHydMesh.visible = toggleCrismHyd.checked;
+  });
+  crismHydOpacitySlider.addEventListener('input', (e) => {
+    const val = parseInt(e.target.value, 10);
+    crismHydOpacityVal.textContent = `${val}%`;
+    if (crismHydMesh) crismHydMesh.material.opacity = val / 100.0;
+  });
+
+  // CRISM Phyllosilicates Toggle & Opacity Slider
+  toggleCrismPhy.addEventListener('change', () => {
+    if (crismPhyMesh) crismPhyMesh.visible = toggleCrismPhy.checked;
+  });
+  crismPhyOpacitySlider.addEventListener('input', (e) => {
+    const val = parseInt(e.target.value, 10);
+    crismPhyOpacityVal.textContent = `${val}%`;
+    if (crismPhyMesh) crismPhyMesh.material.opacity = val / 100.0;
+  });
+
+  // THEMIS Thermal Brightness Toggle & Opacity Slider
+  toggleThemis.addEventListener('change', () => {
+    if (themisMesh) themisMesh.visible = toggleThemis.checked;
+  });
+  themisOpacitySlider.addEventListener('input', (e) => {
+    const val = parseInt(e.target.value, 10);
+    themisOpacityVal.textContent = `${val}%`;
+    if (themisMesh) themisMesh.material.opacity = val / 100.0;
+  });
+
+  // Trajectory & Boxwork Toggles
   toggleRoute.addEventListener('change', () => {
-    if (routePointsGroup) {
-      routePointsGroup.visible = toggleRoute.checked;
-    }
+    if (routeGroup) routeGroup.visible = toggleRoute.checked;
+    if (scienceMarkersGroup) scienceMarkersGroup.visible = toggleRoute.checked;
+    if (startFlagGroup) startFlagGroup.visible = toggleRoute.checked;
   });
 
   toggleBoxwork.addEventListener('change', () => {
-    if (boxworkGroup) {
-      boxworkGroup.visible = toggleBoxwork.checked;
-    }
+    if (boxworkGroup) boxworkGroup.visible = toggleBoxwork.checked;
   });
 
   // Camera Action Buttons
   btnResetCam.addEventListener('click', resetCameraView);
   btnFocusBoxwork.addEventListener('click', focusBoxworkView);
 
-  // Mouse / Pointer Move
+  // Timeline Play / Pause
+  btnPlayPause.addEventListener('click', () => {
+    isPlaying = !isPlaying;
+    btnPlayPause.textContent = isPlaying ? '⏸ PAUSE' : '▶ PLAY';
+    lastReplayTime = performance.now();
+  });
+
+  // Timeline Slider Drag
+  timelineSlider.addEventListener('input', (e) => {
+    isPlaying = false;
+    btnPlayPause.textContent = '▶ PLAY';
+    updateTimelineReplay(parseFloat(e.target.value));
+  });
+
+  // Speed Buttons
+  speedButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      speedButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      replaySpeed = parseFloat(btn.dataset.speed);
+    });
+  });
+
+  // Science Popup Close Button
+  popupCloseBtn.addEventListener('click', () => {
+    sciencePopup.classList.add('hidden');
+  });
+
+  // Canvas Click: Raycast to detect click on Science Waypoints
+  renderer.domElement.addEventListener('click', () => {
+    if (!scienceMarkersGroup) return;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(scienceMarkersGroup.children, false);
+
+    if (intersects.length > 0) {
+      const hitObj = intersects[0].object;
+      if (hitObj.userData && hitObj.userData.isSciencePin) {
+        popupTitle.textContent = hitObj.userData.title;
+        popupSol.textContent = hitObj.userData.solLabel;
+        sciencePopup.classList.remove('hidden');
+      }
+    }
+  });
+
+  // Pointer Move
   window.addEventListener('pointermove', (e) => {
     const rect = renderer.domElement.getBoundingClientRect();
     if (
@@ -693,19 +1295,17 @@ function bindUIEvents() {
   });
 }
 
-// --- Main Asset Loading & Initialization ---
-
-let satelliteTextureRef = null;
-let slopeTextureRef = null;
+// --- Asset Loader & Initialization ---
 
 async function loadAssetsAndInit() {
   try {
     setupLights();
     bindUIEvents();
+    updateTimeOfDay(14.0);
 
-    // 1. Fetch Manifest
-    loadingStatus.textContent = 'Loading terrain metadata...';
-    progressBar.style.width = '15%';
+    // 1. Manifest
+    loadingStatus.textContent = 'Reading topography metadata...';
+    progressBar.style.width = '12%';
     const manifestResp = await fetch('/data/manifest.json');
     const manifest = await manifestResp.json();
     if (manifest.elevation_summary) {
@@ -713,55 +1313,68 @@ async function loadAssetsAndInit() {
       maxElev = manifest.elevation_summary.max_elevation_m;
     }
 
-    // 2. Fetch Terrain Heightmap Binary (Float32, 1025 x 1025)
-    loadingStatus.textContent = 'Downloading high-resolution 1025x1025 DEM...';
-    progressBar.style.width = '35%';
+    // 2. Terrain Height Binary
+    loadingStatus.textContent = 'Loading 1025x1025 elevation mesh binary...';
+    progressBar.style.width = '28%';
     const heightResp = await fetch('/data/terrain_height.bin');
     const heightBuffer = await heightResp.arrayBuffer();
     rawHeights = new Float32Array(heightBuffer);
 
-    // 3. Fetch Slope Binary (Float32, 1025 x 1025)
-    loadingStatus.textContent = 'Downloading 5m slope gradient grid...';
-    progressBar.style.width = '55%';
+    // 3. Slope Binary
+    loadingStatus.textContent = 'Loading 5m slope gradient grid...';
+    progressBar.style.width = '42%';
     const slopeResp = await fetch('/data/slope_5m.bin');
     const slopeBuffer = await slopeResp.arrayBuffer();
     rawSlopes = new Float32Array(slopeBuffer);
 
-    // 4. Fetch Route JSON
-    loadingStatus.textContent = 'Loading Curiosity rover traverse route...';
-    progressBar.style.width = '70%';
+    // 4. Route JSON
+    loadingStatus.textContent = 'Parsing Curiosity traverse telemetry...';
+    progressBar.style.width = '55%';
     const routeResp = await fetch('/data/route.json');
     routeData = await routeResp.json();
     routePoints = routeData.points;
 
     // 5. Load Textures
-    loadingStatus.textContent = 'Loading HiRISE color texture & hazard map...';
-    progressBar.style.width = '85%';
+    loadingStatus.textContent = 'Downloading HiRISE, CRISM & THEMIS textures...';
+    progressBar.style.width = '75%';
+
     const texLoader = new THREE.TextureLoader();
-    const [satTex, slopeTex] = await Promise.all([
+
+    function loadNearestTex(url) {
+      return new Promise((resolve, reject) => {
+        texLoader.load(url, tex => {
+          tex.magFilter = THREE.NearestFilter;
+          tex.minFilter = THREE.NearestFilter;
+          tex.generateMipmaps = false;
+          tex.colorSpace = THREE.SRGBColorSpace;
+          resolve(tex);
+        }, undefined, reject);
+      });
+    }
+
+    const [satTex, slopeTex, crismHydTex, crismPhyTex, themisTex] = await Promise.all([
       new Promise((resolve, reject) => {
-        texLoader.load('/data/terrain_texture.png', resolve, undefined, reject);
+        texLoader.load('/data/terrain_texture.png', tex => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+          resolve(tex);
+        }, undefined, reject);
       }),
-      new Promise((resolve, reject) => {
-        texLoader.load('/data/slope_5m_classified.png', resolve, undefined, reject);
-      })
+      loadNearestTex('/data/slope_5m_classified.png'),
+      loadNearestTex('/data/crism_hyd_crop.png'),
+      loadNearestTex('/data/crism_phy_crop.png'),
+      loadNearestTex('/data/themis_crop.png')
     ]);
 
-    satTex.colorSpace = THREE.SRGBColorSpace;
-    satTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    slopeTex.colorSpace = THREE.SRGBColorSpace;
-    slopeTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    // 6. Build Scene Entities
+    loadingStatus.textContent = 'Draping multi-spectral layers & science markers...';
+    progressBar.style.width = '90%';
 
-    satelliteTextureRef = satTex;
-    slopeTextureRef = slopeTex;
-
-    // 6. Build 3D Entities
-    loadingStatus.textContent = 'Constructing 3D Martian terrain & trajectory...';
-    progressBar.style.width = '95%';
-
-    createTerrainMesh(satTex, slopeTex);
-    createRoute();
-    createBoxworkZone();
+    createTerrainAndDrapedLayers(satTex, slopeTex, crismHydTex, crismPhyTex, themisTex);
+    createRouteAndRover();
+    createScienceMarkersAndFlag();
+    createBoxworkCoreZone();
+    createDustParticles();
     createHoverMarkers();
 
     // Set initial center height for controls target
@@ -770,16 +1383,20 @@ async function loadAssetsAndInit() {
 
     // 7. Finish Loading
     progressBar.style.width = '100%';
-    loadingStatus.textContent = 'Teleporting to Gale Crater...';
+    const totalLoadTimeMs = Math.round(performance.now() - appStartTime);
+    loadValDisplay.textContent = `${totalLoadTimeMs} ms`;
 
     setTimeout(() => {
       loadingOverlay.style.opacity = '0';
       setTimeout(() => {
         loadingOverlay.style.display = 'none';
+        // Launch 4-second cinematic fly-in
+        startCinematicIntro();
       }, 500);
     }, 400);
 
-    // Start Animation Loop
+    // Start Render Loop
+    lastReplayTime = performance.now();
     animate();
 
   } catch (err) {
@@ -789,17 +1406,52 @@ async function loadAssetsAndInit() {
   }
 }
 
-// --- Render Loop ---
+// --- Main Animation Loop ---
 
 function animate() {
   requestAnimationFrame(animate);
 
+  const now = performance.now();
+
+  // 1. Frame Rate Tracking
+  frameCount++;
+  if (now - lastFpsUpdateTime >= 1000) {
+    currentFps = Math.round((frameCount * 1000) / (now - lastFpsUpdateTime));
+    fpsValDisplay.textContent = `${currentFps}`;
+    frameCount = 0;
+    lastFpsUpdateTime = now;
+  }
+
+  // 2. Timeline Replay Playback
+  if (isPlaying) {
+    const deltaSec = (now - lastReplayTime) / 1000.0;
+    let nextSol = currentReplaySol + deltaSec * replaySpeed;
+    if (nextSol > 4868) {
+      nextSol = 4868;
+      isPlaying = false;
+      btnPlayPause.textContent = '▶ PLAY';
+    }
+    updateTimelineReplay(nextSol);
+  }
+  lastReplayTime = now;
+
+  // 3. Rover Beacon Pulsing Ring
+  if (roverBeaconRing) {
+    const scale = 1.0 + 0.3 * Math.sin(now * 0.007);
+    roverBeaconRing.scale.set(scale, scale, scale);
+    roverBeaconRing.material.opacity = 0.5 + 0.4 * Math.cos(now * 0.007);
+  }
+
+  // 4. Update Dust Drift Particles
+  updateDustParticles();
+
+  // 5. Controls & Hover Readout
   controls.update();
   updateHoverReadout();
 
-  // Subtle pulsing animation on nearestSolMarker
+  // 6. Nearest Sol Hover Marker Pulse
   if (nearestSolMarker && nearestSolMarker.visible) {
-    const s = 1.0 + 0.25 * Math.sin(performance.now() * 0.008);
+    const s = 1.0 + 0.25 * Math.sin(now * 0.008);
     nearestSolMarker.scale.set(s, s, s);
   }
 

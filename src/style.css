@@ -1,6 +1,6 @@
 :root {
   --bg-dark: #0a0c10;
-  --panel-bg: rgba(14, 18, 26, 0.82);
+  --panel-bg: rgba(14, 18, 26, 0.85);
   --panel-border: rgba(255, 120, 50, 0.28);
   --panel-border-glow: rgba(255, 90, 20, 0.4);
   --accent-orange: #e65c00;
@@ -100,6 +100,110 @@ html, body {
   transition: width 0.3s ease;
 }
 
+/* Skip Intro Fly-in Button */
+.skip-intro-btn {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(230, 92, 0, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid #ff7733;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 8px 18px;
+  border-radius: 20px;
+  cursor: pointer;
+  z-index: 50;
+  box-shadow: 0 4px 20px rgba(255, 102, 0, 0.5);
+  transition: all 0.2s ease;
+  display: none;
+}
+
+.skip-intro-btn:hover {
+  background: #ff5500;
+  transform: translateX(-50%) scale(1.05);
+}
+
+/* Science Waypoint Popup */
+.science-popup-card {
+  position: absolute;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 22, 32, 0.92);
+  backdrop-filter: blur(14px);
+  border: 1px solid #00d2ff;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 210, 255, 0.4);
+  border-radius: 8px;
+  padding: 18px 24px;
+  width: 360px;
+  z-index: 45;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.science-popup-card.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(-10px);
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.popup-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #00d2ff;
+  background: rgba(0, 210, 255, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 210, 255, 0.3);
+}
+
+.popup-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.popup-close-btn:hover {
+  color: #ffffff;
+}
+
+.science-popup-card h3 {
+  font-size: 15px;
+  color: #ffffff;
+  margin-bottom: 6px;
+  line-height: 1.35;
+}
+
+.popup-sol {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f1c40f;
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+}
+
+.popup-source {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 6px;
+}
+
 /* HUD Panels Common */
 .hud-panel {
   position: absolute;
@@ -118,7 +222,7 @@ html, body {
   top: 18px;
   left: 18px;
   padding: 16px 20px;
-  max-width: 360px;
+  max-width: 380px;
 }
 
 .badge-tag {
@@ -150,11 +254,17 @@ html, body {
 
 .meta-row {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
   font-size: 11px;
   color: var(--accent-cyan);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 8px;
+}
+
+.perf-metric {
+  color: var(--accent-gold);
+  font-family: var(--font-mono);
 }
 
 /* Controls Panel */
@@ -162,7 +272,17 @@ html, body {
   top: 18px;
   right: 18px;
   padding: 16px 20px;
-  width: 290px;
+  width: 320px;
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+}
+
+.hud-controls::-webkit-scrollbar {
+  width: 4px;
+}
+.hud-controls::-webkit-scrollbar-thumb {
+  background: rgba(255, 102, 0, 0.4);
+  border-radius: 2px;
 }
 
 .hud-controls h3 {
@@ -215,12 +335,36 @@ input[type="range"] {
   margin-top: 4px;
 }
 
+.layer-control-block {
+  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.layer-row-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.opacity-val {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+}
+
+.opacity-slider {
+  margin-top: 4px;
+  height: 4px;
+}
+
 .toggle-row {
   display: flex;
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  margin-bottom: 8px;
   font-size: 12px;
 }
 
@@ -272,12 +416,148 @@ input[type="range"] {
   box-shadow: 0 0 12px rgba(0, 210, 255, 0.6);
 }
 
+/* Bottom Timeline Replay HUD */
+.hud-timeline {
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(840px, calc(100vw - 36px));
+  padding: 12px 18px;
+  z-index: 15;
+}
+
+.timeline-row-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.timeline-play-btn {
+  padding: 8px 14px;
+  background: rgba(0, 210, 255, 0.2);
+  border: 1px solid #00d2ff;
+  color: #00d2ff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 85px;
+}
+
+.timeline-play-btn:hover {
+  background: #00d2ff;
+  color: #06080b;
+  box-shadow: 0 0 12px rgba(0, 210, 255, 0.6);
+}
+
+.timeline-slider-container {
+  flex: 1;
+}
+
+.timeline-header-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.timeline-title {
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.sol-badge {
+  color: #ff9955;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.timeline-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.speed-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.speed-title {
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+}
+
+.speed-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.speed-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 3px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.speed-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.speed-btn.active {
+  background: #ff6600;
+  border-color: #ff8833;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.timeline-telemetry-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 8px;
+  padding-top: 6px;
+}
+
+.t-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.t-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.t-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  font-family: var(--font-mono);
+}
+
 /* Hover Telemetry Readout */
 .hud-readout {
-  bottom: 18px;
+  bottom: 120px;
   left: 18px;
   padding: 16px 20px;
-  width: 380px;
+  width: 340px;
 }
 
 .readout-header {
@@ -374,11 +654,21 @@ input[type="range"] {
 
 /* Legend */
 .hud-legend {
-  bottom: 18px;
+  bottom: 120px;
   right: 18px;
   padding: 14px 18px;
-  width: 290px;
+  width: 320px;
   font-size: 11px;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+}
+
+.hud-legend::-webkit-scrollbar {
+  width: 4px;
+}
+.hud-legend::-webkit-scrollbar-thumb {
+  background: rgba(0, 210, 255, 0.4);
+  border-radius: 2px;
 }
 
 .legend-section {
@@ -391,7 +681,14 @@ input[type="range"] {
   font-size: 10px;
   letter-spacing: 1px;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
+}
+
+.legend-sub {
+  font-size: 9.5px;
+  color: #a0aec0;
+  margin-bottom: 5px;
+  font-style: italic;
 }
 
 .legend-item {
@@ -399,17 +696,41 @@ input[type="range"] {
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
+  line-height: 1.3;
 }
 
 .swatch {
   width: 12px;
   height: 12px;
   border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .swatch.easy { background: #2ecc71; }
 .swatch.moderate { background: #f1c40f; }
 .swatch.hazardous { background: #e74c3c; }
+
+.swatch.crism-red { background: #e74c3c; }
+.swatch.crism-green { background: #2ecc71; }
+.swatch.crism-blue { background: #3498db; }
+.swatch.themis-gray { background: #95a5a6; }
+
+.swatch.start-flag {
+  background: #2ecc71;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  border-radius: 0;
+}
+
+.swatch.gold-box {
+  border: 2px solid #f1c40f;
+  background: transparent;
+}
+
+.swatch.science-pin {
+  background: #ff007f;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #ff007f;
+}
 
 .legend-note {
   font-size: 9px;
@@ -422,6 +743,7 @@ input[type="range"] {
   width: 16px;
   height: 3px;
   border-radius: 1px;
+  flex-shrink: 0;
 }
 
 .line-swatch.standard { background: #00d2ff; }
