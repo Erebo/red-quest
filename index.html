@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Red Quest - 3D Mars Interactive Map</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23d35400'/><path d='M20 60 Q 50 40 80 65' stroke='%23e67e22' stroke-width='6' fill='none'/></svg>" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <!-- 3D Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Loading Screen -->
+  <div id="loading-overlay">
+    <div class="loader-content">
+      <div class="mars-spinner"></div>
+      <h2>RED QUEST</h2>
+      <p id="loading-status">Loading Mars terrain & telemetry...</p>
+      <div class="progress-bar-container">
+        <div id="progress-bar" style="width: 10%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Left Header Info -->
+  <header class="hud-panel hud-header">
+    <div class="badge-tag">NASA SPACE APPS</div>
+    <h1>RED QUEST: MARS 3D</h1>
+    <p class="subtitle">Gale Crater &bull; Mount Sharp &bull; Boxwork Campaign</p>
+    <div class="meta-row">
+      <span><strong>Area:</strong> 5 km &times; 5 km</span>
+      <span><strong>Sols:</strong> 3721 &ndash; 4868</span>
+    </div>
+  </header>
+
+  <!-- Top Right Controls Panel -->
+  <aside class="hud-panel hud-controls">
+    <h3>MAP CONTROLS</h3>
+
+    <!-- Exaggeration Slider -->
+    <div class="control-group">
+      <div class="control-label">
+        <span>Vertical Exaggeration</span>
+        <span id="exag-value" class="highlight-val">1.0&times;</span>
+      </div>
+      <input type="range" id="exag-slider" min="1.0" max="3.0" step="0.1" value="1.0" />
+      <div class="slider-marks">
+        <span>1.0&times;</span>
+        <span>2.0&times;</span>
+        <span>3.0&times;</span>
+      </div>
+    </div>
+
+    <!-- Layer Toggles -->
+    <div class="control-group">
+      <span class="control-title">Display Layers</span>
+      <label class="toggle-row">
+        <input type="checkbox" id="toggle-satellite" checked />
+        <span class="custom-check"></span>
+        <span class="toggle-text">Satellite Texture (HiRISE 2m)</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="toggle-slope" />
+        <span class="custom-check"></span>
+        <span class="toggle-text">Slope Hazard Overlay (5m)</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="toggle-route" checked />
+        <span class="custom-check"></span>
+        <span class="toggle-text">Curiosity Route</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="toggle-boxwork" checked />
+        <span class="custom-check"></span>
+        <span class="toggle-text">Boxwork Science Zone</span>
+      </label>
+    </div>
+
+    <!-- Camera Actions -->
+    <div class="control-actions">
+      <button id="btn-reset-cam" class="hud-btn">Reset View</button>
+      <button id="btn-focus-boxwork" class="hud-btn secondary">Focus Boxwork</button>
+    </div>
+  </aside>
+
+  <!-- Bottom Left Hover Telemetry Readout -->
+  <section class="hud-panel hud-readout" id="hud-readout">
+    <div class="readout-header">
+      <span class="pulse-indicator"></span>
+      <h3>SURFACE TELEMETRY</h3>
+      <span id="hover-state" class="hover-badge">HOVER OVER TERRAIN</span>
+    </div>
+
+    <div class="readout-grid">
+      <div class="readout-cell">
+        <span class="cell-label">MOLA Elevation</span>
+        <span class="cell-val" id="readout-elev">&mdash;</span>
+      </div>
+
+      <div class="readout-cell">
+        <span class="cell-label">Slope Gradient</span>
+        <span class="cell-val" id="readout-slope">&mdash;</span>
+      </div>
+
+      <div class="readout-cell">
+        <span class="cell-label">Slope Hazard Tier</span>
+        <span class="cell-val" id="readout-hazard">&mdash;</span>
+      </div>
+
+      <div class="readout-cell">
+        <span class="cell-label">Nearest Rover Sol</span>
+        <span class="cell-val" id="readout-sol">&mdash;</span>
+      </div>
+
+      <div class="readout-cell wide">
+        <span class="cell-label">Local Box Coordinates</span>
+        <span class="cell-val mono" id="readout-local-coords">&mdash;</span>
+      </div>
+
+      <div class="readout-cell wide">
+        <span class="cell-label">Mars Geographic Coordinates</span>
+        <span class="cell-val mono" id="readout-geo-coords">&mdash;</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bottom Right Legend & Navigation Help -->
+  <aside class="hud-panel hud-legend">
+    <div class="legend-section">
+      <h4>SLOPE HAZARD CLASSES</h4>
+      <div class="legend-item"><span class="swatch easy"></span>&lt; 15&deg; Easy (Safe Traversability)</div>
+      <div class="legend-item"><span class="swatch moderate"></span>15&deg;&ndash;25&deg; Moderate (Caution / Slip)</div>
+      <div class="legend-item"><span class="swatch hazardous"></span>&gt; 25&deg; Hazardous (Steep / Incline)</div>
+      <div class="legend-note">* Game design tiers, not NASA rover limits.</div>
+    </div>
+
+    <div class="legend-section">
+      <h4>ROVER TRAVERSE</h4>
+      <div class="legend-item"><span class="line-swatch standard"></span>Traverse (Sols 3721&ndash;4868)</div>
+      <div class="legend-item"><span class="line-swatch boxwork"></span>Boxwork Campaign (Sols 4600&ndash;4805)</div>
+    </div>
+
+    <div class="nav-help">
+      <span><strong>Rotate:</strong> Left Click + Drag</span>
+      <span><strong>Pan:</strong> Right Click / Shift + Drag</span>
+      <span><strong>Zoom:</strong> Scroll Wheel</span>
+    </div>
+  </aside>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

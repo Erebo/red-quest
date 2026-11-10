@@ -1,0 +1,185 @@
+{
+  "project": "Red Quest - 3D Mars Interactive Map & Exploration Game",
+  "version": "1.0.0",
+  "area_name": "Gale Crater - Mount Sharp Gediz Vallis & Boxwork Region",
+  "coordinate_system": {
+    "projection": "Equirectangular (Simple Cylindrical)",
+    "datum": "Mars 2000 Sphere",
+    "sphere_radius_m": 3396190.0,
+    "standard_parallel_deg": 0.0,
+    "central_meridian_deg": 0.0,
+    "units": "meters"
+  },
+  "bounds": {
+    "projected_easting_m": {
+      "west": 8140750.0,
+      "east": 8145750.0,
+      "center": 8143250.0,
+      "span": 5000.0
+    },
+    "projected_northing_m": {
+      "south": -287375.0,
+      "north": -282375.0,
+      "center": -284875.0,
+      "span": 5000.0
+    },
+    "geographic_deg": {
+      "longitude_min_east": 137.339376,
+      "longitude_max_east": 137.42373,
+      "longitude_center_east": 137.381484,
+      "latitude_min_planetocentric": -4.84819,
+      "latitude_max_planetocentric": -4.763837,
+      "latitude_center_planetocentric": -4.806032
+    }
+  },
+  "elevation": {
+    "min_m": -4131.74,
+    "max_m": -3078.41,
+    "relief_m": 1053.33,
+    "datum": "MOLA reference aeroid (0 m datum)"
+  },
+  "files": {
+    "terrain_height.bin": {
+      "file": "terrain_height.bin",
+      "format": "Raw IEEE 754 Float32 binary (little-endian)",
+      "layout": "Row-major, North row first (row 0 = North, row 1024 = South)",
+      "dimensions": [
+        1025,
+        1025
+      ],
+      "pixel_scale_m": 4.8828125,
+      "size_bytes": 4202500,
+      "description": "Native elevation grid resampled from 1 m DEM for real-time 3D web mesh generation"
+    },
+    "terrain_height_preview.png": {
+      "file": "terrain_height_preview.png",
+      "format": "PNG (8-bit Grayscale)",
+      "dimensions": [
+        1025,
+        1025
+      ],
+      "pixel_scale_m": 4.8828125,
+      "size_bytes": 139291,
+      "description": "Normalized grayscale heightmap preview (0 = min elevation, 255 = max elevation)"
+    },
+    "terrain_texture.png": {
+      "file": "terrain_texture.png",
+      "format": "PNG (8-bit RGB)",
+      "dimensions": [
+        2500,
+        2500
+      ],
+      "pixel_scale_m": 2.0,
+      "size_bytes": 12903145,
+      "description": "High-resolution color surface texture downsampled from native 0.25 m HiRISE orthomosaic"
+    },
+    "slope.bin": {
+      "file": "slope.bin",
+      "format": "Raw IEEE 754 Float32 binary (little-endian)",
+      "layout": "Row-major, North row first",
+      "dimensions": [
+        1025,
+        1025
+      ],
+      "pixel_scale_m": 4.8828125,
+      "size_bytes": 4202500,
+      "description": "Surface slope angles in degrees computed from smoothed 1 m DEM"
+    },
+    "slope_classified.png": {
+      "file": "slope_classified.png",
+      "format": "PNG (8-bit RGB)",
+      "dimensions": [
+        1025,
+        1025
+      ],
+      "pixel_scale_m": 4.8828125,
+      "size_bytes": 251930,
+      "description": "Categorized terrain traversability map using game-design slope tiers"
+    },
+    "route.json": {
+      "file": "route.json",
+      "format": "JSON",
+      "dimensions": [
+        1819,
+        6
+      ],
+      "size_bytes": 284922,
+      "description": "Thinned Curiosity rover traverse (ROVER frame, ~5 m spacing) with local box coordinates"
+    },
+    "preview_check.png": {
+      "file": "preview_check.png",
+      "format": "PNG (8-bit RGB)",
+      "dimensions": [
+        2400,
+        2400
+      ],
+      "size_bytes": 2153767,
+      "description": "Annotated verification hillshade map showing the rover traverse and highlighted Boxwork Zone"
+    },
+    "slope_5m.bin": {
+      "file": "slope_5m.bin",
+      "format": "Raw IEEE 754 Float32 binary (little-endian)",
+      "layout": "Row-major, North row first",
+      "dimensions": [
+        1025,
+        1025
+      ],
+      "pixel_scale_m": 4.8828125,
+      "size_bytes": 4202500,
+      "description": "Surface slope angles in degrees (capped at 60 deg) recomputed from smoothed 1 m DEM with 5 m baseline"
+    },
+    "slope_5m_classified.png": {
+      "file": "slope_5m_classified.png",
+      "format": "PNG (8-bit RGB)",
+      "dimensions": [
+        1025,
+        1025
+      ],
+      "pixel_scale_m": 4.8828125,
+      "size_bytes": 163605,
+      "description": "Categorized traversability map using 5 m baseline slope and game-design thresholds"
+    }
+  },
+  "slope_classes": {
+    "easy": {
+      "range_deg": "< 15.0",
+      "color_rgb": [
+        46,
+        204,
+        113
+      ],
+      "hex": "#2ecc71",
+      "percent_area": 63.7,
+      "description": "Flat to gentle slopes, accessible to all rover modes"
+    },
+    "moderate": {
+      "range_deg": "15.0 - 25.0",
+      "color_rgb": [
+        241,
+        196,
+        15
+      ],
+      "hex": "#f1c40f",
+      "percent_area": 20.4,
+      "description": "Challenging incline, wheel slip possible, requires caution"
+    },
+    "hazardous": {
+      "range_deg": "> 25.0",
+      "color_rgb": [
+        231,
+        76,
+        60
+      ],
+      "hex": "#e74c3c",
+      "percent_area": 15.9,
+      "description": "Steep slopes / cliffs, severe tipping risk"
+    }
+  },
+  "data_source_notes": {
+    "slope_classification_disclaimer": "The slope thresholds (<15 deg easy, 15-25 deg moderate, >25 deg hazardous) are game-design thresholds, not NASA limits.",
+    "elevation_source": "USGS / NASA PDS MSL Gale Crater 1m DEM Mosaic v3",
+    "imagery_source": "NASA/JPL/University of Arizona HiRISE LRGB 78-quad controlled orthomosaic (0.25 m/px)",
+    "rover_traverse_source": "NASA PDS MSL Rover Localization Data (localized_interp view, Sols 3721 to 4868)",
+    "target_science_zone": "Mount Sharp Boxwork Formations campaign, Sols 4600 to 4805"
+  }
+}
