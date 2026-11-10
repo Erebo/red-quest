@@ -62,6 +62,7 @@ const qualityPreset = document.getElementById('quality-preset');
 
 const btnReset = document.getElementById('btn-reset');
 const btnBoxwork = document.getElementById('btn-boxwork');
+const btnResetCustom = document.getElementById('btn-reset-custom');
 
 // Inspector Elements
 const inspectorPanel = document.getElementById('inspector-panel');
@@ -169,6 +170,8 @@ let boxworkGroup = null;
 let dustParticles = null;
 let dustVelocities = [];
 let hoverCursor = null;
+let cursorReticle = null;
+let pinnedReticle = null;
 
 // Lights
 let sunLight = null;
@@ -680,6 +683,19 @@ function applyVerticalExaggeration(exag) {
     startFlagGroup.children[1].position.y = sy + 46 * currentExag;
   }
 
+  if (pinnedReticle && pinnedReticle.visible && pinnedPoint) {
+    const { col, row } = localToGrid(pinnedPoint.lx, pinnedPoint.ly);
+    const elev = sampleGridBilinear(rawHeights, col, row);
+    pinnedReticle.position.y = (elev - minElev) * currentExag + 2.0;
+  }
+
+  if (cursorReticle && cursorReticle.visible) {
+    const { lx, ly } = meshToLocal(cursorReticle.position.x, cursorReticle.position.z);
+    const { col, row } = localToGrid(lx, ly);
+    const elev = sampleGridBilinear(rawHeights, col, row);
+    cursorReticle.position.y = (elev - minElev) * currentExag + 2.0;
+  }
+
   const meanElev = (minElev + maxElev) / 2.0;
   controls.target.y = (meanElev - minElev) * currentExag;
 }
@@ -852,11 +868,123 @@ function updatePointInspector(lx, ly) {
   }
 }
 
+// --- 3D Cursor Reticle & Surface Pointers ---
+function createReticles() {
+  // 1. Interactive Hover Cursor Reticle (targeting ring on the Martian surface)
+  cursorReticle = new THREE.Group();
+
+  // Outer segmented ring
+  const ringGeo = new THREE.RingGeometry(22, 26, 32);
+  ringGeo.rotateX(-Math.PI / 2);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xff7733,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: true,
+    depthWrite: false
+  });
+  cursorReticle.add(new THREE.Mesh(ringGeo, ringMat));
+
+  // Inner center dot
+  const dotGeo = new THREE.RingGeometry(0, 3.5, 16);
+  dotGeo.rotateX(-Math.PI / 2);
+  cursorReticle.add(new THREE.Mesh(dotGeo, ringMat));
+
+  // 4 Targeting crosshair tick marks pointing outward
+  const tickMat = new THREE.MeshBasicMaterial({ color: 0xffaa44, transparent: true, opacity: 0.95, depthWrite: false });
+  const tGeoZ = new THREE.BoxGeometry(1.8, 0.6, 10);
+  const tickN = new THREE.Mesh(tGeoZ, tickMat);
+  tickN.position.z = -31;
+  const tickS = new THREE.Mesh(tGeoZ, tickMat);
+  tickS.position.z = 31;
+  const tGeoX = new THREE.BoxGeometry(10, 0.6, 1.8);
+  const tickE = new THREE.Mesh(tGeoX, tickMat);
+  tickE.position.x = 31;
+  const tickW = new THREE.Mesh(tGeoX, tickMat);
+  tickW.position.x = -31;
+  cursorReticle.add(tickN, tickS, tickE, tickW);
+
+  cursorReticle.visible = false;
+  scene.add(cursorReticle);
+
+  // 2. Pinned Point Reticle & Beacon
+  pinnedReticle = new THREE.Group();
+
+  const pRingGeo = new THREE.RingGeometry(20, 26, 32);
+  pRingGeo.rotateX(-Math.PI / 2);
+  const pRingMat = new THREE.MeshBasicMaterial({
+    color: 0x00d2ff,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false
+  });
+  pinnedReticle.add(new THREE.Mesh(pRingGeo, pRingMat));
+
+  // Vertical needle & beacon diamond
+  const needle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.8, 0.8, 45, 8),
+    new THREE.MeshBasicMaterial({ color: 0x00d2ff, transparent: true, opacity: 0.85, depthWrite: false })
+  );
+  needle.position.y = 22.5;
+  pinnedReticle.add(needle);
+
+  const beacon = new THREE.Mesh(
+    new THREE.OctahedronGeometry(6, 0),
+    new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      emissive: 0x00aaff,
+      emissiveIntensity: 0.7,
+      roughness: 0.2
+    })
+  );
+  beacon.position.y = 48;
+  pinnedReticle.add(beacon);
+
+  pinnedReticle.visible = false;
+  scene.add(pinnedReticle);
+}
+
 // Raycaster & Mouse Handling
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2(-9999, -9999);
-const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-const rayHit = new THREE.Vector3();
+
+function getTerrainIntersection(ray) {
+  if (!rawHeights) return null;
+  const orig = ray.origin;
+  const dir = ray.direction;
+  if (Math.abs(dir.y) < 1e-5) return null;
+
+  // Start with plane at median elevation
+  let planeY = ((minElev + maxElev) * 0.5 - minElev) * currentExag;
+  let t = (planeY - orig.y) / dir.y;
+  if (t < 0) return null;
+
+  // 3 iterations of secant / plane refinement
+  for (let iter = 0; iter < 3; iter++) {
+    const x = orig.x + t * dir.x;
+    const z = orig.z + t * dir.z;
+    if (Math.abs(x) > 2500 || Math.abs(z) > 2500) break;
+    const { lx, ly } = meshToLocal(x, z);
+    const { col, row } = localToGrid(lx, ly);
+    const elev = sampleGridBilinear(rawHeights, col, row);
+    planeY = (elev - minElev) * currentExag;
+    t = (planeY - orig.y) / dir.y;
+    if (t < 0) return null;
+  }
+
+  const hitX = orig.x + t * dir.x;
+  const hitZ = orig.z + t * dir.z;
+  if (Math.abs(hitX) > 2500 || Math.abs(hitZ) > 2500) return null;
+
+  const { lx, ly } = meshToLocal(hitX, hitZ);
+  const { col, row } = localToGrid(lx, ly);
+  const elev = sampleGridBilinear(rawHeights, col, row);
+  const hitY = (elev - minElev) * currentExag;
+
+  return { x: hitX, y: hitY, z: hitZ, lx, ly, elev };
+}
 
 function handlePointerInspection() {
   if (isPinned) return;
@@ -866,12 +994,15 @@ function handlePointerInspection() {
 
   raycaster.setFromCamera(mouse, camera);
 
-  // Fast mathematical ray intersection with horizontal ground bounds
-  if (raycaster.ray.intersectPlane(groundPlane, rayHit)) {
-    if (Math.abs(rayHit.x) <= 2500 && Math.abs(rayHit.z) <= 2500) {
-      const { lx, ly } = meshToLocal(rayHit.x, rayHit.z);
-      updatePointInspector(lx, ly);
+  const hit = getTerrainIntersection(raycaster.ray);
+  if (hit) {
+    updatePointInspector(hit.lx, hit.ly);
+    if (cursorReticle) {
+      cursorReticle.position.set(hit.x, hit.y + 2.0, hit.z);
+      cursorReticle.visible = true;
     }
+  } else {
+    if (cursorReticle) cursorReticle.visible = false;
   }
 }
 
@@ -926,6 +1057,118 @@ function endCinematicIntro() {
   camera.position.set(meshX + 180, targetY + 700, meshZ + 900);
   controls.target.set(meshX, targetY, meshZ);
   controls.update();
+}
+
+// --- Reset Customization to Standard Defaults ---
+function resetCustomizationToStandard() {
+  // 1. Terrain satellite
+  if (lyrSat) {
+    lyrSat.checked = true;
+    if (terrainMesh) terrainMesh.visible = true;
+  }
+
+  // 2. Vertical Exaggeration -> 1.0x
+  if (exagSlider) {
+    exagSlider.value = 1.0;
+    applyVerticalExaggeration(1.0);
+  }
+
+  // 3. Slope Hazard -> off, 65% opacity
+  if (lyrSlope) {
+    lyrSlope.checked = false;
+    if (hazardMesh) hazardMesh.visible = false;
+  }
+  if (slopeOpacity) {
+    slopeOpacity.value = 65;
+    if (slopeOv) slopeOv.textContent = '65 %';
+    if (hazardMesh) hazardMesh.material.opacity = 0.65;
+  }
+
+  // 4. CRISM Hydrated -> off, 80% opacity
+  if (lyrCrismHyd) {
+    lyrCrismHyd.checked = false;
+    if (crismHydMesh) crismHydMesh.visible = false;
+  }
+  if (crismHydOpacity) {
+    crismHydOpacity.value = 80;
+    if (crismHydOv) crismHydOv.textContent = '80 %';
+    if (crismHydMesh) crismHydMesh.material.opacity = 0.8;
+  }
+
+  // 5. CRISM Phyllosilicates -> off, 80% opacity
+  if (lyrCrismPhy) {
+    lyrCrismPhy.checked = false;
+    if (crismPhyMesh) crismPhyMesh.visible = false;
+  }
+  if (crismPhyOpacity) {
+    crismPhyOpacity.value = 80;
+    if (crismPhyOv) crismPhyOv.textContent = '80 %';
+    if (crismPhyMesh) crismPhyMesh.material.opacity = 0.8;
+  }
+
+  // 6. THEMIS -> off, 70% opacity
+  if (lyrThemis) {
+    lyrThemis.checked = false;
+    if (themisMesh) themisMesh.visible = false;
+  }
+  if (themisOpacity) {
+    themisOpacity.value = 70;
+    if (themisOv) themisOv.textContent = '70 %';
+    if (themisMesh) themisMesh.material.opacity = 0.7;
+  }
+
+  // 7. Route & markers -> visible, slope color mode
+  if (lyrRoute) {
+    lyrRoute.checked = true;
+    if (routeGroup) routeGroup.visible = true;
+    if (scienceMarkersGroup) scienceMarkersGroup.visible = true;
+    if (startFlagGroup) startFlagGroup.visible = true;
+  }
+  if (lyrBoxwork) {
+    lyrBoxwork.checked = true;
+    if (boxworkGroup) boxworkGroup.visible = true;
+  }
+  if (routeColorMode) {
+    routeColorMode.value = 'slope';
+    updateRouteColoring();
+  }
+
+  // 8. Atmosphere: Time 14:00, Dust on
+  if (timeSlider) {
+    timeSlider.value = 14.0;
+    updateTimeOfDay(14.0);
+  }
+  if (lyrDust) {
+    lyrDust.checked = true;
+    if (dustParticles) dustParticles.visible = true;
+  }
+
+  // 9. Unpin Inspector & Reticle
+  isPinned = false;
+  pinnedPoint = null;
+  if (inspectorMode) inspectorMode.textContent = '(hover)';
+  if (inspectorUnpin) inspectorUnpin.style.display = 'none';
+  if (pinnedReticle) pinnedReticle.visible = false;
+
+  // 10. Reset Camera Orbit
+  controls.target.set(0, ((-3772.0 - minElev) * currentExag), 0);
+  camera.position.set(0, 3400, 3900);
+  controls.update();
+
+  // Button feedback animation
+  if (btnResetCustom) {
+    const origText = btnResetCustom.innerHTML;
+    btnResetCustom.innerHTML = '✓ Customizations Reset';
+    btnResetCustom.style.background = 'rgba(46, 204, 113, 0.25)';
+    btnResetCustom.style.borderColor = '#2ecc71';
+    btnResetCustom.style.color = '#2ecc71';
+    setTimeout(() => {
+      btnResetCustom.innerHTML = origText;
+      btnResetCustom.style.background = '';
+      btnResetCustom.style.borderColor = '';
+      btnResetCustom.style.color = '';
+    }, 1200);
+  }
 }
 
 // --- UI Event Listeners ---
@@ -996,6 +1239,8 @@ function bindUIEvents() {
     createDustParticles();
   });
 
+  if (btnResetCustom) btnResetCustom.addEventListener('click', resetCustomizationToStandard);
+
   if (btnReset) btnReset.addEventListener('click', () => {
     controls.target.set(0, ((-3772.0 - minElev) * currentExag), 0);
     camera.position.set(0, 3400, 3900);
@@ -1037,8 +1282,10 @@ function bindUIEvents() {
   // Inspector Pin / Unpin
   if (inspectorUnpin) inspectorUnpin.addEventListener('click', () => {
     isPinned = false;
+    pinnedPoint = null;
     inspectorMode.textContent = '(hover)';
     inspectorUnpin.style.display = 'none';
+    if (pinnedReticle) pinnedReticle.visible = false;
   });
 
   // Canvas Click: Pin point or open Science Marker
@@ -1058,21 +1305,24 @@ function bindUIEvents() {
     }
 
     // 2. Pin clicked terrain point
-    if (raycaster.ray.intersectPlane(groundPlane, rayHit)) {
-      if (Math.abs(rayHit.x) <= 2500 && Math.abs(rayHit.z) <= 2500) {
-        const { lx, ly } = meshToLocal(rayHit.x, rayHit.z);
-        isPinned = true;
-        pinnedPoint = { lx, ly };
-        inspectorMode.textContent = '(pinned)';
-        inspectorUnpin.style.display = 'block';
-        updatePointInspector(lx, ly);
+    const hit = getTerrainIntersection(raycaster.ray);
+    if (hit) {
+      isPinned = true;
+      pinnedPoint = { lx: hit.lx, ly: hit.ly };
+      inspectorMode.textContent = '(pinned)';
+      inspectorUnpin.style.display = 'block';
+      updatePointInspector(hit.lx, hit.ly);
+      if (pinnedReticle) {
+        pinnedReticle.position.set(hit.x, hit.y + 2.0, hit.z);
+        pinnedReticle.visible = true;
       }
+      if (cursorReticle) cursorReticle.visible = false;
     }
   });
 
   if (popupClose) popupClose.addEventListener('click', () => sciencePopup.classList.add('hidden'));
 
-  // Pointer Move
+  // Pointer Move & Leave
   window.addEventListener('pointermove', e => {
     const rect = renderer.domElement.getBoundingClientRect();
     if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
@@ -1080,6 +1330,10 @@ function bindUIEvents() {
       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       handlePointerInspection();
     }
+  });
+
+  renderer.domElement.addEventListener('pointerleave', () => {
+    if (cursorReticle && !isPinned) cursorReticle.visible = false;
   });
 
   window.addEventListener('resize', () => {
@@ -1174,6 +1428,7 @@ async function loadAssetsAndInit() {
     createScienceMarkersAndFlag();
     createBoxworkCoreZone();
     createDustParticles();
+    createReticles();
 
     // 7. Complete Loading
     progressBar.style.width = '100%';
@@ -1232,6 +1487,24 @@ function animate() {
     const s = 1.0 + 0.3 * Math.sin(now * 0.007);
     roverBeacon.scale.set(s, s, s);
     roverBeacon.material.opacity = 0.5 + 0.4 * Math.cos(now * 0.007);
+  }
+
+  // Animated 3D Targeting Cursor Reticle
+  if (cursorReticle && cursorReticle.visible) {
+    cursorReticle.rotation.y += 0.015;
+    const pulse = 1.0 + 0.06 * Math.sin(now * 0.008);
+    cursorReticle.scale.set(pulse, 1.0, pulse);
+  }
+
+  // Animated Pinned Beacon Reticle
+  if (pinnedReticle && pinnedReticle.visible) {
+    const pulseP = 1.0 + 0.1 * Math.sin(now * 0.006);
+    if (pinnedReticle.children[0]) {
+      pinnedReticle.children[0].scale.set(pulseP, pulseP, pulseP);
+    }
+    if (pinnedReticle.children[2]) {
+      pinnedReticle.children[2].rotation.y += 0.02;
+    }
   }
 
   // Dust Particle drift

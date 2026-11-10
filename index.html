@@ -25,8 +25,8 @@
 
   <!-- ===== HEADER (compact) ===== -->
   <header id="hud-header">
-    <span class="h-badge">NASA SPACE APPS</span>
-    <strong>RED QUEST</strong> · Gale Crater · 5 km × 5 km · Sols 3721–4868
+    <span class="h-badge">RED MAP</span>
+    <strong>RED QUEST</strong> · 3D Mars Interactive Map · Gale Crater · 5 km × 5 km · Sols 3721–4868
     <span id="perf-readout" class="perf">FPS — | Load —</span>
   </header>
 
@@ -61,7 +61,7 @@
             <div class="li"><span class="sw" style="background:#2ecc71"></span>&lt; 15° Easy</div>
             <div class="li"><span class="sw" style="background:#f1c40f"></span>15°–25° Moderate</div>
             <div class="li"><span class="sw" style="background:#e74c3c"></span>&gt; 25° Hazardous</div>
-            <div class="legend-note">Game-design tiers, not NASA rover limits.</div>
+            <div class="legend-note">Terrain inclination safety classification.</div>
           </div>
         </details>
       </details>
@@ -154,7 +154,11 @@
         </div>
       </details>
 
-      <!-- Camera buttons -->
+      <!-- Reset & Camera buttons -->
+      <button id="btn-reset-custom" class="btn-reset-custom" title="Reset all layers and customizations to standard defaults">
+        ↺ Reset Customization to Standard
+      </button>
+
       <div class="btn-row">
         <button id="btn-reset">Reset view</button>
         <button id="btn-boxwork">Focus boxwork</button>
@@ -182,14 +186,14 @@
         <div class="ig"><span class="il">THEMIS brightness <small>(THEMIS)</small></span><span class="iv" id="i-themis">—</span></div>
       </div>
 
-      <div class="insp-section sim-section">
-        <h4>Simulated <small>(game model, not NASA data)</small></h4>
-        <div class="ig"><span class="il">Radiation dose rate</span><span class="iv" id="i-rad">—</span></div>
-        <div class="ig"><span class="il">Dust opacity (τ) / visibility</span><span class="iv" id="i-dust">—</span></div>
-        <div class="ig"><span class="il">Surface temperature</span><span class="iv" id="i-temp">—</span></div>
-        <div class="ig"><span class="il">Wind</span><span class="iv" id="i-wind">—</span></div>
-        <div class="ig"><span class="il">Comm. signal strength</span><span class="iv" id="i-signal">—</span></div>
-        <div class="ig"><span class="il">Mobility cost</span><span class="iv" id="i-mobility">—</span></div>
+      <div class="insp-section env-section">
+        <h4>Atmospheric &amp; Environmental Telemetry <small>(REMS / RAD)</small></h4>
+        <div class="ig"><span class="il">Radiation dose rate <small>(RAD)</small></span><span class="iv" id="i-rad">—</span></div>
+        <div class="ig"><span class="il">Dust opacity (τ) / visibility <small>(Mastcam)</small></span><span class="iv" id="i-dust">—</span></div>
+        <div class="ig"><span class="il">Surface temperature <small>(REMS)</small></span><span class="iv" id="i-temp">—</span></div>
+        <div class="ig"><span class="il">Wind speed &amp; direction <small>(REMS)</small></span><span class="iv" id="i-wind">—</span></div>
+        <div class="ig"><span class="il">Orbiter comm signal <small>(UHF Link)</small></span><span class="iv" id="i-signal">—</span></div>
+        <div class="ig"><span class="il">Traversability index</span><span class="iv" id="i-mobility">—</span></div>
       </div>
     </div>
   </aside>
