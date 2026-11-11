@@ -46,11 +46,12 @@
     <span id="perf-readout" class="perf">FPS — | Load —</span>
   </header>
 
-  <!-- Floating Top-Right Map Controls (Vertical Exag Badge, Labels Dropdown & MISSION Lenses button) -->
+  <!-- Floating Top-Right Map Controls (Vertical Exag Badge, Elements Toggle, Labels Dropdown, Codex & Lenses) -->
   <div id="map-top-controls" class="map-top-controls">
     <span id="lens-exag-badge" class="lens-exag-badge hidden">Vertical exaggeration 1.5x</span>
+    <button id="btn-show-all-elements" class="lenses-btn labels-btn mission-only-ctrl hidden" type="button" aria-pressed="false" title="Toggle between active-lens element filter and all element families (max 12 icons)">Show all elements</button>
     <div id="labels-dropdown-wrap" class="labels-dropdown-wrap">
-      <button id="btn-labels" class="lenses-btn labels-btn active" type="button" aria-expanded="false" title="Filter 3D map label categories & Show all mode">Labels ▾</button>
+      <button id="btn-labels" class="lenses-btn labels-btn active" type="button" aria-expanded="false" title="Filter 3D map label & element categories">Labels ▾</button>
       <div id="labels-dropdown" class="labels-dropdown hidden" role="menu" aria-label="Label categories">
         <div class="ld-head">Categories</div>
         <div class="ld-chips">
@@ -58,16 +59,19 @@
           <button type="button" class="ld-chip active" data-cat="terrain" aria-pressed="true">▲ Terrain features</button>
           <button type="button" class="ld-chip active" data-cat="materials" aria-pressed="true">◆ Materials</button>
           <button type="button" class="ld-chip active" data-cat="hazards" aria-pressed="true">⚠ Hazards</button>
+          <button type="button" class="ld-chip active" data-cat="resources" aria-pressed="true">✚ Resources</button>
           <button type="button" class="ld-chip active" data-cat="science" aria-pressed="true">★ Science</button>
+          <button type="button" id="chip-cat-mystery" class="ld-chip active hidden" data-cat="mystery" aria-pressed="true">? Mystery</button>
         </div>
         <div class="ld-sep"></div>
-        <button type="button" id="btn-labels-show-all" class="ld-show-all" aria-pressed="false">Show all (with leader lines)</button>
+        <button type="button" id="btn-labels-show-all" class="ld-show-all" aria-pressed="false">Show all labels (with leader lines)</button>
       </div>
     </div>
+    <button id="btn-codex" class="lenses-btn codex-btn mission-only-ctrl hidden" type="button" title="Open Field Codex of surface element types">Field Codex (<span id="codex-count">0/15</span>)</button>
     <button id="btn-lenses" class="lenses-btn hidden" type="button" title="Open map lenses and overlay layers">Lenses</button>
   </div>
 
-  <!-- Projected Camera-Facing 3D Map Labels, Leader Lines, Hover & Click Detail Cards -->
+  <!-- Projected Camera-Facing 3D Map Labels, Leader Lines, Hover, Detail Card & Field Codex -->
   <svg id="map-leader-svg" class="map-leader-svg hidden" aria-hidden="true"></svg>
   <div id="map-labels-layer" class="map-labels-layer" aria-hidden="true"></div>
   <div id="marker-hover-card" class="marker-hover-card hidden" role="status" aria-hidden="true">
@@ -76,6 +80,7 @@
       <span id="mhc-sol" class="mhc-sol hidden"></span>
     </div>
     <div id="mhc-desc" class="mhc-desc">—</div>
+    <div id="mhc-effect" class="mhc-effect hidden"></div>
     <div id="mhc-tags" class="mhc-tags"></div>
   </div>
   <aside id="label-detail-card" class="label-detail-card hidden" role="dialog" aria-label="Map feature details">
@@ -86,26 +91,43 @@
     </div>
     <h4 id="ldc-title">—</h4>
     <div class="ldc-sec"><span class="ldc-k">What it is</span><p id="ldc-what">—</p></div>
-    <div class="ldc-sec"><span class="ldc-k">Dataset</span><p id="ldc-dataset" class="ldc-mono">—</p></div>
+    <div class="ldc-sec"><span class="ldc-k">Dataset / Rule</span><p id="ldc-dataset" class="ldc-mono">—</p></div>
     <div class="ldc-sec"><span class="ldc-k">Why it matters</span><p id="ldc-why">—</p></div>
     <div id="ldc-tags" class="mhc-tags"></div>
   </aside>
 
-  <!-- Bottom-Left Collapsible Map Legend -->
+  <!-- Field Codex Panel (MISSION mode in-memory discovery log) -->
+  <aside id="codex-panel" class="codex-panel hidden" role="dialog" aria-label="Field Codex">
+    <div class="codex-head">
+      <div>
+        <span class="badge-plan" style="margin-right:6px;">FIELD CODEX</span>
+        <span id="codex-progress" class="codex-prog">0 / 15 types discovered</span>
+      </div>
+      <button id="codex-close" class="ldc-close" type="button" title="Close Field Codex">×</button>
+    </div>
+    <div id="codex-body" class="codex-body"></div>
+  </aside>
+
+  <!-- Bottom-Left Collapsible Map Legend (Grouped by Family) -->
   <aside id="map-legend" class="map-legend open" aria-label="Map legend">
     <button id="btn-toggle-legend" class="map-legend-toggle" type="button" aria-expanded="true">
       <span>Legend</span>
       <span class="leg-chev">▾</span>
     </button>
     <div id="map-legend-body" class="map-legend-body">
-      <div class="leg-item"><span class="leg-sym leg-start"></span><span>Start</span></div>
-      <div class="leg-item"><span class="leg-sym leg-goal"></span><span>Goal</span></div>
-      <div class="leg-item"><span class="leg-sym leg-target"></span><span>Target (1–3)</span></div>
-      <div class="leg-item"><span class="leg-sym leg-hazard"></span><span>Hazard zone (&gt;25°)</span></div>
+      <div class="leg-group-title">Mission &amp; Routes</div>
+      <div class="leg-item"><span class="leg-sym leg-start"></span><span>Start / Goal</span><span class="leg-sym leg-goal" style="margin-left:auto;"></span></div>
+      <div class="leg-item"><span class="leg-sym leg-hazard"></span><span>Steep &gt;25° outline</span></div>
       <div class="leg-item"><span class="leg-line" id="leg-route-a" style="background:#38bdf8;"></span><span>Route A</span></div>
       <div class="leg-item"><span class="leg-line" id="leg-route-b" style="background:#c084fc;"></span><span>Route B</span></div>
       <div class="leg-item"><span class="leg-line" id="leg-route-c" style="background:#fb923c;"></span><span>Route C</span></div>
       <div id="legend-ref-row" class="leg-item hidden"><span class="leg-line leg-ref"></span><span>Curiosity (reference)</span></div>
+
+      <div class="leg-group-title mission-only-legend">Elements by Family <span class="tag-pill game">GAME</span></div>
+      <div class="leg-item mission-only-legend"><span class="leg-sym leg-fam-haz"></span><span>Hazards (sand, rockfall, dust, shadow)</span></div>
+      <div class="leg-item mission-only-legend"><span class="leg-sym leg-fam-res"></span><span>Resources (shelter, O₂, solar, relay)</span></div>
+      <div class="leg-item mission-only-legend"><span class="leg-sym leg-fam-sci"></span><span>Science (targets, drill, geology)</span></div>
+      <div id="legend-mystery-row" class="leg-item mission-only-legend hidden"><span class="leg-sym leg-fam-mys">?</span><span>Mystery (? scan, Explore+)</span></div>
     </div>
   </aside>
 

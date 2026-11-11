@@ -1,0 +1,572 @@
+/**
+ * Level 1 Mission Elements: Hazards, Resources, Science, and Scan Mystery Blips.
+ * Handles lens-based anti-clutter filtering, 12-icon screen-space overlap capping,
+ * off-screen animation pausing (dust devils & mystery beacons), route <=150 m counts,
+ * and in-memory Field Codex unlock tracking.
+ */
+
+import * as THREE from 'three';
+
+const TERRAIN_WIDTH_M = 5000.0;
+const TERRAIN_HEIGHT_M = 5000.0;
+const MAX_VISIBLE_ICONS = 12;
+
+export const FAMILY_META = Object.freeze({
+  hazard: { label: 'Hazards', color: '#ef4444', hex: 0xef4444, cat: 'hazards', priority: 82 },
+  resource: { label: 'Resources', color: '#22c55e', hex: 0x22c55e, cat: 'resources', priority: 78 },
+  science: { label: 'Science', color: '#38bdf8', hex: 0x38bdf8, cat: 'science', priority: 86 },
+  mystery: { label: 'Mystery', color: '#f59e0b', hex: 0xf59e0b, cat: 'mystery', priority: 92 }
+});
+
+export const TYPE_DISPLAY_NAMES = Object.freeze({
+  soft_sand_pocket: 'Soft sand pocket',
+  rockfall_zone: 'Rockfall zone',
+  dust_devil_corridor: 'Dust devil corridor',
+  radio_shadow: 'Radio shadow',
+  radiation_shelter: 'Radiation shelter',
+  oxygen_cache: 'Oxygen cache',
+  solar_ridge: 'Battery / solar ridge',
+  comm_relay_beacon: 'Comm relay beacon',
+  science_target: 'Science target',
+  drill_site: 'Drill site',
+  layered_rock_outcrop: 'Layered rock outcrop',
+  clay_sample_patch: 'Clay-rich sample patch',
+  mineral_vein_hint: 'Mineral vein hint',
+  concretion_field: 'Concretion field',
+  boxwork_ridge_network: 'Boxwork ridge network',
+  mystery_blip: 'Mystery scan blip'
+});
+
+function localToMesh(lx, ly) {
+  return {
+    meshX: lx - TERRAIN_WIDTH_M / 2.0,
+    meshZ: TERRAIN_HEIGHT_M / 2.0 - ly
+  };
+}
+
+function pointToSegmentDistSq2D(px, py, ax, ay, bx, by) {
+  const vx = bx - ax;
+  const vy = by - ay;
+  const wx = px - ax;
+  const wy = py - ay;
+  const lenSq = vx * vx + vy * vy;
+  if (lenSq <= 1e-8) return wx * wx + wy * wy;
+  const t = Math.max(0.0, Math.min(1.0, (wx * vx + wy * vy) / lenSq));
+  const dx = px - (ax + t * vx);
+  const dy = py - (ay + t * vy);
+  return dx * dx + dy * dy;
+}
+
+function minDistanceToPolyline2D(x, y, waypoints) {
+  if (!waypoints || waypoints.length === 0) return Infinity;
+  if (waypoints.length === 1) {
+    return Math.hypot(x - waypoints[0].x, y - waypoints[0].y);
+  }
+  let bestSq = Infinity;
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const a = waypoints[i];
+    const b = waypoints[i + 1];
+    const dSq = pointToSegmentDistSq2D(x, y, a.x, a.y, b.x, b.y);
+    if (dSq < bestSq) bestSq = dSq;
+  }
+  return Math.sqrt(bestSq);
+}
+
+/**
+ * Compute counts of visible hazards, resources, and science elements within 150 m of each route.
+ * Scan-only Mystery blips are excluded from planning counts.
+ */
+export function computeRouteElementCounts(candidates, elements, maxDistM = 150.0) {
+  const counts = {};
+  candidates.forEach(c => {
+    const res = { hazard: 0, resource: 0, science: 0, total: 0, ids: [] };
+    elements.forEach(el => {
+      if (el.visibility === 'scan') return;
+      const d = minDistanceToPolyline2D(el.x, el.y, c.waypoints);
+      if (d <= maxDistM) {
+        if (el.family === 'hazard' || el.family === 'resource' || el.family === 'science') {
+          res[el.family]++;
+          res.total++;
+          res.ids.push(el.id);
+        }
+      }
+    });
+    counts[c.id] = res;
+  });
+  return counts;
+}
+
+function createMysteryQuestionTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 64, 64);
+
+  ctx.beginPath();
+  ctx.arc(32, 32, 26, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(24, 16, 4, 0.9)';
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#f59e0b';
+  ctx.stroke();
+
+  ctx.fillStyle = '#fde68a';
+  ctx.font = 'bold 34px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('?', 32, 34);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function createSmallElementMesh(el, sampleElevFn, minElev, mysteryTex, hitGeo, hitMat) {
+  const group = new THREE.Group();
+  const elev = sampleElevFn(el.x, el.y);
+  const { meshX, meshZ } = localToMesh(el.x, el.y);
+  const meta = FAMILY_META[el.family] || FAMILY_META.science;
+
+  group.position.set(meshX, elev - minElev, meshZ);
+  group.userData = {
+    isMissionElement: true,
+    elementId: el.id,
+    element: el,
+    elev,
+    meshX,
+    meshZ
+  };
+
+  if (hitGeo && hitMat) {
+    const collider = new THREE.Mesh(hitGeo, hitMat);
+    collider.position.y = 19;
+    group.add(collider);
+  }
+
+  if (el.type === 'dust_devil_corridor') {
+    // Ground dust swirl ring + lightweight 28-particle vortex funnel
+    const ringGeo = new THREE.RingGeometry(8, 13, 24);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xef4444,
+      transparent: true,
+      opacity: 0.72,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    group.add(new THREE.Mesh(ringGeo, ringMat));
+
+    const pCount = 28;
+    const pos = new Float32Array(pCount * 3);
+    for (let i = 0; i < pCount; i++) {
+      const f = i / pCount;
+      const ang = f * Math.PI * 5.0;
+      const rad = 2.5 + f * 11.5;
+      pos[i * 3] = Math.cos(ang) * rad;
+      pos[i * 3 + 1] = 4.0 + f * 36.0;
+      pos[i * 3 + 2] = Math.sin(ang) * rad;
+    }
+    const pGeo = new THREE.BufferGeometry();
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const funnel = new THREE.Points(
+      pGeo,
+      new THREE.PointsMaterial({ color: 0xf4a261, size: 3.4, transparent: true, opacity: 0.85, depthWrite: false })
+    );
+    funnel.userData = { isDustVortex: true, elementId: el.id };
+    group.add(funnel);
+
+    const topRingGeo = new THREE.RingGeometry(4, 6, 16);
+    topRingGeo.rotateX(-Math.PI / 2);
+    const topRing = new THREE.Mesh(topRingGeo, ringMat);
+    topRing.position.y = 14;
+    group.add(topRing);
+    group.userData.vortexObj = funnel;
+  } else if (el.family === 'mystery') {
+    // Pulsing amber scan ring + billboard "?" sprite
+    const ringGeo = new THREE.RingGeometry(9, 14, 24);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      transparent: true,
+      opacity: 0.88,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const pulseRing = new THREE.Mesh(ringGeo, ringMat);
+    pulseRing.position.y = 2.5;
+    group.add(pulseRing);
+
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: mysteryTex, transparent: true, depthWrite: false })
+    );
+    sprite.scale.set(26, 26, 1);
+    sprite.position.y = 24;
+    group.add(sprite);
+
+    group.userData.pulseRing = pulseRing;
+    group.userData.questionSprite = sprite;
+  } else {
+    // Small & consistent family markers (red hazards, green resources, blue science)
+    const segs = el.family === 'hazard' ? 3 : (el.family === 'resource' ? 6 : 16);
+    const ringGeo = new THREE.RingGeometry(7.5, 11.5, segs);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: meta.hex,
+      transparent: true,
+      opacity: 0.86,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const baseRing = new THREE.Mesh(ringGeo, ringMat);
+    baseRing.position.y = 2.5;
+    group.add(baseRing);
+
+    const stemGeo = new THREE.CylinderGeometry(0.7, 0.7, 16, 6);
+    const stemMat = new THREE.MeshBasicMaterial({ color: meta.hex, transparent: true, opacity: 0.65 });
+    const stem = new THREE.Mesh(stemGeo, stemMat);
+    stem.position.y = 10;
+    group.add(stem);
+
+    let headGeo;
+    if (el.family === 'hazard') {
+      headGeo = new THREE.ConeGeometry(5.5, 11, 4);
+    } else if (el.family === 'resource') {
+      headGeo = new THREE.BoxGeometry(7.5, 7.5, 7.5);
+    } else if (el.type === 'drill_site') {
+      headGeo = new THREE.CylinderGeometry(2.5, 5.5, 12, 8);
+    } else {
+      headGeo = new THREE.OctahedronGeometry(6.2, 0);
+    }
+
+    const headMat = new THREE.MeshStandardMaterial({
+      color: meta.hex,
+      emissive: meta.hex,
+      emissiveIntensity: 0.48,
+      roughness: 0.25
+    });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.y = 20;
+    group.add(head);
+  }
+
+  // Propagate clickable/hoverable elementId cleanly across children
+  group.traverse(child => {
+    child.userData.elementId = el.id;
+    child.userData.isMissionElement = true;
+  });
+
+  return group;
+}
+
+export function createMissionElementsController({ elementsData, sampleElevFn, minElev }) {
+  const elements = elementsData.elements || [];
+  const elementById = new Map(elements.map(e => [e.id, e]));
+  const group = new THREE.Group();
+  group.name = 'MissionElementsGroup';
+
+  const mysteryTex = createMysteryQuestionTexture();
+  const sharedHitGeo = new THREE.CylinderGeometry(18, 18, 38, 8);
+  const sharedHitMat = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0.0,
+    depthWrite: false,
+    colorWrite: false
+  });
+  const markerGroups = new Map();
+  const dustMarkers = [];
+  const mysteryMarkers = [];
+
+  elements.forEach(el => {
+    const mg = createSmallElementMesh(el, sampleElevFn, minElev, mysteryTex, sharedHitGeo, sharedHitMat);
+    markerGroups.set(el.id, mg);
+    group.add(mg);
+    if (el.type === 'dust_devil_corridor') dustMarkers.push(mg);
+    if (el.family === 'mystery') mysteryMarkers.push(mg);
+  });
+
+  // In-memory Field Codex unlock set
+  const unlockedTypes = new Set();
+
+  let currentExag = 1.0;
+  let activeLens = 'satellite';
+  let isPostLock = false;
+  let isBriefing = true;
+  let isMissionMode = true;
+  let showAllElements = false;
+  const enabledCategories = new Set(['mission', 'terrain', 'materials', 'hazards', 'resources', 'science', 'mystery']);
+
+  const tmpVec = new THREE.Vector3();
+  const projScreenMatrix = new THREE.Matrix4();
+  const frustum = new THREE.Frustum();
+
+  function getUniqueTypesForStage(postLock = isPostLock) {
+    const seen = new Set();
+    const list = [];
+    elements.forEach(el => {
+      if (el.visibility === 'scan' && !postLock) return;
+      if (seen.has(el.type)) return;
+      seen.add(el.type);
+      list.push({
+        type: el.type,
+        title: TYPE_DISPLAY_NAMES[el.type] || el.name,
+        family: el.family,
+        source: el.source,
+        whatIsIt: el.whatIsIt,
+        effectOnMission: el.effectOnMission
+      });
+    });
+    return list;
+  }
+
+  function getCodexProgress() {
+    const stageTypes = getUniqueTypesForStage(isPostLock);
+    const unlocked = stageTypes.filter(t => unlockedTypes.has(t.type)).length;
+    return { unlocked, total: stageTypes.length };
+  }
+
+  function unlockType(type) {
+    if (!type || unlockedTypes.has(type)) return false;
+    unlockedTypes.add(type);
+    return true;
+  }
+
+  function resetCodex() {
+    unlockedTypes.clear();
+  }
+
+  function updateExaggeration(exag) {
+    currentExag = exag;
+    markerGroups.forEach(mg => {
+      const elev = mg.userData.elev;
+      mg.position.y = (elev - minElev) * currentExag;
+    });
+  }
+
+  function isElementEligible(el) {
+    if (!isMissionMode || isBriefing) return false;
+    if (el.visibility === 'scan' && !isPostLock) return false;
+
+    const catKey = FAMILY_META[el.family]?.cat || 'science';
+    if (!enabledCategories.has(catKey)) return false;
+
+    if (showAllElements) return true;
+
+    if (activeLens === 'satellite') {
+      return el.type === 'science_target' || el.type === 'drill_site' || (el.visibility === 'scan' && isPostLock);
+    }
+    if (activeLens === 'terrain' || activeLens === 'heat') {
+      return el.family === 'hazard';
+    }
+    if (activeLens === 'minerals') {
+      return el.family === 'science';
+    }
+    if (activeLens === 'radiation') {
+      return el.family === 'resource';
+    }
+    if (activeLens === 'sun') {
+      return el.type === 'solar_ridge' || el.type === 'comm_relay_beacon' || el.type === 'oxygen_cache';
+    }
+    return true;
+  }
+
+  function setState({ missionMode, briefing, postLock, lens, showAll }) {
+    if (typeof missionMode === 'boolean') isMissionMode = missionMode;
+    if (typeof briefing === 'boolean') isBriefing = briefing;
+    if (typeof postLock === 'boolean') isPostLock = postLock;
+    if (typeof lens === 'string') activeLens = lens;
+    if (typeof showAll === 'boolean') showAllElements = showAll;
+
+    group.visible = isMissionMode && !isBriefing;
+  }
+
+  function setCategoryEnabled(cat, enabled) {
+    if (enabled) enabledCategories.add(cat);
+    else enabledCategories.delete(cat);
+  }
+
+  /**
+   * Anti-clutter frame update:
+   * 1) Enforces <= 12 visible icons with screen-space overlap culling.
+   * 2) Pauses dust devil & mystery vortex animations when off-screen or culled.
+   */
+  function update(now, camera, width, height, plannerTopY, rightLimitX = width - 10, leftLimitX = 10) {
+    if (!group.visible) return;
+
+    camera.updateMatrixWorld();
+    projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(projScreenMatrix);
+
+    const eligible = [];
+    for (let i = 0; i < elements.length; i++) {
+      const el = elements[i];
+      const mg = markerGroups.get(el.id);
+      if (!mg) continue;
+
+      if (!isElementEligible(el)) {
+        mg.visible = false;
+        continue;
+      }
+
+      tmpVec.set(mg.position.x, mg.position.y + 18, mg.position.z);
+      if (!frustum.containsPoint(tmpVec)) {
+        mg.visible = false;
+        continue;
+      }
+
+      const dist = camera.position.distanceTo(tmpVec);
+      tmpVec.project(camera);
+      if (tmpVec.z < -1 || tmpVec.z > 1) {
+        mg.visible = false;
+        continue;
+      }
+
+      const sx = (tmpVec.x * 0.5 + 0.5) * width;
+      const sy = (-tmpVec.y * 0.5 + 0.5) * height;
+      const maxY = plannerTopY > 120 ? plannerTopY - 8 : height - 14;
+      if (sx < leftLimitX || sx > rightLimitX || sy < 44 || sy > maxY) {
+        mg.visible = false;
+        continue;
+      }
+
+      let priority = FAMILY_META[el.family]?.priority || 70;
+      if (el.type === 'science_target' || el.type === 'drill_site') priority += 12;
+      if (el.visibility === 'scan') priority += 15;
+      eligible.push({ mg, sx, sy, score: priority * 100 - dist * 0.01 });
+    }
+
+    eligible.sort((a, b) => b.score - a.score);
+
+    const placed = [];
+    let visCount = 0;
+    const minSepSq = 28 * 28; // overlap culling radius between 3D icons
+
+    for (let i = 0; i < eligible.length; i++) {
+      const item = eligible[i];
+      if (visCount >= MAX_VISIBLE_ICONS) {
+        item.mg.visible = false;
+        continue;
+      }
+      let overlaps = false;
+      for (let j = 0; j < placed.length; j++) {
+        const dx = item.sx - placed[j].sx;
+        const dy = item.sy - placed[j].sy;
+        if (dx * dx + dy * dy < minSepSq) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (overlaps) {
+        item.mg.visible = false;
+      } else {
+        item.mg.visible = true;
+        placed.push(item);
+        visCount++;
+      }
+    }
+
+    // Pause animations when off-screen or hidden
+    for (let i = 0; i < dustMarkers.length; i++) {
+      const dmg = dustMarkers[i];
+      if (!dmg.visible) continue;
+      const vortex = dmg.userData.vortexObj;
+      if (vortex) {
+        vortex.rotation.y = now * 0.0042;
+      }
+    }
+
+    for (let i = 0; i < mysteryMarkers.length; i++) {
+      const mmg = mysteryMarkers[i];
+      if (!mmg.visible) continue;
+      const pulseRing = mmg.userData.pulseRing;
+      const sprite = mmg.userData.questionSprite;
+      const s = 1.0 + 0.16 * Math.sin(now * 0.006);
+      if (pulseRing) {
+        pulseRing.scale.set(s, s, 1);
+        pulseRing.material.opacity = 0.55 + 0.35 * Math.cos(now * 0.006);
+      }
+      if (sprite) {
+        sprite.position.y = 24 + 2.5 * Math.sin(now * 0.004);
+      }
+    }
+  }
+
+  function getRaycastTargets() {
+    if (!group.visible) return [];
+    const list = [];
+    markerGroups.forEach(mg => {
+      if (mg.visible) list.push(mg);
+    });
+    return list;
+  }
+
+  function buildElementCardPayload(el) {
+    if (!el) return null;
+    const isTarget = el.id === 'target-1' || el.id === 'target-2' || el.id === 'target-3';
+    const tags = [{ text: 'GAME', cls: 'game' }];
+    if (isTarget) {
+      tags.unshift({ text: 'measured (Curiosity traverse); description unverified', cls: 'unverified' });
+    } else if (el.source === 'derived from DEM') {
+      tags.push({ text: 'derived from DEM', cls: 'dem' });
+    }
+    if (import.meta.env.DEV && el.whatIsIt && el.whatIsIt.verified === false) {
+      tags.push({ text: 'verify before submission', cls: 'sim' });
+    }
+
+    const catName = FAMILY_META[el.family]?.label || el.family;
+    const typeLabel = TYPE_DISPLAY_NAMES[el.type] || el.type;
+
+    let hoverTitle = el.name;
+    let whatItIs = el.whatIsIt.text;
+    if (el.id === 'target-1') {
+      hoverTitle = `Target 1: ${el.name}`;
+    } else if (el.id === 'target-2') {
+      hoverTitle = `Target 2: ${el.name}`;
+    } else if (el.id === 'target-3') {
+      hoverTitle = el.name;
+    }
+
+    return {
+      id: el.id,
+      type: el.type,
+      category: FAMILY_META[el.family]?.cat || 'science',
+      categoryLabel: `${catName} · ${typeLabel}`,
+      label: el.shortLabel || el.name,
+      hoverTitle,
+      whatItIs,
+      effectOnMission: el.effectOnMission,
+      solText: el.solLabel || null,
+      dataset: el.coordinateSource === 'measured'
+        ? `Curiosity ROVER location (measured) · ${el.placementRule}`
+        : `${el.source} · ${el.placementRule}`,
+      whyItMatters: `Effect on mission: ${el.effectOnMission}`,
+      tags,
+      sourceChip: el.source === 'derived from DEM' ? 'derived' : 'game',
+      rawElement: el
+    };
+  }
+
+  return {
+    group,
+    getElements: () => elements,
+    getElementById: id => elementById.get(id) || null,
+    getMarkerGroup: id => markerGroups.get(id) || null,
+    getUniqueTypesForStage,
+    getCodexProgress,
+    unlockType,
+    isTypeUnlocked: type => unlockedTypes.has(type),
+    getUnlockedCount: () => unlockedTypes.size,
+    resetCodex,
+    setState,
+    setCategoryEnabled,
+    updateExaggeration,
+    update,
+    getRaycastTargets,
+    buildElementCardPayload,
+    getVisibleIconCount: () => {
+      let c = 0;
+      markerGroups.forEach(mg => { if (mg.visible) c++; });
+      return c;
+    }
+  };
+}

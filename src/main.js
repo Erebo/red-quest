@@ -32,6 +32,12 @@ import {
   runDevCrismSelfCheck
 } from './game/decisionLenses.js';
 import { createMapLabelController } from './game/mapLabels.js';
+import level01Elements from './game/levels/level01_elements.json';
+import {
+  FAMILY_META,
+  computeRouteElementCounts,
+  createMissionElementsController
+} from './game/missionElements.js';
 
 // --- Performance & Timing Metrics ---
 const appStartTime = performance.now();
@@ -190,6 +196,139 @@ const mhcName = document.getElementById('mhc-name');
 const mhcSol = document.getElementById('mhc-sol');
 const mhcDesc = document.getElementById('mhc-desc');
 const mhcTags = document.getElementById('mhc-tags');
+const mhcEffect = document.getElementById('mhc-effect');
+const btnShowAllElements = document.getElementById('btn-show-all-elements');
+const chipCatMystery = document.getElementById('chip-cat-mystery');
+const btnCodex = document.getElementById('btn-codex');
+const codexCount = document.getElementById('codex-count');
+const codexPanel = document.getElementById('codex-panel');
+const codexProgress = document.getElementById('codex-progress');
+const codexBody = document.getElementById('codex-body');
+const codexClose = document.getElementById('codex-close');
+const legendMysteryRow = document.getElementById('legend-mystery-row');
+
+let routeElementCounts = {};
+let missionElements = null;
+let showAllElements = false;
+
+function isCurrentPostLock() {
+  const s = levelState.getState().screen;
+  return s === GAME_STATES.EXPLORE || s === GAME_STATES.DEBRIEF;
+}
+
+function renderFieldCodex() {
+  if (!missionElements) return;
+  const postLock = isCurrentPostLock();
+  const prog = missionElements.getCodexProgress();
+  if (codexCount) codexCount.textContent = `${prog.unlocked}/${prog.total}`;
+  if (codexProgress) codexProgress.textContent = `Unlocked ${prog.unlocked} / ${prog.total} types`;
+  if (!codexBody) return;
+
+  const entries = missionElements.getUniqueTypesForStage(postLock);
+  const families = ['hazard', 'resource', 'science'];
+  if (postLock) families.push('mystery');
+
+  codexBody.innerHTML = '';
+  families.forEach(fam => {
+    const groupEntries = entries.filter(e => e.family === fam);
+    if (!groupEntries.length) return;
+
+    const section = document.createElement('div');
+    const head = document.createElement('div');
+    head.className = `codex-fam-head codex-fam-${fam}`;
+    head.textContent = `${FAMILY_META[fam]?.label || fam} (${groupEntries.length})`;
+    section.appendChild(head);
+
+    groupEntries.forEach(entry => {
+      const unlocked = missionElements.isTypeUnlocked(entry.type);
+      const card = document.createElement('div');
+      card.className = `codex-entry ${unlocked ? 'unlocked' : 'locked'}`;
+      card.dataset.codexType = entry.type;
+
+      const top = document.createElement('div');
+      top.className = 'codex-etop';
+      const titleSpan = document.createElement('span');
+      titleSpan.textContent = entry.title;
+      const statusSpan = document.createElement('span');
+      statusSpan.className = unlocked ? 'codex-badge-open' : 'codex-badge-lock';
+      statusSpan.textContent = unlocked ? 'Unlocked' : 'Locked · click on map';
+      top.appendChild(titleSpan);
+      top.appendChild(statusSpan);
+      card.appendChild(top);
+
+      if (unlocked) {
+        const note = document.createElement('div');
+        note.className = 'codex-note';
+        note.textContent = entry.whatIsIt?.text || '';
+        card.appendChild(note);
+
+        const eff = document.createElement('div');
+        eff.className = 'codex-eff';
+        eff.textContent = `Effect on mission: ${entry.effectOnMission || 'TBD'}`;
+        card.appendChild(eff);
+
+        const tags = document.createElement('div');
+        tags.className = 'codex-tags';
+        const gameTag = document.createElement('span');
+        gameTag.className = 'mhc-tag game';
+        gameTag.textContent = 'GAME';
+        tags.appendChild(gameTag);
+
+        if (entry.source === 'derived from DEM') {
+          const demTag = document.createElement('span');
+          demTag.className = 'mhc-tag dem';
+          demTag.textContent = 'derived from DEM';
+          tags.appendChild(demTag);
+        }
+        if (import.meta.env.DEV && entry.whatIsIt?.verified === false) {
+          const verTag = document.createElement('span');
+          verTag.className = 'mhc-tag sim';
+          verTag.textContent = 'verify before submission';
+          tags.appendChild(verTag);
+        }
+        card.appendChild(tags);
+      }
+
+      section.appendChild(card);
+    });
+
+    codexBody.appendChild(section);
+  });
+}
+
+function handleAnchorOrElementSelect(anchorOrId) {
+  if (!missionElements || !anchorOrId) return;
+  const id = typeof anchorOrId === 'string' ? anchorOrId : anchorOrId.id;
+  if (!id) return;
+  const el = missionElements.getElementById(id);
+  if (el) {
+    const unlockedNow = missionElements.unlockType(el.type);
+    if (unlockedNow || codexProgress) {
+      renderFieldCodex();
+    }
+  }
+}
+
+function syncMissionElementsState() {
+  const st = levelState.getState();
+  const isMission = currentViewMode === 'MISSION';
+  const isBriefing = st.screen === GAME_STATES.BRIEFING;
+  const isPostLock = st.screen === GAME_STATES.EXPLORE || st.screen === GAME_STATES.DEBRIEF;
+
+  if (chipCatMystery) chipCatMystery.classList.toggle('hidden', !isPostLock);
+  if (legendMysteryRow) legendMysteryRow.classList.toggle('hidden', !isPostLock);
+
+  if (missionElements) {
+    missionElements.setState({
+      missionMode: isMission,
+      briefing: isBriefing,
+      postLock: isPostLock,
+      lens: activeMissionLens,
+      showAll: showAllElements
+    });
+    renderFieldCodex();
+  }
+}
 
 const labelDetailCard = document.getElementById('label-detail-card');
 const ldcTitle = document.getElementById('ldc-title');
@@ -587,6 +726,7 @@ function applyLayerVisibilityForMode() {
     if (crismHydMesh) crismHydMesh.visible = false;
     if (crismPhyMesh) crismPhyMesh.visible = false;
     if (themisMesh) themisMesh.visible = false;
+    if (scienceMarkersGroup) scienceMarkersGroup.visible = false;
 
     applyMissionLensWeightsToMeshes();
   } else {
@@ -600,10 +740,12 @@ function applyLayerVisibilityForMode() {
     if (crismHydMesh) crismHydMesh.visible = lyrCrismHyd ? lyrCrismHyd.checked : false;
     if (crismPhyMesh) crismPhyMesh.visible = lyrCrismPhy ? lyrCrismPhy.checked : false;
     if (themisMesh) themisMesh.visible = lyrThemis ? lyrThemis.checked : false;
+    if (scienceMarkersGroup) scienceMarkersGroup.visible = lyrRoute ? lyrRoute.checked : true;
 
     [hazardOutlineMesh, lensTerrainMesh, lensMineralsMesh, lensHeatMesh, lensSunMesh, lensSkyMesh]
       .forEach(m => { if (m) m.visible = false; });
   }
+  syncMissionElementsState();
 }
 
 function updateGeometryHeights(geo, skipNormals = false) {
@@ -993,6 +1135,10 @@ function applyVerticalExaggeration(exag, { skipNormals = false, syncSlider = tru
     startFlagGroup.children[1].position.y = sy + 46 * currentExag;
   }
 
+  if (missionElements) {
+    missionElements.updateExaggeration(currentExag);
+  }
+
   if (boxworkGroup && boxworkGroup.children[0]) {
     const bLine = boxworkGroup.children[0];
     const bPts = bLine.userData?.basePts;
@@ -1375,7 +1521,7 @@ function findHitMarkerKey() {
   const targets = [];
   if (startMarker) targets.push(startMarker);
   if (goalMarker) targets.push(goalMarker);
-  if (scienceMarkersGroup) {
+  if (scienceMarkersGroup && scienceMarkersGroup.visible) {
     scienceMarkersGroup.children.forEach(c => {
       if (c.visible && c.userData && c.userData.markerKey) targets.push(c);
     });
@@ -1386,6 +1532,22 @@ function findHitMarkerKey() {
   let obj = hits[0].object;
   while (obj) {
     if (obj.userData && obj.userData.markerKey) return obj.userData.markerKey;
+    obj = obj.parent;
+  }
+  return null;
+}
+
+function findHitMissionElement() {
+  if (!missionElements || currentViewMode !== 'MISSION') return null;
+  const targets = missionElements.getRaycastTargets();
+  if (!targets.length) return null;
+  const hits = raycaster.intersectObjects(targets, true);
+  if (!hits.length) return null;
+  let obj = hits[0].object;
+  while (obj) {
+    if (obj.userData && obj.userData.elementId) {
+      return missionElements.getElementById(obj.userData.elementId);
+    }
     obj = obj.parent;
   }
   return null;
@@ -1412,7 +1574,22 @@ function handlePointerInspection(clientX, clientY) {
 
   raycaster.setFromCamera(mouse, camera);
 
-  // 1. Check 3D marker hover card first (works in both pinned and unpinned views)
+  // 1. Check 3D Mission Gameplay Elements & Core Markers hover card first
+  const hitElement = findHitMissionElement();
+  if (hitElement && mapLabels) {
+    if (hoveredCandidateId !== null) {
+      hoveredCandidateId = null;
+      updateCandidateRouteStyles();
+    }
+    const card = missionElements.buildElementCardPayload(hitElement);
+    if (card) {
+      mapLabels.showHoverCard(card, clientX, clientY);
+      hideHoverTooltip();
+      renderer.domElement.style.cursor = 'pointer';
+      return;
+    }
+  }
+
   const hitMarkerKey = findHitMarkerKey();
   if (hitMarkerKey && mapLabels) {
     if (hoveredCandidateId !== null) {
@@ -1627,11 +1804,27 @@ function resetCustomizationToStandard() {
   setActiveMissionLens('satellite', { immediate: true });
   setSunPreset('morning');
   if (mapLabels) {
-    ['mission', 'terrain', 'materials', 'hazards', 'science'].forEach(cat => {
+    ['mission', 'terrain', 'materials', 'hazards', 'resources', 'science', 'mystery'].forEach(cat => {
       mapLabels.setCategoryEnabled(cat, true);
     });
     mapLabels.setShowAll(false);
     mapLabels.hideDetailCard();
+  }
+  showAllElements = false;
+  if (btnShowAllElements) {
+    btnShowAllElements.classList.remove('active');
+    btnShowAllElements.setAttribute('aria-pressed', 'false');
+  }
+  if (missionElements) {
+    ['mission', 'terrain', 'materials', 'hazards', 'resources', 'science', 'mystery'].forEach(cat => {
+      missionElements.setCategoryEnabled(cat, true);
+    });
+    missionElements.resetCodex();
+  }
+  if (codexPanel) codexPanel.classList.add('hidden');
+  if (btnCodex) {
+    btnCodex.classList.remove('open');
+    btnCodex.setAttribute('aria-expanded', 'false');
   }
   labelCatChips.forEach(chip => {
     chip.classList.add('active');
@@ -2350,8 +2543,11 @@ function bindUIEvents() {
     }
   });
 
-  // Canvas Click: Pin point, set start/goal, or select route
-  renderer.domElement.addEventListener('click', () => {
+  // Canvas Click: Pin point, set start/goal, inspect elements/markers, or select route
+  renderer.domElement.addEventListener('click', e => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
     // 0. Setting START or GOAL
@@ -2384,14 +2580,18 @@ function bindUIEvents() {
       return;
     }
 
-    // 1. Check clicking on Candidate Route Lines (Line2)
-    const clickedRouteId = findHitCandidateRouteId();
-    if (clickedRouteId) {
-      selectCandidate(clickedRouteId, { userInitiated: true });
-      return;
+    // 1. Check Mission Gameplay 3D Elements (matching hover priority above route lines)
+    const clickedElement = findHitMissionElement();
+    if (clickedElement && mapLabels) {
+      const payload = missionElements.buildElementCardPayload(clickedElement);
+      if (payload) {
+        mapLabels.showDetailCard(payload);
+        handleAnchorOrElementSelect(clickedElement.id);
+        return;
+      }
     }
 
-    // 2. Check Start / Goal / Science Markers -> open neutral detail card (hiding Sol pre-lock-in)
+    // 2. Check Start / Goal / Legacy Science Markers -> open neutral detail card (hiding Sol pre-lock-in)
     const clickedMarkerKey = findHitMarkerKey();
     if (clickedMarkerKey && mapLabels) {
       const anchor = mapLabels.getAnchorById(clickedMarkerKey);
@@ -2400,7 +2600,7 @@ function bindUIEvents() {
         return;
       }
     }
-    if (scienceMarkersGroup) {
+    if (scienceMarkersGroup && scienceMarkersGroup.visible) {
       const hits = raycaster.intersectObjects(scienceMarkersGroup.children, false);
       if (hits.length > 0 && hits[0].object.userData.isSciencePin) {
         const u = hits[0].object.userData;
@@ -2412,6 +2612,13 @@ function bindUIEvents() {
         sciencePopup.classList.remove('hidden');
         return;
       }
+    }
+
+    // 3. Check clicking on Candidate Route Lines (Line2)
+    const clickedRouteId = findHitCandidateRouteId();
+    if (clickedRouteId) {
+      selectCandidate(clickedRouteId, { userInitiated: true });
+      return;
     }
 
     // 3. Pin clicked terrain point (opens full inspector in MISSION mode too)
@@ -2592,6 +2799,7 @@ function renderMissionLensDetail() {
 function buildLensRouteCardHtml(cand) {
   const isSel = cand.id === selectedCandidateId;
   const st = routeLensStats[cand.id] || { phyPct: 0, hydHighPct: 0, anyMineralPct: 0, themisMeanDn: 0, sun: {}, radiation: null };
+  const cnt = routeElementCounts[cand.id] || { hazard: 0, resource: 0, science: 0 };
 
   let metricText = '';
   let subText = '';
@@ -2683,6 +2891,15 @@ function buildLensRouteCardHtml(cand) {
       </div>
       ${barHtml}
       <div class="lrs-sub">${subText}</div>
+      <div class="lrs-along" title="Gameplay surface elements within 150 m of route (no recommendations)">
+        <span class="lrs-along-lbl">Along this route (within 150 m):</span>
+        <span class="lrs-along-vals">
+          <span class="lrs-cnt haz">Haz ${cnt.hazard}</span>
+          <span class="lrs-cnt res">Res ${cnt.resource}</span>
+          <span class="lrs-cnt sci">Sci ${cnt.science}</span>
+          <span class="mhc-tag game">GAME</span>
+        </span>
+      </div>
     </div>
   `;
 }
@@ -2811,6 +3028,7 @@ function setActiveMissionLens(lensId, { immediate = false } = {}) {
   }
 
   if (mapLabels) mapLabels.setActiveLens(lensId);
+  syncMissionElementsState();
   renderMissionLensDetail();
   renderLensRouteStrip();
   startLensCrossfade(lensId, immediate);
@@ -2885,7 +3103,7 @@ function buildLevelMapAnchors() {
     getWorldY: () => sampleWorldY(bz.xMin, bz.yMin, 16)
   });
 
-  // --- SCIENCE TARGETS (no Sol numbers before lock-in) ---
+  // --- SCIENCE TARGETS (no Sol numbers before lock-in; ONLY Target 3 is Drill site) ---
   level01.scienceTargets.forEach((t, idx) => {
     let pinObj = null;
     if (scienceMarkersGroup) {
@@ -2893,19 +3111,33 @@ function buildLevelMapAnchors() {
     }
     const { meshX, meshZ } = pinObj ? { meshX: pinObj.position.x, meshZ: pinObj.position.z } : localToMesh(t.x, t.y);
     const elev = pinObj ? pinObj.userData.pt.elevation : t.elevation;
+    const elem = level01Elements.elements.find(e => e.id === t.id);
+    const tags = [
+      { text: 'measured (Curiosity traverse); description unverified', cls: 'unverified' },
+      { text: 'GAME', cls: 'game' }
+    ];
+    if (import.meta.env.DEV && elem?.whatIsIt?.verified === false) {
+      tags.push({ text: 'verify before submission', cls: 'sim' });
+    }
 
     anchors.push({
       id: t.id,
       category: 'science',
-      categoryLabel: 'Science Target',
+      categoryLabel: t.id === 'target-3' ? 'Science · Drill site' : 'Science · Science target',
       basePriority: 90 - idx * 2,
       sourceChip: 'measured',
       label: `Target ${idx + 1}`,
-      hoverTitle: `Target ${idx + 1}`,
-      whatItIs: t.title,
+      hoverTitle: t.id === 'target-3' ? (elem?.name || 'Drill site: Nevado Sajama drill') : `Target ${idx + 1}: ${t.title}`,
+      whatItIs: elem?.whatIsIt?.text || t.title,
+      effectOnMission: elem?.effectOnMission || null,
       solText: t.label,
-      dataset: 'NASA PDS Curiosity ROVER traverse (location measured); description unverified',
-      whyItMatters: 'Indicates a candidate science observation waypoint along the corridor; visiting nearby waypoints trades path detours or local slope for sampling coverage.',
+      dataset: elem
+        ? `Curiosity ROVER location (measured) · ${elem.placementRule}`
+        : 'NASA PDS Curiosity ROVER traverse (location measured); description unverified',
+      whyItMatters: elem
+        ? `Effect on mission: ${elem.effectOnMission}`
+        : 'Indicates a candidate science observation waypoint along the corridor; visiting nearby waypoints trades path detours or local slope for sampling coverage.',
+      tags,
       worldX: meshX,
       worldZ: meshZ,
       getWorldY: () => (elev - minElev) * currentExag + 26 * currentExag
@@ -3226,6 +3458,8 @@ function syncPanelsToViewMode() {
     const showLensesBtn = !isBriefing && currentViewMode === 'MISSION';
     btnLenses.classList.toggle('hidden', !showLensesBtn);
     btnLenses.classList.toggle('open', prefs.layersOpen);
+    if (btnShowAllElements) btnShowAllElements.classList.toggle('hidden', !showLensesBtn);
+    if (btnCodex) btnCodex.classList.toggle('hidden', !showLensesBtn);
   }
   if (lensExagBadge) {
     lensExagBadge.classList.toggle('hidden', isBriefing || currentViewMode !== 'MISSION' || activeMissionLens !== 'terrain');
@@ -3237,6 +3471,13 @@ function syncPanelsToViewMode() {
   }
   if (legendRefRow) {
     legendRefRow.classList.toggle('hidden', !isPostLock);
+  }
+  if ((isBriefing || currentViewMode !== 'MISSION') && codexPanel) {
+    codexPanel.classList.add('hidden');
+    if (btnCodex) {
+      btnCodex.classList.remove('open');
+      btnCodex.setAttribute('aria-expanded', 'false');
+    }
   }
 
   // Map labels context
@@ -3405,6 +3646,13 @@ function bindGameEvents() {
   if (btnLenses) {
     btnLenses.addEventListener('click', () => {
       panelPrefs[currentViewMode].layersOpen = !panelPrefs[currentViewMode].layersOpen;
+      if (panelPrefs[currentViewMode].layersOpen && codexPanel && !codexPanel.classList.contains('hidden')) {
+        codexPanel.classList.add('hidden');
+        if (btnCodex) {
+          btnCodex.classList.remove('open');
+          btnCodex.setAttribute('aria-expanded', 'false');
+        }
+      }
       syncPanelsToViewMode();
     });
   }
@@ -3430,6 +3678,7 @@ function bindGameEvents() {
       chip.classList.toggle('active', next);
       chip.setAttribute('aria-pressed', next ? 'true' : 'false');
       if (mapLabels) mapLabels.setCategoryEnabled(cat, next);
+      if (missionElements) missionElements.setCategoryEnabled(cat, next);
       if (btnLabels && mapLabels) {
         btnLabels.classList.toggle('active', mapLabels.getEnabledCategories().length > 0);
       }
@@ -3442,6 +3691,40 @@ function bindGameEvents() {
       btnLabelsShowAll.classList.toggle('active', next);
       btnLabelsShowAll.setAttribute('aria-pressed', next ? 'true' : 'false');
       if (mapLabels) mapLabels.setShowAll(next);
+    });
+  }
+
+  if (btnShowAllElements) {
+    btnShowAllElements.addEventListener('click', () => {
+      showAllElements = !showAllElements;
+      btnShowAllElements.classList.toggle('active', showAllElements);
+      btnShowAllElements.setAttribute('aria-pressed', showAllElements ? 'true' : 'false');
+      syncMissionElementsState();
+    });
+  }
+
+  if (btnCodex && codexPanel) {
+    btnCodex.addEventListener('click', () => {
+      const willOpen = codexPanel.classList.toggle('hidden') === false;
+      btnCodex.classList.toggle('open', willOpen);
+      btnCodex.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (willOpen) {
+        if (panelPrefs[currentViewMode].layersOpen) {
+          panelPrefs[currentViewMode].layersOpen = false;
+          syncPanelsToViewMode();
+        }
+        renderFieldCodex();
+      }
+    });
+  }
+
+  if (codexClose && codexPanel) {
+    codexClose.addEventListener('click', () => {
+      codexPanel.classList.add('hidden');
+      if (btnCodex) {
+        btnCodex.classList.remove('open');
+        btnCodex.setAttribute('aria-expanded', 'false');
+      }
     });
   }
 
@@ -3618,7 +3901,22 @@ async function loadAssetsAndInit() {
     // Load fixed Level 1 candidate routes generated from routeWorker.js
     plannerCandidates = buildBlindedPlannerCandidates(level01);
     routeLensStats = computeOpticalRouteStats(plannerCandidates, hydBuf, phyBuf, themisBuf);
+    routeElementCounts = computeRouteElementCounts(plannerCandidates, level01Elements.elements, 150.0);
     runDevCrismSelfCheck(routeLensStats);
+
+    missionElements = createMissionElementsController({
+      elementsData: level01Elements,
+      sampleElevFn: (lx, ly) => {
+        const { col, row } = localToGrid(lx, ly);
+        return sampleGridBilinear(rawHeights, col, row);
+      },
+      minElev
+    });
+    scene.add(missionElements.group);
+    if (import.meta.env.DEV) {
+      window.__missionElements = missionElements;
+      window.__camera = camera;
+    }
 
     mapLabels = createMapLabelController({
       layerEl: mapLabelsLayer,
@@ -3627,6 +3925,7 @@ async function loadAssetsAndInit() {
       mhcNameEl: mhcName,
       mhcSolEl: mhcSol,
       mhcDescEl: mhcDesc,
+      mhcEffectEl: mhcEffect,
       mhcTagsEl: mhcTags,
       detailCardEl: labelDetailCard,
       ldcTitleEl: ldcTitle,
@@ -3636,7 +3935,8 @@ async function loadAssetsAndInit() {
       ldcDatasetEl: ldcDataset,
       ldcWhyEl: ldcWhy,
       ldcTagsEl: ldcTags,
-      ldcCloseBtn: ldcClose
+      ldcCloseBtn: ldcClose,
+      onSelectAnchor: handleAnchorOrElementSelect
     });
     mapLabels.setAnchors(buildLevelMapAnchors());
 
@@ -3645,6 +3945,7 @@ async function loadAssetsAndInit() {
     buildCandidateRouteLines(plannerCandidates);
     setActiveMissionLens('satellite', { immediate: true });
     applyGameScreenState(levelState.getState());
+    syncMissionElementsState();
 
     initRouteWorker();
     initTerrainAnalysisWorker();
@@ -3749,6 +4050,20 @@ function animate() {
   updateDustParticles();
 
   controls.update();
+
+  // Mission gameplay elements anti-clutter culling & off-screen animation pause
+  if (missionElements) {
+    missionElements.update(
+      now,
+      camera,
+      window.innerWidth,
+      window.innerHeight,
+      cachedPlannerTop,
+      cachedLabelRightLimit,
+      cachedLabelLeftLimit
+    );
+  }
+
   renderer.render(scene, camera);
 
   // Camera-facing 2D projected map labels (overlap culled or Show All with leader lines)

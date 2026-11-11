@@ -17,16 +17,18 @@ const CATEGORY_ICONS = Object.freeze({
   terrain: '▲',
   materials: '◆',
   hazards: '⚠',
-  science: '★'
+  resources: '✚',
+  science: '★',
+  mystery: '?'
 });
 
 const LENS_CATEGORY_BOOST = Object.freeze({
-  satellite: { mission: 12, science: 8, hazards: 6, terrain: 0, materials: 0 },
-  terrain: { terrain: 42, hazards: 36, mission: 6, science: 0, materials: 0 },
-  minerals: { materials: 48, science: 22, mission: 4, terrain: 0, hazards: 0 },
-  heat: { materials: 22, terrain: 22, mission: 6, science: 4, hazards: 0 },
-  sun: { terrain: 44, mission: 6, hazards: 10, materials: 0, science: 0 },
-  radiation: { terrain: 44, hazards: 16, mission: 6, materials: 0, science: 0 }
+  satellite: { mission: 12, science: 8, hazards: 6, terrain: 0, materials: 0, resources: 0, mystery: 14 },
+  terrain: { terrain: 42, hazards: 36, mission: 6, science: 0, materials: 0, resources: 0, mystery: 6 },
+  minerals: { materials: 48, science: 22, mission: 4, terrain: 0, hazards: 0, resources: 0, mystery: 6 },
+  heat: { materials: 22, terrain: 22, hazards: 20, mission: 6, science: 4, resources: 0, mystery: 6 },
+  sun: { terrain: 44, resources: 18, mission: 6, hazards: 10, materials: 0, science: 0, mystery: 6 },
+  radiation: { terrain: 44, resources: 28, hazards: 16, mission: 6, materials: 0, science: 0, mystery: 6 }
 });
 
 // Candidate pixel offsets around anchor (sx, sy) for Show-all de-overlap placement
@@ -64,6 +66,7 @@ export function createMapLabelController({
   mhcNameEl,
   mhcSolEl,
   mhcDescEl,
+  mhcEffectEl,
   mhcTagsEl,
   detailCardEl,
   ldcTitleEl,
@@ -73,11 +76,12 @@ export function createMapLabelController({
   ldcDatasetEl,
   ldcWhyEl,
   ldcTagsEl,
-  ldcCloseBtn
+  ldcCloseBtn,
+  onSelectAnchor
 }) {
   let anchors = [];
   let sortedAnchors = [];
-  const enabledCategories = new Set(['mission', 'terrain', 'materials', 'hazards', 'science']);
+  const enabledCategories = new Set(['mission', 'terrain', 'materials', 'hazards', 'resources', 'science', 'mystery']);
   let showAllMode = false;
   let activeLens = 'satellite';
   let postLockRevealed = false;
@@ -144,12 +148,12 @@ export function createMapLabelController({
 
   function buildProvenanceBadges(targetEl, anchor) {
     targetEl.innerHTML = '';
-    if (anchor.category === 'science') {
-      targetEl.appendChild(createTagBadge(TARGET_PROVENANCE_TAG, 'unverified'));
-      return;
-    }
     if (anchor.tags && anchor.tags.length) {
       anchor.tags.forEach(t => targetEl.appendChild(createTagBadge(t.text, t.cls)));
+      return;
+    }
+    if (anchor.category === 'science') {
+      targetEl.appendChild(createTagBadge(TARGET_PROVENANCE_TAG, 'unverified'));
       return;
     }
     const chipCls = anchor.sourceChip === 'derived' ? 'dem' : anchor.sourceChip === 'SIM' ? 'sim' : anchor.sourceChip || 'measured';
@@ -163,6 +167,16 @@ export function createMapLabelController({
 
     mhcNameEl.textContent = anchor.hoverTitle || anchor.label;
     mhcDescEl.textContent = (postLockRevealed && anchor.whatPostLock) ? anchor.whatPostLock : anchor.whatItIs;
+
+    if (mhcEffectEl) {
+      if (anchor.effectOnMission) {
+        mhcEffectEl.textContent = anchor.effectOnMission;
+        mhcEffectEl.classList.remove('hidden');
+      } else {
+        mhcEffectEl.textContent = '';
+        mhcEffectEl.classList.add('hidden');
+      }
+    }
 
     if (mhcSolEl) {
       if (postLockRevealed && anchor.solText) {
@@ -213,6 +227,9 @@ export function createMapLabelController({
 
     detailCardEl.classList.remove('hidden');
     detailCardEl.dataset.anchorId = anchor.id;
+    if (typeof onSelectAnchor === 'function') {
+      onSelectAnchor(anchor);
+    }
   }
 
   function hideDetailCard() {
@@ -380,7 +397,7 @@ export function createMapLabelController({
     for (let i = 0; i < sortedAnchors.length; i++) {
       const a = sortedAnchors[i];
 
-      if (!enabledCategories.has(a.category)) {
+      if (!enabledCategories.has(a.category) || (a.requirePostLock && !postLockRevealed)) {
         applyLabelVisual(a.id, false, 0, 0, 0, 0, 0, false);
         continue;
       }
