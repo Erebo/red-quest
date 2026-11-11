@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23d35400'/></svg>" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
-<body>
+<body class="front-door-active">
   <div id="canvas-container"></div>
 
   <!-- Loading -->
@@ -20,39 +20,136 @@
     </div>
   </div>
 
+  <!-- START Stage 1: Title Intro Animation -->
+  <section id="intro-overlay" class="intro-overlay hidden" role="dialog" aria-label="Red Quest Introduction">
+    <canvas id="intro-starfield" class="intro-starfield" aria-hidden="true"></canvas>
+    <div class="intro-content">
+      <h1 id="intro-title" class="intro-title" aria-label="RED QUEST"></h1>
+      <p id="intro-subtitle" class="intro-subtitle">Gale Crater Expedition</p>
+      <p id="intro-skip-hint" class="intro-skip-hint">Click or press any key to continue</p>
+    </div>
+  </section>
+
+  <!-- START Stage 2: Mars Globe & Mission Select -->
+  <section id="mission-select-overlay" class="mission-select-overlay hidden" role="dialog" aria-label="Mission Select">
+    <div id="globe-canvas-wrap" class="globe-canvas-wrap" aria-hidden="true"></div>
+    <header class="ms-top-header">
+      <span class="ms-eyebrow">PLANETARY OPERATIONS · SELECT EXPEDITION</span>
+      <h1 class="ms-title">RED QUEST</h1>
+    </header>
+    <div class="ms-cards-dock" role="region" aria-label="Available Missions">
+      <article id="mission-card-1" class="ms-card unlocked">
+        <div class="ms-card-top">
+          <span class="ms-badge open">MISSION 01 · READY</span>
+          <span class="ms-coords">4.8°S, 137.4°E</span>
+        </div>
+        <h2>Gale Crater: Route Survey</h2>
+        <p class="ms-desc">Plan a safe 5 km traverse across steep scarps and mineral targets.</p>
+        <button id="btn-mission1-start" class="btn-mission-start" type="button">START</button>
+      </article>
+
+      <article id="mission-card-2" class="ms-card locked" aria-disabled="true">
+        <div class="ms-card-top">
+          <span class="ms-badge locked-tag">
+            <svg class="ui-ico ms-lock-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            LOCKED
+          </span>
+          <span class="ms-coming">Coming soon</span>
+        </div>
+        <h2>Mission 2: Jezero Delta</h2>
+        <p class="ms-desc">Coming soon — ancient crater rim and delta shoreline survey.</p>
+        <button class="btn-mission-locked" type="button" disabled aria-disabled="true">Coming soon</button>
+      </article>
+
+      <article id="mission-card-3" class="ms-card locked" aria-disabled="true">
+        <div class="ms-card-top">
+          <span class="ms-badge locked-tag">
+            <svg class="ui-ico ms-lock-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            LOCKED
+          </span>
+          <span class="ms-coming">Coming soon</span>
+        </div>
+        <h2>Mission 3: Noctis Labyrinthus</h2>
+        <p class="ms-desc">Coming soon — canyon cliffline traverse and relay network.</p>
+        <button class="btn-mission-locked" type="button" disabled aria-disabled="true">Coming soon</button>
+      </article>
+    </div>
+  </section>
+
   <!-- Skip intro -->
   <button id="btn-skip-intro" class="skip-btn" style="display:none;">Skip intro ⏭</button>
 
-  <!-- ===== HEADER (compact) ===== -->
+  <!-- ===== HEADER (MISSION Stage Rail + Mode Switch; compact in RESEARCH) ===== -->
   <header id="hud-header">
+    <button id="btn-home-missions" class="hud-icon-btn mission-only-ctrl" type="button" title="Return to Mission Select" aria-label="Home — Mission Select">
+      <svg class="ui-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></svg>
+    </button>
     <span class="h-badge">RED MAP</span>
-    <strong>RED QUEST</strong> <span class="hud-sub">· Gale Crater · 5 km × 5 km</span>
-    <div id="game-phase-bar" class="game-phase-bar" aria-label="Mission phases">
-      <span class="phase-step active" data-phase="BRIEFING">BRIEFING</span>
-      <span class="phase-sep">›</span>
-      <span class="phase-step" data-phase="ANALYZE">ANALYZE</span>
-      <span class="phase-sep">›</span>
-      <span class="phase-step" data-phase="CHOOSE">CHOOSE</span>
-      <span class="phase-sep">›</span>
-      <span class="phase-step" data-phase="EXPLORE">EXPLORE</span>
-      <span class="phase-sep">›</span>
-      <span class="phase-step" data-phase="DEBRIEF">DEBRIEF</span>
-    </div>
+    <strong class="hud-brand">RED QUEST</strong> <span class="hud-sub">· Gale Crater · 5 km × 5 km</span>
+    <nav id="game-phase-bar" class="game-phase-bar" aria-label="Mission stages">
+      <span class="phase-step active" data-phase="BRIEFING">
+        <svg class="ui-ico phase-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M15 3v5h5"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+        <span class="phase-check" aria-hidden="true">✓</span>
+        <span class="phase-lbl">BRIEFING</span>
+      </span>
+      <span class="phase-sep" aria-hidden="true">›</span>
+      <span class="phase-step" data-phase="ANALYZE">
+        <svg class="ui-ico phase-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+        <span class="phase-check" aria-hidden="true">✓</span>
+        <span class="phase-lbl">ANALYZE</span>
+      </span>
+      <span class="phase-sep" aria-hidden="true">›</span>
+      <span class="phase-step" data-phase="CHOOSE">
+        <svg class="ui-ico phase-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 17C12 17 12 6 15.5 6"/><path d="M8.5 18h7"/></svg>
+        <span class="phase-check" aria-hidden="true">✓</span>
+        <span class="phase-lbl">CHOOSE</span>
+      </span>
+      <span class="phase-sep" aria-hidden="true">›</span>
+      <span class="phase-step" data-phase="EXPLORE">
+        <svg class="ui-ico phase-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="17" r="2.5"/><circle cx="17" cy="17" r="2.5"/><path d="M5 17H4l1-5h12l2 5h-1"/><path d="M9 12V8h6l2 4"/><path d="M12 8V5l3-1"/></svg>
+        <span class="phase-check" aria-hidden="true">✓</span>
+        <span class="phase-lbl">EXPLORE</span>
+      </span>
+      <span class="phase-sep" aria-hidden="true">›</span>
+      <span class="phase-step" data-phase="DEBRIEF">
+        <svg class="ui-ico phase-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3v18"/><path d="M5 4h11l-2 4 2 4H5"/></svg>
+        <span class="phase-check" aria-hidden="true">✓</span>
+        <span class="phase-lbl">DEBRIEF</span>
+      </span>
+    </nav>
     <div id="view-mode-toggle" class="mode-toggle" role="group" aria-label="View mode">
-      <button type="button" class="mode-btn active" data-mode="MISSION">MISSION</button>
-      <button type="button" class="mode-btn" data-mode="RESEARCH">RESEARCH</button>
+      <button type="button" class="mode-btn active" data-mode="MISSION">
+        <svg class="ui-ico mode-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polygon points="10 14 14 10 15.5 8.5 14 14 8.5 15.5"/></svg>
+        <span class="mode-lbl">MISSION</span>
+      </button>
+      <button type="button" class="mode-btn" data-mode="RESEARCH">
+        <svg class="ui-ico mode-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 3 3 8 12 13 21 8"/><polyline points="3 13 12 18 21 13"/><polyline points="3 18 12 23 21 18"/></svg>
+        <span class="mode-lbl">RESEARCH</span>
+      </button>
     </div>
-    <button id="btn-dev-reset" class="dev-reset-btn" style="display:none;" title="Dev only: reset Level 1 back to Briefing">DEV: Reset Level</button>
-    <span id="perf-readout" class="perf">FPS — | Load —</span>
+    <button id="btn-tutorial-help" class="hud-help-btn mission-only-ctrl" type="button" title="Replay guided tutorial" aria-label="Help — Replay tutorial">
+      <svg class="ui-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .8c0 1.8-2.5 2.2-2.5 3.6"/><circle cx="12" cy="17.2" r=".7" fill="currentColor"/></svg>
+      <span class="help-lbl">Help</span>
+    </button>
+    <button id="btn-dev-reset" class="dev-reset-btn" style="display:none;" title="Dev only: reset Level 1 back to Briefing">DEV: Reset</button>
   </header>
 
   <!-- Floating Top-Right Map Controls (Vertical Exag Badge, Elements Toggle, Labels Dropdown, Codex & Lenses) -->
   <div id="map-top-controls" class="map-top-controls">
     <span id="lens-exag-badge" class="lens-exag-badge hidden">Vertical exaggeration 1.5x</span>
-    <button id="btn-calc-toggle" class="lenses-btn calc-btn mission-only-ctrl hidden" type="button" aria-expanded="false" title="Open or close Survey Kit (keeps route values masked while open)">Survey Kit</button>
-    <button id="btn-show-all-elements" class="lenses-btn labels-btn mission-only-ctrl hidden" type="button" aria-pressed="false" title="Toggle between active-lens element filter and all element families (max 12 icons)">Show all elements</button>
+    <button id="btn-calc-toggle" class="lenses-btn calc-btn mission-only-ctrl hidden" type="button" aria-expanded="false" title="Open or close Survey Kit (keeps route values masked while open)">
+      <svg class="ui-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v4"/><path d="M5 20 12 6l7 14"/><path d="M7.5 15a8 8 0 0 0 9 0"/></svg>
+      <span>Survey Kit</span>
+    </button>
+    <button id="btn-show-all-elements" class="lenses-btn labels-btn mission-only-ctrl hidden" type="button" aria-pressed="false" title="Toggle between active-lens element filter and all element families">
+      <svg class="ui-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/></svg>
+      <span>Show all elements</span>
+    </button>
     <div id="labels-dropdown-wrap" class="labels-dropdown-wrap">
-      <button id="btn-labels" class="lenses-btn labels-btn active" type="button" aria-expanded="false" title="Filter 3D map label & element categories">Labels ▾</button>
+      <button id="btn-labels" class="lenses-btn labels-btn active" type="button" aria-expanded="false" title="Filter 3D map label &amp; element categories">
+        <svg class="ui-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V4a1 1 0 0 1 1-1h9l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.2" fill="currentColor"/></svg>
+        <span>Labels ▾</span>
+      </button>
       <div id="labels-dropdown" class="labels-dropdown hidden" role="menu" aria-label="Label categories">
         <div class="ld-head">Categories</div>
         <div class="ld-chips">
@@ -68,8 +165,14 @@
         <button type="button" id="btn-labels-show-all" class="ld-show-all" aria-pressed="false">Show all labels (with leader lines)</button>
       </div>
     </div>
-    <button id="btn-codex" class="lenses-btn codex-btn mission-only-ctrl hidden" type="button" title="Open Field Codex of surface element types">Field Codex (<span id="codex-count">0/15</span>)</button>
-    <button id="btn-lenses" class="lenses-btn hidden" type="button" title="Open map lenses and overlay layers">Lenses</button>
+    <button id="btn-codex" class="lenses-btn codex-btn mission-only-ctrl hidden" type="button" title="Open Field Codex of surface element types">
+      <svg class="ui-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 0 4 22z"/><path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20"/><path d="M9 8h6"/><path d="M9 11.5h4"/></svg>
+      <span>Field Codex (<span id="codex-count">0/15</span>)</span>
+    </button>
+    <button id="btn-lenses" class="lenses-btn hidden" type="button" title="Open map lenses and overlay layers">
+      <svg class="ui-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.8-6.5 10-6.5S22 12 22 12s-3.8 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span>Lenses</span>
+    </button>
   </div>
 
   <!-- Projected Camera-Facing 3D Map Labels, Leader Lines, Hover, Detail Card & Field Codex -->
@@ -607,6 +710,37 @@
       <div class="ts"><span class="tsl">Net elevation change</span><span class="tsv" id="ts-net">0 m</span></div>
     </div>
   </nav>
+
+  <!-- PHASE C: Guided Tutorial (MISSION Mode First Entry + Replay via Help) -->
+  <div id="tutorial-root" class="tutorial-root hidden" role="dialog" aria-label="Mission Guide ARIA">
+    <div id="tutorial-dim-top" class="tutorial-dim"></div>
+    <div id="tutorial-dim-right" class="tutorial-dim"></div>
+    <div id="tutorial-dim-bottom" class="tutorial-dim"></div>
+    <div id="tutorial-dim-left" class="tutorial-dim"></div>
+    <div id="tutorial-spotlight-ring" class="tutorial-spotlight-ring hidden" aria-hidden="true"></div>
+
+    <div id="tutorial-card" class="tutorial-card">
+      <div class="tut-head">
+        <div class="tut-avatar" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="4"/><circle cx="9.5" cy="11.5" r="1.4" fill="currentColor"/><circle cx="14.5" cy="11.5" r="1.4" fill="currentColor"/><path d="M9 15h6"/><path d="M12 2v4"/><circle cx="12" cy="2" r="1" fill="currentColor"/></svg>
+        </div>
+        <div class="tut-meta">
+          <span id="tutorial-guide-name" class="tut-name">ARIA</span>
+          <span id="tutorial-step-counter" class="tut-step-counter">Step 1 of 9</span>
+        </div>
+      </div>
+      <h3 id="tutorial-title" class="tut-title">—</h3>
+      <p id="tutorial-text" class="tut-text">—</p>
+      <div id="tutorial-action-hint" class="tut-action-hint hidden"></div>
+      <div class="tut-actions">
+        <button id="btn-tutorial-skip" class="tut-btn-skip" type="button">Skip tutorial</button>
+        <button id="btn-tutorial-next" class="tut-btn-next" type="button">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dev-Only Compact Corner Diagnostics -->
+  <div id="perf-readout" class="perf-corner hidden" aria-hidden="true">FPS — | Load —</div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

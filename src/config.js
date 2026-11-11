@@ -4,6 +4,31 @@
  * without altering worker or route scoring logic.
  */
 
+export const UI_DESIGN_TOKENS = Object.freeze({
+  primaryBtnHeightPx: 48,
+  toolBtnHeightPx: 44,
+  iconSizePx: 24,
+  bodyFontSizePx: 14,
+  headingFontSizePx: 18,
+  radiusSmPx: 8,
+  radiusMdPx: 12,
+  accents: Object.freeze({
+    primary: '#e67e22',
+    survey: '#38bdf8',
+    confirm: '#22c55e',
+    warn: '#f59e0b'
+  })
+});
+
+/**
+ * Subtle UI sound hook placeholder (no audio assets loaded yet).
+ * @param {string} _eventName
+ * @param {object} [_meta]
+ */
+export function playUiSound(_eventName, _meta) {
+  // Intentional no-op placeholder until audio feedback assets are added.
+}
+
 export const WALKING_SPEED_CONFIG = Object.freeze({
   flatCruiseSpeedMPerH: 100.0,
   flatCruiseSpeedKmPerH: 0.10,

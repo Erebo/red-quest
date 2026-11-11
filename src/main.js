@@ -43,6 +43,10 @@ import {
   renderDebriefCalcRevealDOM
 } from './game/routeCalculator.js';
 import { createSurveyKitController } from './game/surveyKit.js';
+import { playUiSound } from './config.js';
+import { createIntroController } from './ui/intro.js';
+import { createMissionSelectController } from './ui/missionSelect.js';
+import { createTutorialController } from './ui/tutorial.js';
 
 // --- Performance & Timing Metrics ---
 const appStartTime = performance.now();
@@ -72,6 +76,42 @@ const loadingStatus = document.getElementById('loading-status');
 const progressBar = document.getElementById('progress-bar');
 const btnSkipIntro = document.getElementById('btn-skip-intro');
 const perfReadout = document.getElementById('perf-readout');
+
+// Front Door DOM & State (START stage before BRIEFING; keeps gameState.js untouched)
+const introOverlay = document.getElementById('intro-overlay');
+const introStarfield = document.getElementById('intro-starfield');
+const introTitle = document.getElementById('intro-title');
+const introSubtitle = document.getElementById('intro-subtitle');
+const introSkipHint = document.getElementById('intro-skip-hint');
+const missionSelectOverlay = document.getElementById('mission-select-overlay');
+const globeCanvasWrap = document.getElementById('globe-canvas-wrap');
+const missionCard1 = document.getElementById('mission-card-1');
+const btnMission1Start = document.getElementById('btn-mission1-start');
+const missionCard2 = document.getElementById('mission-card-2');
+const missionCard3 = document.getElementById('mission-card-3');
+const btnHomeMissions = document.getElementById('btn-home-missions');
+const btnTutorialHelp = document.getElementById('btn-tutorial-help');
+
+let frontDoorStage = 'INTRO'; // 'INTRO' | 'MISSION_SELECT' | 'MAP'
+let introCtrl = null;
+let missionSelectCtrl = null;
+let tutorialCtrl = null;
+
+// Tutorial DOM Elements
+const tutorialRoot = document.getElementById('tutorial-root');
+const tutorialDimTop = document.getElementById('tutorial-dim-top');
+const tutorialDimRight = document.getElementById('tutorial-dim-right');
+const tutorialDimBottom = document.getElementById('tutorial-dim-bottom');
+const tutorialDimLeft = document.getElementById('tutorial-dim-left');
+const tutorialSpotlightRing = document.getElementById('tutorial-spotlight-ring');
+const tutorialCard = document.getElementById('tutorial-card');
+const tutorialGuideName = document.getElementById('tutorial-guide-name');
+const tutorialStepCounter = document.getElementById('tutorial-step-counter');
+const tutorialTitle = document.getElementById('tutorial-title');
+const tutorialText = document.getElementById('tutorial-text');
+const tutorialActionHint = document.getElementById('tutorial-action-hint');
+const btnTutorialNext = document.getElementById('btn-tutorial-next');
+const btnTutorialSkip = document.getElementById('btn-tutorial-skip');
 
 // Layer Controls
 const lyrSat = document.getElementById('lyr-sat');
@@ -2566,7 +2606,13 @@ function bindUIEvents() {
   });
 
   if (btnSkipIntro) btnSkipIntro.addEventListener('click', endCinematicIntro);
-  controls.addEventListener('start', () => { if (isIntroActive) endCinematicIntro(); });
+  controls.addEventListener('start', () => {
+    if (isIntroActive) endCinematicIntro();
+    if (frontDoorStage === 'MAP' && tutorialCtrl) tutorialCtrl.notifyAction('camera');
+  });
+  renderer.domElement.addEventListener('wheel', () => {
+    if (frontDoorStage === 'MAP' && tutorialCtrl) tutorialCtrl.notifyAction('camera');
+  }, { passive: true });
 
   // Timeline Controls
   if (btnPlay) btnPlay.addEventListener('click', () => {
@@ -2667,8 +2713,24 @@ function bindUIEvents() {
     }
   });
 
-  // Canvas Click: Ruler tool, set start/goal, inspect elements/markers, or select route
+  // Canvas Click: ignore camera orbit/pan drags (>6px); otherwise handle tool, set start/goal, inspect, or select route
+  let canvasDownX = 0;
+  let canvasDownY = 0;
+  let canvasDragDistSq = 0;
+  renderer.domElement.addEventListener('pointerdown', e => {
+    canvasDownX = e.clientX;
+    canvasDownY = e.clientY;
+    canvasDragDistSq = 0;
+  });
+  renderer.domElement.addEventListener('pointermove', e => {
+    if (e.buttons) {
+      const dx = e.clientX - canvasDownX;
+      const dy = e.clientY - canvasDownY;
+      canvasDragDistSq = Math.max(canvasDragDistSq, dx * dx + dy * dy);
+    }
+  });
   renderer.domElement.addEventListener('click', e => {
+    if (canvasDragDistSq > 36) return;
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -2712,6 +2774,7 @@ function bindUIEvents() {
         if (hit) {
           surveyKit.scanPoint(hit.lx, hit.ly, { postLock: isCurrentPostLock() });
           syncSurveyKitUi();
+          if (tutorialCtrl) tutorialCtrl.notifyAction('survey-scan');
         }
         return;
       }
@@ -3518,11 +3581,19 @@ function updateLayoutBounds() {
   const hudBottom = Math.max(34, Math.ceil(hudRect.bottom)) + 4;
   document.documentElement.style.setProperty('--hud-bottom', `${hudBottom}px`);
 
+  const topCtrlVisible = mapTopControls && !mapTopControls.classList.contains('hidden');
+  const topCtrlBottom = topCtrlVisible ? Math.ceil(mapTopControls.getBoundingClientRect().bottom) + 6 : hudBottom;
+
   let bottomTop = window.innerHeight - 12;
-  if (timelineBar && !timelineBar.classList.contains('hidden')) {
+  const tlVisible = timelineBar && !timelineBar.classList.contains('hidden');
+  if (tlVisible) {
     const tlRect = timelineBar.getBoundingClientRect();
     if (tlRect.height > 0) bottomTop = Math.min(bottomTop, Math.floor(tlRect.top) - 8);
   }
+  if (perfReadout && import.meta.env.DEV) {
+    perfReadout.classList.toggle('above-timeline', Boolean(tlVisible));
+  }
+
   if (plannerPanel && !plannerPanel.classList.contains('hidden')) {
     const plRect = plannerPanel.getBoundingClientRect();
     if (plRect.height > 0) {
@@ -3538,25 +3609,56 @@ function updateLayoutBounds() {
   const sideMaxH = Math.max(120, bottomTop - hudBottom);
   document.documentElement.style.setProperty('--side-max-h', `${sideMaxH}px`);
 
-  // Keep bottom-left map legend clear of timeline, planner card, and open inspector panel
+  const inspOpen = inspectorPanel && inspectorPanel.classList.contains('open');
+  const inspRight = inspOpen ? Math.ceil(inspectorPanel.getBoundingClientRect().right) + 12 : 12;
+  const calcOpen = currentViewMode === 'MISSION' && routeCalcPanel && !routeCalcPanel.classList.contains('hidden');
+  const calcRect = calcOpen ? routeCalcPanel.getBoundingClientRect() : null;
+  const calcRight = calcRect && calcRect.width > 0 ? Math.ceil(inspRight + calcRect.width + 12) : inspRight;
+
+  if (routeCalcPanel) routeCalcPanel.style.left = `${inspRight}px`;
+  if (labelDetailCard) {
+    labelDetailCard.style.top = `${Math.max(hudBottom + 6, topCtrlBottom)}px`;
+    labelDetailCard.style.left = `${calcOpen ? calcRight : inspRight}px`;
+  }
+
+  // Keep bottom-left map legend clear of timeline, planner card, Survey Kit & inspector
   if (mapLegend && !mapLegend.classList.contains('hidden')) {
     let baseBottom = 12;
-    if (timelineBar && !timelineBar.classList.contains('hidden')) {
-      const tlRect = timelineBar.getBoundingClientRect();
-      if (tlRect.height > 0) baseBottom = Math.max(baseBottom, Math.ceil(window.innerHeight - tlRect.top + 8));
+    const tlRect = tlVisible ? timelineBar.getBoundingClientRect() : null;
+    if (tlRect && tlRect.height > 0) {
+      baseBottom = Math.max(baseBottom, Math.ceil(window.innerHeight - tlRect.top + 8));
     }
-    if (plannerPanel && !plannerPanel.classList.contains('hidden')) {
-      const plRect = plannerPanel.getBoundingClientRect();
-      if (plRect.height > 0 && plRect.left < 200) {
+    const legRect = mapLegend.getBoundingClientRect();
+    const legW = Math.max(180, Math.ceil(legRect.width));
+    const legH = Math.max(48, Math.ceil(legRect.height));
+    const plVisible = plannerPanel && !plannerPanel.classList.contains('hidden');
+    const plRect = plVisible ? plannerPanel.getBoundingClientRect() : null;
+    const hasPlanner = Boolean(plRect && plRect.height > 0);
+    const fitsLeftOfPlanner = !hasPlanner || (inspRight + legW + 12 <= plRect.left);
+
+    const calcBottomY = calcRect ? Math.ceil(calcRect.bottom) : hudBottom;
+    const tlTopY = tlRect && tlRect.height > 0 ? Math.floor(tlRect.top) - 8 : window.innerHeight - 12;
+    const sideBottomIfLeftOfPlanner = Math.min(tlTopY, window.innerHeight - 12);
+
+    if (fitsLeftOfPlanner && (!calcOpen || sideBottomIfLeftOfPlanner - (calcBottomY + 12) >= legH)) {
+      mapLegend.style.left = `${inspRight}px`;
+      mapLegend.style.bottom = `${baseBottom}px`;
+    } else {
+      if (hasPlanner && plRect.left < inspRight + legW + 12) {
         baseBottom = Math.max(baseBottom, Math.ceil(window.innerHeight - plRect.top + 8));
       }
+      const fitsUnderCalcAbovePlanner = !calcOpen || (bottomTop - (calcBottomY + 12) >= legH + 4);
+      if (fitsUnderCalcAbovePlanner) {
+        mapLegend.style.left = `${inspRight}px`;
+        mapLegend.style.bottom = `${baseBottom}px`;
+      } else {
+        mapLegend.style.left = `${calcRight}px`;
+        if (hasPlanner && calcRight + legW + 12 > plRect.left) {
+          baseBottom = Math.max(baseBottom, Math.ceil(window.innerHeight - plRect.top + 8));
+        }
+        mapLegend.style.bottom = `${baseBottom}px`;
+      }
     }
-    const inspOpen = inspectorPanel && inspectorPanel.classList.contains('open');
-    const calcOpen = currentViewMode === 'MISSION' && routeCalcPanel && !routeCalcPanel.classList.contains('hidden');
-    if (routeCalcPanel) routeCalcPanel.style.left = inspOpen ? '292px' : '12px';
-    if (labelDetailCard) labelDetailCard.style.left = calcOpen ? (inspOpen ? '554px' : '274px') : (inspOpen ? '292px' : '12px');
-    mapLegend.style.left = (calcOpen && sideMaxH < 520) ? (inspOpen ? '554px' : '274px') : (inspOpen ? '292px' : '12px');
-    mapLegend.style.bottom = `${baseBottom}px`;
   }
 
   // Keep top-right Labels button clear of open RESEARCH Layers drawer
@@ -3564,9 +3666,7 @@ function updateLayoutBounds() {
   if (mapTopControls) {
     mapTopControls.style.right = (currentViewMode === 'RESEARCH' && layersOpen) ? '328px' : '12px';
   }
-  const inspOpen = inspectorPanel && inspectorPanel.classList.contains('open');
-  const calcOpen = currentViewMode === 'MISSION' && routeCalcPanel && !routeCalcPanel.classList.contains('hidden');
-  cachedLabelLeftLimit = Math.max(inspOpen ? 290 : 10, calcOpen ? (inspOpen ? 552 : 272) : 10);
+  cachedLabelLeftLimit = Math.max(inspOpen ? inspRight : 10, calcOpen ? calcRight : 10);
   cachedLabelRightLimit = layersOpen ? Math.max(200, window.innerWidth - 310) : window.innerWidth - 10;
 }
 
@@ -3692,6 +3792,9 @@ function setViewMode(mode) {
   if (mode !== 'MISSION' && mode !== 'RESEARCH') return;
   if (currentViewMode === mode) return;
   currentViewMode = mode;
+  if (mode === 'RESEARCH' && tutorialCtrl && tutorialCtrl.isActive()) {
+    tutorialCtrl.skip();
+  }
   if (mode === 'RESEARCH') {
     const userExag = exagSlider ? parseFloat(exagSlider.value) || 1.0 : 1.0;
     lensBlend.active = false;
@@ -3799,9 +3902,25 @@ function bindGameEvents() {
 
   if (viewModeToggle) {
     viewModeToggle.querySelectorAll('.mode-btn').forEach(btn => {
-      btn.addEventListener('click', () => setViewMode(btn.dataset.mode));
+      btn.addEventListener('click', () => {
+        playUiSound('modeSwitch', { mode: btn.dataset.mode });
+        setViewMode(btn.dataset.mode);
+      });
     });
   }
+
+  // Subtle sound hook for MISSION top bar & primary interactive controls (no-op placeholder)
+  [hudHeader, mapTopControls, plannerPanel].forEach(rootEl => {
+    if (!rootEl) return;
+    rootEl.addEventListener('click', e => {
+      const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+      if (btn && !btn.disabled) playUiSound('uiClick', { id: btn.id || btn.className });
+    });
+    rootEl.addEventListener('pointerenter', e => {
+      const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+      if (btn && !btn.disabled) playUiSound('uiHover', { id: btn.id || btn.className });
+    }, true);
+  });
 
   if (btnLenses) {
     btnLenses.addEventListener('click', () => {
@@ -3814,6 +3933,7 @@ function bindGameEvents() {
         }
       }
       syncPanelsToViewMode();
+      if (tutorialCtrl) tutorialCtrl.notifyAction('open-lenses');
     });
   }
 
@@ -3901,7 +4021,10 @@ function bindGameEvents() {
   }
 
   lensBtns.forEach(btn => {
-    btn.addEventListener('click', () => setActiveMissionLens(btn.dataset.lens));
+    btn.addEventListener('click', () => {
+      setActiveMissionLens(btn.dataset.lens);
+      if (tutorialCtrl) tutorialCtrl.notifyAction('open-lenses');
+    });
   });
 
   if (btnMissionResetView && btnReset) {
@@ -3981,6 +4104,21 @@ function bindGameEvents() {
     });
   }
 
+  if (btnHomeMissions) {
+    btnHomeMissions.addEventListener('click', () => {
+      playUiSound('homeReturn');
+      returnHomeToMissionSelect();
+    });
+  }
+
+  if (btnTutorialHelp) {
+    btnTutorialHelp.addEventListener('click', () => {
+      if (currentViewMode === 'MISSION' && tutorialCtrl) {
+        tutorialCtrl.replay();
+      }
+    });
+  }
+
   initDevResetButton(() => {
     hasPlayedIntro = false;
     endCinematicIntro();
@@ -3988,6 +4126,46 @@ function bindGameEvents() {
     levelState.resetLevel();
     resetCustomizationToStandard();
   });
+}
+
+function setFrontDoorStage(stage) {
+  frontDoorStage = stage;
+  document.body.classList.toggle('front-door-active', stage !== 'MAP');
+  if (stage === 'MAP') {
+    if (introCtrl) introCtrl.dispose();
+    if (missionSelectCtrl) missionSelectCtrl.closeAndDispose();
+    syncPanelsToViewMode();
+    applyGameScreenState(levelState.getState());
+    requestAnimationFrame(updateLayoutBounds);
+  }
+}
+
+function enterMissionSelect() {
+  if (introCtrl && introCtrl.isActive()) introCtrl.dispose();
+  setFrontDoorStage('MISSION_SELECT');
+  if (missionSelectCtrl) missionSelectCtrl.open();
+}
+
+function enterMapFromMissionSelect() {
+  setFrontDoorStage('MAP');
+  if (currentViewMode === 'MISSION' && tutorialCtrl) {
+    tutorialCtrl.startIfFirstTime();
+  }
+}
+
+function returnHomeToMissionSelect() {
+  if (codexPanel) codexPanel.classList.add('hidden');
+  if (labelsDropdown) labelsDropdown.classList.add('hidden');
+  if (btnCodex) {
+    btnCodex.classList.remove('open');
+    btnCodex.setAttribute('aria-expanded', 'false');
+  }
+  if (surveyKit) surveyKit.clearTool();
+  document.body.classList.remove('cursor-survey-tool');
+  hideHoverTooltip();
+  if (mapLabels) mapLabels.hideHoverCard();
+  // Note: levelState, surveyKit pins, Codex unlocks & panelPrefs stay untouched in memory
+  enterMissionSelect();
 }
 
 // --- Asset Loader & Application Entry ---
@@ -4135,11 +4313,88 @@ async function loadAssetsAndInit() {
     });
     scene.add(surveyKit.group);
 
+    introCtrl = createIntroController({
+      overlayEl: introOverlay,
+      starCanvasEl: introStarfield,
+      titleEl: introTitle,
+      subtitleEl: introSubtitle,
+      hintEl: introSkipHint,
+      onSound: playUiSound,
+      onComplete: () => {
+        enterMissionSelect();
+      }
+    });
+
+    missionSelectCtrl = createMissionSelectController({
+      overlayEl: missionSelectOverlay,
+      globeContainerEl: globeCanvasWrap,
+      mission1CardEl: missionCard1,
+      mission1BtnEl: btnMission1Start,
+      mission2CardEl: missionCard2,
+      mission3CardEl: missionCard3,
+      onSound: playUiSound,
+      onEnterMission1: () => {
+        enterMapFromMissionSelect();
+      }
+    });
+
+    tutorialCtrl = createTutorialController({
+      rootEl: tutorialRoot,
+      dimTopEl: tutorialDimTop,
+      dimRightEl: tutorialDimRight,
+      dimBottomEl: tutorialDimBottom,
+      dimLeftEl: tutorialDimLeft,
+      ringEl: tutorialSpotlightRing,
+      cardEl: tutorialCard,
+      guideNameEl: tutorialGuideName,
+      stepCounterEl: tutorialStepCounter,
+      titleEl: tutorialTitle,
+      textEl: tutorialText,
+      actionHintEl: tutorialActionHint,
+      nextBtnEl: btnTutorialNext,
+      skipBtnEl: btnTutorialSkip,
+      onSound: playUiSound,
+      isBlockingOverlayOpen: () => Boolean(
+        (gameBriefingOverlay && !gameBriefingOverlay.classList.contains('hidden')) ||
+        (gameExploreOverlay && !gameExploreOverlay.classList.contains('hidden')) ||
+        (gameDebriefOverlay && !gameDebriefOverlay.classList.contains('hidden'))
+      ),
+      onBeforeEnterStep: step => {
+        const curScreen = levelState.getState().screen;
+        // Leaving stage-rail into interactive map steps from initial Briefing smoothly opens Analyze
+        if (step.id === 'camera' && curScreen === GAME_STATES.BRIEFING) {
+          hasPlayedIntro = true;
+          endCinematicIntro();
+          levelState.startMission();
+        }
+        // Ensure Survey Kit panel is visible during Step 6 when in Analyze or Choose
+        if (step.id === 'survey-kit' && (curScreen === GAME_STATES.ANALYZE || curScreen === GAME_STATES.CHOOSE)) {
+          if (routeCalc && !routeCalc.isDrawerOpen()) {
+            routeCalc.setDrawerOpen(true, { userAction: false });
+            syncRouteCalcPanelUi();
+            requestAnimationFrame(updateLayoutBounds);
+          }
+        }
+        // Ensure Planner table is expanded during Step 7 when in Analyze or Choose
+        if (step.id === 'planner-table' && (curScreen === GAME_STATES.ANALYZE || curScreen === GAME_STATES.CHOOSE)) {
+          if (panelPrefs.MISSION.plannerCollapsed) {
+            panelPrefs.MISSION.plannerCollapsed = false;
+            syncPanelsToViewMode();
+            requestAnimationFrame(updateLayoutBounds);
+          }
+        }
+      }
+    });
+
     if (import.meta.env.DEV) {
       window.__missionElements = missionElements;
       window.__camera = camera;
       window.__routeCalc = routeCalc;
       window.__surveyKit = surveyKit;
+      window.__intro = introCtrl;
+      window.__missionSelect = missionSelectCtrl;
+      window.__tutorial = tutorialCtrl;
+      window.__frontDoorStage = () => frontDoorStage;
     }
 
     mapLabels = createMapLabelController({
@@ -4177,14 +4432,24 @@ async function loadAssetsAndInit() {
     // 7. Complete Loading
     progressBar.style.width = '100%';
     const totalLoadTime = Math.round(performance.now() - appStartTime);
-    perfReadout.textContent = `FPS 60 | Load ${totalLoadTime} ms`;
+    if (perfReadout) {
+      if (import.meta.env.DEV) {
+        perfReadout.classList.remove('hidden');
+        perfReadout.textContent = `FPS 60 | Load ${totalLoadTime} ms`;
+      } else {
+        perfReadout.remove();
+      }
+    }
 
     setTimeout(() => {
       loadingOverlay.style.opacity = '0';
       setTimeout(() => {
         loadingOverlay.style.display = 'none';
-      }, 500);
-    }, 300);
+      }, 450);
+    }, 250);
+
+    setFrontDoorStage('INTRO');
+    introCtrl.start();
 
     lastReplayTime = performance.now();
     animate();
@@ -4202,14 +4467,22 @@ function animate() {
 
   const now = performance.now();
 
-  // FPS Counter
+  // FPS Counter (dev corner pill only)
   frameCount++;
   if (now - lastFpsUpdateTime >= 1000) {
     currentFps = Math.round((frameCount * 1000) / (now - lastFpsUpdateTime));
-    const loadStr = perfReadout.textContent.split('|')[1] || '';
-    perfReadout.textContent = `FPS ${currentFps} |${loadStr}`;
+    if (import.meta.env.DEV && perfReadout && perfReadout.isConnected) {
+      const loadStr = perfReadout.textContent.split('|')[1] || '';
+      perfReadout.textContent = `FPS ${currentFps} |${loadStr}`;
+    }
     frameCount = 0;
     lastFpsUpdateTime = now;
+  }
+
+  // Skip heavy terrain simulation & WebGL draw while on front door (Intro / Mars Globe)
+  if (frontDoorStage !== 'MAP') {
+    lastReplayTime = now;
+    return;
   }
 
   // Timeline Playback
