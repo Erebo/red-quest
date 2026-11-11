@@ -96,33 +96,90 @@ export function computeRouteElementCounts(candidates, elements, maxDistM = 150.0
   return counts;
 }
 
-function createMysteryQuestionTexture() {
+function createFamilyIconTexture(family, type) {
   const canvas = document.createElement('canvas');
   canvas.width = 64;
   canvas.height = 64;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, 64, 64);
 
-  ctx.beginPath();
-  ctx.arc(32, 32, 26, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(24, 16, 4, 0.9)';
-  ctx.fill();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = '#f59e0b';
-  ctx.stroke();
+  const meta = FAMILY_META[family] || FAMILY_META.science;
+  const color = meta.color;
 
-  ctx.fillStyle = '#fde68a';
-  ctx.font = 'bold 34px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('?', 32, 34);
+  // Soft outer category glow
+  const grad = ctx.createRadialGradient(32, 32, 10, 32, 32, 30);
+  grad.addColorStop(0, `${color}66`);
+  grad.addColorStop(1, `${color}00`);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(32, 32, 30, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#070a10';
+  ctx.fillStyle = color;
+
+  if (family === 'hazard') {
+    // High-contrast red triangle
+    ctx.beginPath();
+    ctx.moveTo(32, 11);
+    ctx.lineTo(53, 49);
+    ctx.lineTo(11, 49);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#070a10';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', 32, 37);
+  } else if (family === 'resource') {
+    // High-contrast green rounded diamond/square
+    ctx.beginPath();
+    ctx.moveTo(32, 11);
+    ctx.lineTo(53, 32);
+    ctx.lineTo(32, 53);
+    ctx.lineTo(11, 32);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#070a10';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('+', 32, 33);
+  } else if (family === 'mystery') {
+    ctx.beginPath();
+    ctx.arc(32, 32, 22, 0, Math.PI * 2);
+    ctx.fillStyle = '#181004';
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    ctx.fillStyle = '#fde68a';
+    ctx.font = 'bold 30px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', 32, 34);
+  } else {
+    // High-contrast cyan-blue circle (star/target ring for science / drill)
+    ctx.beginPath();
+    ctx.arc(32, 32, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#070a10';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(type === 'drill_site' ? '◎' : '★', 32, 33);
+  }
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
-function createSmallElementMesh(el, sampleElevFn, minElev, mysteryTex, hitGeo, hitMat) {
+function createSmallElementMesh(el, sampleElevFn, minElev, iconTextures, hitGeo, hitMat, index = 0) {
   const group = new THREE.Group();
   const elev = sampleElevFn(el.x, el.y);
   const { meshX, meshZ } = localToMesh(el.x, el.y);
@@ -135,7 +192,8 @@ function createSmallElementMesh(el, sampleElevFn, minElev, mysteryTex, hitGeo, h
     element: el,
     elev,
     meshX,
-    meshZ
+    meshZ,
+    phase: index * 0.65
   };
 
   if (hitGeo && hitMat) {
@@ -144,110 +202,88 @@ function createSmallElementMesh(el, sampleElevFn, minElev, mysteryTex, hitGeo, h
     group.add(collider);
   }
 
-  if (el.type === 'dust_devil_corridor') {
-    // Ground dust swirl ring + lightweight 28-particle vortex funnel
-    const ringGeo = new THREE.RingGeometry(8, 13, 24);
-    ringGeo.rotateX(-Math.PI / 2);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xef4444,
+  // Thin dark outline halo + bright category glow pulse ring (depthTest off so terrain never hides them)
+  const outlineGeo = new THREE.RingGeometry(11.5, 13.5, 24);
+  outlineGeo.rotateX(-Math.PI / 2);
+  const outlineRing = new THREE.Mesh(
+    outlineGeo,
+    new THREE.MeshBasicMaterial({
+      color: 0x070a10,
       transparent: true,
-      opacity: 0.72,
+      opacity: 0.9,
       side: THREE.DoubleSide,
+      depthTest: false,
       depthWrite: false
-    });
-    group.add(new THREE.Mesh(ringGeo, ringMat));
+    })
+  );
+  outlineRing.position.y = 2.0;
+  outlineRing.renderOrder = 11;
+  group.add(outlineRing);
 
+  const pulseGeo = new THREE.RingGeometry(4.5, 11.4, 24);
+  pulseGeo.rotateX(-Math.PI / 2);
+  const pulseMat = new THREE.MeshBasicMaterial({
+    color: meta.hex,
+    transparent: true,
+    opacity: 0.92,
+    side: THREE.DoubleSide,
+    depthTest: false,
+    depthWrite: false
+  });
+  const pulseRing = new THREE.Mesh(pulseGeo, pulseMat);
+  pulseRing.position.y = 2.5;
+  pulseRing.renderOrder = 12;
+  group.add(pulseRing);
+  group.userData.pulseRing = pulseRing;
+
+  if (el.type === 'dust_devil_corridor') {
     const pCount = 28;
     const pos = new Float32Array(pCount * 3);
     for (let i = 0; i < pCount; i++) {
       const f = i / pCount;
       const ang = f * Math.PI * 5.0;
-      const rad = 2.5 + f * 11.5;
+      const rad = 3.0 + f * 12.5;
       pos[i * 3] = Math.cos(ang) * rad;
-      pos[i * 3 + 1] = 4.0 + f * 36.0;
+      pos[i * 3 + 1] = 4.0 + f * 38.0;
       pos[i * 3 + 2] = Math.sin(ang) * rad;
     }
     const pGeo = new THREE.BufferGeometry();
     pGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const funnel = new THREE.Points(
       pGeo,
-      new THREE.PointsMaterial({ color: 0xf4a261, size: 3.4, transparent: true, opacity: 0.85, depthWrite: false })
+      new THREE.PointsMaterial({
+        color: 0xf87171,
+        size: 5.5,
+        sizeAttenuation: true,
+        transparent: true,
+        opacity: 0.95,
+        depthTest: false,
+        depthWrite: false
+      })
     );
+    funnel.renderOrder = 13;
     funnel.userData = { isDustVortex: true, elementId: el.id };
     group.add(funnel);
-
-    const topRingGeo = new THREE.RingGeometry(4, 6, 16);
-    topRingGeo.rotateX(-Math.PI / 2);
-    const topRing = new THREE.Mesh(topRingGeo, ringMat);
-    topRing.position.y = 14;
-    group.add(topRing);
     group.userData.vortexObj = funnel;
-  } else if (el.family === 'mystery') {
-    // Pulsing amber scan ring + billboard "?" sprite
-    const ringGeo = new THREE.RingGeometry(9, 14, 24);
-    ringGeo.rotateX(-Math.PI / 2);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xf59e0b,
+  }
+
+  // Camera-facing crisp icon sprite for clear readability from any camera angle
+  const texKey = el.type === 'drill_site' ? 'drill_site' : el.family;
+  const spriteTex = iconTextures[texKey] || iconTextures.science;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: spriteTex,
       transparent: true,
-      opacity: 0.88,
-      side: THREE.DoubleSide,
+      depthTest: false,
       depthWrite: false
-    });
-    const pulseRing = new THREE.Mesh(ringGeo, ringMat);
-    pulseRing.position.y = 2.5;
-    group.add(pulseRing);
-
-    const sprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: mysteryTex, transparent: true, depthWrite: false })
-    );
-    sprite.scale.set(26, 26, 1);
-    sprite.position.y = 24;
-    group.add(sprite);
-
-    group.userData.pulseRing = pulseRing;
+    })
+  );
+  sprite.scale.set(22, 22, 1);
+  sprite.position.y = el.type === 'dust_devil_corridor' ? 40 : 20;
+  sprite.renderOrder = 14;
+  group.add(sprite);
+  if (el.family === 'mystery') {
     group.userData.questionSprite = sprite;
-  } else {
-    // Small & consistent family markers (red hazards, green resources, blue science)
-    const segs = el.family === 'hazard' ? 3 : (el.family === 'resource' ? 6 : 16);
-    const ringGeo = new THREE.RingGeometry(7.5, 11.5, segs);
-    ringGeo.rotateX(-Math.PI / 2);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: meta.hex,
-      transparent: true,
-      opacity: 0.86,
-      side: THREE.DoubleSide,
-      depthWrite: false
-    });
-    const baseRing = new THREE.Mesh(ringGeo, ringMat);
-    baseRing.position.y = 2.5;
-    group.add(baseRing);
-
-    const stemGeo = new THREE.CylinderGeometry(0.7, 0.7, 16, 6);
-    const stemMat = new THREE.MeshBasicMaterial({ color: meta.hex, transparent: true, opacity: 0.65 });
-    const stem = new THREE.Mesh(stemGeo, stemMat);
-    stem.position.y = 10;
-    group.add(stem);
-
-    let headGeo;
-    if (el.family === 'hazard') {
-      headGeo = new THREE.ConeGeometry(5.5, 11, 4);
-    } else if (el.family === 'resource') {
-      headGeo = new THREE.BoxGeometry(7.5, 7.5, 7.5);
-    } else if (el.type === 'drill_site') {
-      headGeo = new THREE.CylinderGeometry(2.5, 5.5, 12, 8);
-    } else {
-      headGeo = new THREE.OctahedronGeometry(6.2, 0);
-    }
-
-    const headMat = new THREE.MeshStandardMaterial({
-      color: meta.hex,
-      emissive: meta.hex,
-      emissiveIntensity: 0.48,
-      roughness: 0.25
-    });
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.y = 20;
-    group.add(head);
   }
 
   // Propagate clickable/hoverable elementId cleanly across children
@@ -265,7 +301,13 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
   const group = new THREE.Group();
   group.name = 'MissionElementsGroup';
 
-  const mysteryTex = createMysteryQuestionTexture();
+  const iconTextures = {
+    hazard: createFamilyIconTexture('hazard', 'hazard'),
+    resource: createFamilyIconTexture('resource', 'resource'),
+    science: createFamilyIconTexture('science', 'science_target'),
+    drill_site: createFamilyIconTexture('science', 'drill_site'),
+    mystery: createFamilyIconTexture('mystery', 'mystery_blip')
+  };
   const sharedHitGeo = new THREE.CylinderGeometry(18, 18, 38, 8);
   const sharedHitMat = new THREE.MeshBasicMaterial({
     transparent: true,
@@ -277,8 +319,8 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
   const dustMarkers = [];
   const mysteryMarkers = [];
 
-  elements.forEach(el => {
-    const mg = createSmallElementMesh(el, sampleElevFn, minElev, mysteryTex, sharedHitGeo, sharedHitMat);
+  elements.forEach((el, idx) => {
+    const mg = createSmallElementMesh(el, sampleElevFn, minElev, iconTextures, sharedHitGeo, sharedHitMat, idx);
     markerGroups.set(el.id, mg);
     group.add(mg);
     if (el.type === 'dust_devil_corridor') dustMarkers.push(mg);
@@ -390,7 +432,7 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
    * 1) Enforces <= 12 visible icons with screen-space overlap culling.
    * 2) Pauses dust devil & mystery vortex animations when off-screen or culled.
    */
-  function update(now, camera, width, height, plannerTopY, rightLimitX = width - 10, leftLimitX = 10) {
+  function update(now, camera, width, height) {
     if (!group.visible) return;
 
     camera.updateMatrixWorld();
@@ -423,8 +465,7 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
 
       const sx = (tmpVec.x * 0.5 + 0.5) * width;
       const sy = (-tmpVec.y * 0.5 + 0.5) * height;
-      const maxY = plannerTopY > 120 ? plannerTopY - 8 : height - 14;
-      if (sx < leftLimitX || sx > rightLimitX || sy < 44 || sy > maxY) {
+      if (sx < 8 || sx > width - 8 || sy < 36 || sy > height - 8) {
         mg.visible = false;
         continue;
       }
@@ -432,37 +473,53 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
       let priority = FAMILY_META[el.family]?.priority || 70;
       if (el.type === 'science_target' || el.type === 'drill_site') priority += 12;
       if (el.visibility === 'scan') priority += 15;
-      eligible.push({ mg, sx, sy, score: priority * 100 - dist * 0.01 });
+      eligible.push({ mg, sx, sy, dist, score: priority * 100 - dist * 0.01 });
     }
 
     eligible.sort((a, b) => b.score - a.score);
 
     const placed = [];
     let visCount = 0;
-    const minSepSq = 28 * 28; // overlap culling radius between 3D icons
+    const minSepSq = 22 * 22;
 
     for (let i = 0; i < eligible.length; i++) {
       const item = eligible[i];
-      if (visCount >= MAX_VISIBLE_ICONS) {
-        item.mg.visible = false;
-        continue;
-      }
-      let overlaps = false;
-      for (let j = 0; j < placed.length; j++) {
-        const dx = item.sx - placed[j].sx;
-        const dy = item.sy - placed[j].sy;
-        if (dx * dx + dy * dy < minSepSq) {
-          overlaps = true;
-          break;
+      if (!showAllElements) {
+        if (visCount >= MAX_VISIBLE_ICONS) {
+          item.mg.visible = false;
+          continue;
+        }
+        let overlaps = false;
+        for (let j = 0; j < placed.length; j++) {
+          const dx = item.sx - placed[j].sx;
+          const dy = item.sy - placed[j].sy;
+          if (dx * dx + dy * dy < minSepSq) {
+            overlaps = true;
+            break;
+          }
+        }
+        if (overlaps) {
+          item.mg.visible = false;
+          continue;
         }
       }
-      if (overlaps) {
-        item.mg.visible = false;
-      } else {
-        item.mg.visible = true;
-        placed.push(item);
-        visCount++;
+
+      item.mg.visible = true;
+      // Maintain minimum on-screen marker visibility from any camera angle/distance
+      const worldScale = Math.max(1.0, Math.min(3.8, item.dist / 1200.0));
+      item.mg.scale.setScalar(worldScale);
+
+      // Soft breathing pulse on ground halo while visible
+      const pulseRing = item.mg.userData.pulseRing;
+      if (pulseRing) {
+        const wave = 0.5 + 0.5 * Math.sin(now * 0.0042 + (item.mg.userData.phase || 0));
+        const ps = 0.94 + 0.24 * wave;
+        pulseRing.scale.set(ps, ps, 1);
+        pulseRing.material.opacity = 0.62 + 0.36 * (1.0 - wave);
       }
+
+      placed.push(item);
+      visCount++;
     }
 
     // Pause animations when off-screen or hidden
@@ -478,13 +535,7 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
     for (let i = 0; i < mysteryMarkers.length; i++) {
       const mmg = mysteryMarkers[i];
       if (!mmg.visible) continue;
-      const pulseRing = mmg.userData.pulseRing;
       const sprite = mmg.userData.questionSprite;
-      const s = 1.0 + 0.16 * Math.sin(now * 0.006);
-      if (pulseRing) {
-        pulseRing.scale.set(s, s, 1);
-        pulseRing.material.opacity = 0.55 + 0.35 * Math.cos(now * 0.006);
-      }
       if (sprite) {
         sprite.position.y = 24 + 2.5 * Math.sin(now * 0.004);
       }

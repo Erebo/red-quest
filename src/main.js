@@ -38,6 +38,11 @@ import {
   computeRouteElementCounts,
   createMissionElementsController
 } from './game/missionElements.js';
+import {
+  createRouteCalculatorController,
+  renderDebriefCalcRevealDOM
+} from './game/routeCalculator.js';
+import { createSurveyKitController } from './game/surveyKit.js';
 
 // --- Performance & Timing Metrics ---
 const appStartTime = performance.now();
@@ -210,6 +215,92 @@ const legendMysteryRow = document.getElementById('legend-mystery-row');
 let routeElementCounts = {};
 let missionElements = null;
 let showAllElements = false;
+
+const btnCalcToggle = document.getElementById('btn-calc-toggle');
+const routeCalcPanel = document.getElementById('route-calc-panel');
+const surveyToolGrid = document.getElementById('survey-tool-grid');
+const surveyLogLine = document.getElementById('survey-log-line');
+const btnSurveyClearPins = document.getElementById('btn-survey-clear-pins');
+const surveyPinsLayer = document.getElementById('survey-pins-layer');
+const debriefCalcAcc = document.getElementById('debrief-calc-acc');
+const debriefCalcAnswered = document.getElementById('debrief-calc-answered');
+const debriefCalcScore = document.getElementById('debrief-calc-score');
+const debriefCalcNeutral = document.getElementById('debrief-calc-neutral');
+const debriefCalcTables = document.getElementById('debrief-calc-tables');
+
+let routeCalc = null;
+let surveyKit = null;
+let lastCalcMaskedState = null;
+
+function isRouteCalcMasked() {
+  return Boolean(routeCalc && routeCalc.shouldMaskTrueValues(levelState.getState().screen, currentViewMode));
+}
+
+function syncSurveyKitUi() {
+  if (!surveyKit) return;
+  const activeTool = surveyKit.getActiveTool();
+  const log = surveyKit.getLog();
+  if (surveyToolGrid) {
+    surveyToolGrid.querySelectorAll('.sk-tool-btn').forEach(btn => {
+      const t = btn.dataset.tool;
+      if (t === 'dust') return;
+      const isAct = activeTool === t;
+      btn.classList.toggle('active', isAct);
+      btn.setAttribute('aria-pressed', isAct ? 'true' : 'false');
+      const badge = btn.querySelector('.sk-badge');
+      if (badge) badge.classList.toggle('hidden', !log.usedSet.has(t));
+    });
+  }
+  if (surveyLogLine) {
+    surveyLogLine.textContent = `Scans: ${log.scans} · Tools used: ${log.toolsUsed}/${log.totalTools}`;
+  }
+  const screen = levelState.getState().screen;
+  const canUseTools = currentViewMode === 'MISSION' && (screen === GAME_STATES.ANALYZE || screen === GAME_STATES.CHOOSE);
+  document.body.classList.toggle('cursor-survey-tool', Boolean(canUseTools && activeTool));
+}
+
+function syncRouteCalcPanelUi() {
+  if (!routeCalc) return;
+  const screen = levelState.getState().screen;
+  const canUseCalc = currentViewMode === 'MISSION' && (screen === GAME_STATES.ANALYZE || screen === GAME_STATES.CHOOSE);
+  const isOpen = canUseCalc && routeCalc.isDrawerOpen();
+
+  if (btnCalcToggle) {
+    btnCalcToggle.classList.toggle('hidden', !canUseCalc);
+    btnCalcToggle.classList.toggle('open', isOpen);
+    btnCalcToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  }
+  if (routeCalcPanel) {
+    routeCalcPanel.classList.toggle('hidden', !isOpen);
+  }
+  if (surveyKit) {
+    if (!canUseCalc) surveyKit.clearTool();
+    surveyKit.group.visible = canUseCalc;
+    syncSurveyKitUi();
+  }
+
+  const nextMasked = isRouteCalcMasked();
+  if (nextMasked !== lastCalcMaskedState) {
+    lastCalcMaskedState = nextMasked;
+    renderPlannerTable(plannerCandidates);
+    renderLensRouteStrip();
+    const selCand = plannerCandidates.find(c => c.id === selectedCandidateId);
+    if (selCand) drawElevationChart(selCand);
+  }
+}
+
+function renderDebriefCalculatorReveal() {
+  if (!routeCalc) return;
+  renderDebriefCalcRevealDOM({
+    accEl: debriefCalcAcc,
+    answeredEl: debriefCalcAnswered,
+    scoreEl: debriefCalcScore,
+    neutralEl: debriefCalcNeutral,
+    tablesEl: debriefCalcTables,
+    candidates: plannerCandidates,
+    frozenSnapshot: routeCalc.getFrozenSnapshot()
+  });
+}
 
 function isCurrentPostLock() {
   const s = levelState.getState().screen;
@@ -1138,6 +1229,12 @@ function applyVerticalExaggeration(exag, { skipNormals = false, syncSlider = tru
   if (missionElements) {
     missionElements.updateExaggeration(currentExag);
   }
+  if (routeCalc) {
+    routeCalc.updateExaggeration(currentExag);
+  }
+  if (surveyKit) {
+    surveyKit.updateExaggeration(currentExag);
+  }
 
   if (boxworkGroup && boxworkGroup.children[0]) {
     const bLine = boxworkGroup.children[0];
@@ -1826,6 +1923,14 @@ function resetCustomizationToStandard() {
     btnCodex.classList.remove('open');
     btnCodex.setAttribute('aria-expanded', 'false');
   }
+  if (routeCalc) {
+    routeCalc.reset();
+    lastCalcMaskedState = null;
+  }
+  if (surveyKit) {
+    surveyKit.reset();
+    syncSurveyKitUi();
+  }
   labelCatChips.forEach(chip => {
     chip.classList.add('active');
     chip.setAttribute('aria-pressed', 'true');
@@ -2177,13 +2282,15 @@ function drawElevationChart(candidate) {
     ctx.fillText(`${Math.round(z)}m`, padLeft - 4, y + 3);
   }
 
-  // Distance X labels
+  // Distance X labels (masked while Route Calculator is open pre-lock)
+  const maskedKm = isRouteCalcMasked();
   ctx.textAlign = 'center';
   const distSteps = 4;
   for (let s = 0; s <= distSteps; s++) {
     const d = (s / distSteps) * maxDist;
     const x = padLeft + (s / distSteps) * plotW;
-    ctx.fillText(`${d.toFixed(1)}km`, x, height - 3);
+    const lbl = maskedKm ? (s === 0 ? 'Start' : (s === distSteps ? 'Goal' : '— km')) : `${d.toFixed(1)}km`;
+    ctx.fillText(lbl, x, height - 3);
   }
 
   // Draw filled gradient under curve
@@ -2289,8 +2396,9 @@ function bindElevationChartHover() {
     ctx.restore();
 
     const tierStr = closest.tier === 'easy' ? '<15° Easy' : (closest.tier === 'mod' ? '15°–25° Mod' : '>25° Haz');
+    const distLabel = isRouteCalcMasked() ? 'Distance hidden (calc open)' : `${closest.distKm.toFixed(2)} km`;
     if (profileHoverInfo) {
-      profileHoverInfo.textContent = `${closest.distKm.toFixed(2)} km | Elev ${closest.elev.toFixed(1)} m | Slope ${closest.slope.toFixed(1)}° (${tierStr})`;
+      profileHoverInfo.textContent = `${distLabel} | Elev ${closest.elev.toFixed(1)} m | Slope ${closest.slope.toFixed(1)}° (${tierStr})`;
     }
 
     if (profileMarker && rawHeights) {
@@ -2314,6 +2422,7 @@ function bindElevationChartHover() {
 function renderPlannerTable(candidates) {
   if (!plannerTbody) return;
   plannerTbody.innerHTML = '';
+  const masked = isRouteCalcMasked();
 
   candidates.forEach(c => {
     const tr = document.createElement('tr');
@@ -2327,13 +2436,24 @@ function renderPlannerTable(candidates) {
         <td colspan="10" style="color:#e74c3c;font-style:italic;">No safe route found</td>
       `;
     } else {
+      const distCell = masked
+        ? '<span class="calc-masked-val">— (calc)</span>'
+        : c.distKm.toFixed(2);
+      const netStr = `${c.netElevM >= 0 ? '+' : ''}${c.netElevM.toFixed(1)}`;
+      const ascentCell = masked
+        ? `<span class="calc-masked-val">— / ${netStr}</span>`
+        : `+${c.ascentM.toFixed(1)} / ${netStr}`;
+      const tiersCell = masked
+        ? '<span class="calc-masked-val">— / — / — (calc)</span>'
+        : `<span class="tier-easy">${c.pctEasy.toFixed(1)}%</span> / <span class="tier-mod">${c.pctMod.toFixed(1)}%</span> / <span class="tier-haz">${c.pctHaz.toFixed(1)}%</span>`;
+
       tr.innerHTML = `
         <td><div class="route-cell"><span class="route-swatch" style="background:${c.color}"></span>${c.name}</div></td>
         <td class="col-true-val"><span class="badge-best ${c.id}">${c.bestFor}</span></td>
-        <td>${c.distKm.toFixed(2)}</td>
-        <td>+${c.ascentM.toFixed(1)} / ${c.netElevM >= 0 ? '+' : ''}${c.netElevM.toFixed(1)}</td>
+        <td>${distCell}</td>
+        <td>${ascentCell}</td>
         <td>${c.maxSlopeDeg.toFixed(1)}°</td>
-        <td><span class="tier-easy">${c.pctEasy.toFixed(1)}%</span> / <span class="tier-mod">${c.pctMod.toFixed(1)}%</span> / <span class="tier-haz">${c.pctHaz.toFixed(1)}%</span></td>
+        <td>${tiersCell}</td>
         <td class="col-true-val">${c.timeHours.toFixed(1)} h</td>
         <td class="col-true-val">${c.energyKwh.toFixed(2)} kWh</td>
         <td class="col-true-val">${Math.round(c.radDoseUsv)} µSv</td>
@@ -2527,6 +2647,10 @@ function bindUIEvents() {
         if (btnSetGoal) btnSetGoal.classList.remove('active');
         showPlannerToast('Cancelled endpoint selection');
       }
+      if (surveyKit && surveyKit.getActiveTool()) {
+        surveyKit.clearTool();
+        syncSurveyKitUi();
+      }
     }
   });
 
@@ -2543,14 +2667,14 @@ function bindUIEvents() {
     }
   });
 
-  // Canvas Click: Pin point, set start/goal, inspect elements/markers, or select route
+  // Canvas Click: Ruler tool, set start/goal, inspect elements/markers, or select route
   renderer.domElement.addEventListener('click', e => {
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
-    // 0. Setting START or GOAL
+    // 0a. Setting START or GOAL (RESEARCH sandbox only)
     if (isSettingStart || isSettingGoal) {
       const hit = getTerrainIntersection(raycaster.ray);
       if (hit) {
@@ -2578,6 +2702,19 @@ function bindUIEvents() {
         requestRouteComputation();
       }
       return;
+    }
+
+    // 0b. Survey Kit active tool click (ANALYZE / CHOOSE in MISSION mode)
+    if (currentViewMode === 'MISSION' && surveyKit && surveyKit.getActiveTool()) {
+      const screen = levelState.getState().screen;
+      if (screen === GAME_STATES.ANALYZE || screen === GAME_STATES.CHOOSE) {
+        const hit = getTerrainIntersection(raycaster.ray);
+        if (hit) {
+          surveyKit.scanPoint(hit.lx, hit.ly, { postLock: isCurrentPostLock() });
+          syncSurveyKitUi();
+        }
+        return;
+      }
     }
 
     // 1. Check Mission Gameplay 3D Elements (matching hover priority above route lines)
@@ -2800,24 +2937,31 @@ function buildLensRouteCardHtml(cand) {
   const isSel = cand.id === selectedCandidateId;
   const st = routeLensStats[cand.id] || { phyPct: 0, hydHighPct: 0, anyMineralPct: 0, themisMeanDn: 0, sun: {}, radiation: null };
   const cnt = routeElementCounts[cand.id] || { hazard: 0, resource: 0, science: 0 };
+  const masked = isRouteCalcMasked();
 
   let metricText = '';
   let subText = '';
   let barHtml = '';
 
   if (activeMissionLens === 'terrain') {
-    const easyW = Math.max(0, Math.min(100, cand.pctEasy));
-    const modW = Math.max(0, Math.min(100 - easyW, cand.pctMod));
-    const hazW = Math.max(0, Math.min(100 - easyW - modW, cand.pctHaz));
-    metricText = `<15° ${cand.pctEasy.toFixed(1)}%`;
-    subText = `15–25° ${cand.pctMod.toFixed(1)}% · >25° ${cand.pctHaz.toFixed(1)}%`;
-    barHtml = `
-      <div class="lrs-bar-wrap" style="display:flex;overflow:hidden;">
-        <div class="lrs-bar-fill" style="width:${easyW.toFixed(1)}%;border-radius:0;"></div>
-        <div class="lrs-bar-fill alt" style="width:${modW.toFixed(1)}%;border-radius:0;"></div>
-        <div style="width:${hazW.toFixed(1)}%;height:100%;background:#435060;"></div>
-      </div>
-    `;
+    if (masked) {
+      metricText = '<15° —';
+      subText = 'Slope tiers hidden (calc open)';
+      barHtml = `<div class="lrs-bar-wrap"><div class="lrs-bar-fill" style="width:0%;"></div></div>`;
+    } else {
+      const easyW = Math.max(0, Math.min(100, cand.pctEasy));
+      const modW = Math.max(0, Math.min(100 - easyW, cand.pctMod));
+      const hazW = Math.max(0, Math.min(100 - easyW - modW, cand.pctHaz));
+      metricText = `<15° ${cand.pctEasy.toFixed(1)}%`;
+      subText = `15–25° ${cand.pctMod.toFixed(1)}% · >25° ${cand.pctHaz.toFixed(1)}%`;
+      barHtml = `
+        <div class="lrs-bar-wrap" style="display:flex;overflow:hidden;">
+          <div class="lrs-bar-fill" style="width:${easyW.toFixed(1)}%;border-radius:0;"></div>
+          <div class="lrs-bar-fill alt" style="width:${modW.toFixed(1)}%;border-radius:0;"></div>
+          <div style="width:${hazW.toFixed(1)}%;height:100%;background:#435060;"></div>
+        </div>
+      `;
+    }
   } else if (activeMissionLens === 'minerals') {
     const pct = Math.max(0, Math.min(100, st.anyMineralPct));
     metricText = `Flagged ${pct.toFixed(1)}%`;
@@ -2872,15 +3016,21 @@ function buildLensRouteCardHtml(cand) {
       `;
     }
   } else {
-    const maxDist = Math.max(...plannerCandidates.map(x => x.distKm || 0), 1);
-    const pct = Math.max(0, Math.min(100, (cand.distKm / maxDist) * 100.0));
-    metricText = `${cand.distKm.toFixed(2)} km`;
-    subText = `Ascent +${cand.ascentM.toFixed(1)} m · Net ${cand.netElevM >= 0 ? '+' : ''}${cand.netElevM.toFixed(1)} m`;
-    barHtml = `
-      <div class="lrs-bar-wrap">
-        <div class="lrs-bar-fill" style="width:${pct.toFixed(1)}%;"></div>
-      </div>
-    `;
+    if (masked) {
+      metricText = '— km';
+      subText = `Ascent hidden (calc open) · Net ${cand.netElevM >= 0 ? '+' : ''}${cand.netElevM.toFixed(1)} m`;
+      barHtml = `<div class="lrs-bar-wrap"><div class="lrs-bar-fill" style="width:0%;"></div></div>`;
+    } else {
+      const maxDist = Math.max(...plannerCandidates.map(x => x.distKm || 0), 1);
+      const pct = Math.max(0, Math.min(100, (cand.distKm / maxDist) * 100.0));
+      metricText = `${cand.distKm.toFixed(2)} km`;
+      subText = `Ascent +${cand.ascentM.toFixed(1)} m · Net ${cand.netElevM >= 0 ? '+' : ''}${cand.netElevM.toFixed(1)} m`;
+      barHtml = `
+        <div class="lrs-bar-wrap">
+          <div class="lrs-bar-fill" style="width:${pct.toFixed(1)}%;"></div>
+        </div>
+      `;
+    }
   }
 
   return `
@@ -3402,7 +3552,10 @@ function updateLayoutBounds() {
       }
     }
     const inspOpen = inspectorPanel && inspectorPanel.classList.contains('open');
-    mapLegend.style.left = inspOpen ? '292px' : '12px';
+    const calcOpen = currentViewMode === 'MISSION' && routeCalcPanel && !routeCalcPanel.classList.contains('hidden');
+    if (routeCalcPanel) routeCalcPanel.style.left = inspOpen ? '292px' : '12px';
+    if (labelDetailCard) labelDetailCard.style.left = calcOpen ? (inspOpen ? '554px' : '274px') : (inspOpen ? '292px' : '12px');
+    mapLegend.style.left = (calcOpen && sideMaxH < 520) ? (inspOpen ? '554px' : '274px') : (inspOpen ? '292px' : '12px');
     mapLegend.style.bottom = `${baseBottom}px`;
   }
 
@@ -3412,7 +3565,8 @@ function updateLayoutBounds() {
     mapTopControls.style.right = (currentViewMode === 'RESEARCH' && layersOpen) ? '328px' : '12px';
   }
   const inspOpen = inspectorPanel && inspectorPanel.classList.contains('open');
-  cachedLabelLeftLimit = inspOpen ? 290 : 10;
+  const calcOpen = currentViewMode === 'MISSION' && routeCalcPanel && !routeCalcPanel.classList.contains('hidden');
+  cachedLabelLeftLimit = Math.max(inspOpen ? 290 : 10, calcOpen ? (inspOpen ? 552 : 272) : 10);
   cachedLabelRightLimit = layersOpen ? Math.max(200, window.innerWidth - 310) : window.innerWidth - 10;
 }
 
@@ -3510,6 +3664,7 @@ function syncPanelsToViewMode() {
   if (lensRouteStrip && currentViewMode === 'MISSION') {
     renderLensRouteStrip();
   }
+  syncRouteCalcPanelUi();
 
   // Hide cursor tooltip in RESEARCH mode or BRIEFING
   if (currentViewMode !== 'MISSION' || isBriefing || isPinned) {
@@ -3553,6 +3708,10 @@ function setViewMode(mode) {
 function applyGameScreenState(state) {
   const screen = state.screen;
   const isRefRevealed = screen === GAME_STATES.DEBRIEF;
+
+  if (routeCalc) {
+    routeCalc.onScreenTransition(screen);
+  }
 
   updatePhaseStepper(screen);
 
@@ -3628,6 +3787,7 @@ function applyGameScreenState(state) {
 
   if (screen === GAME_STATES.DEBRIEF) {
     populateDebriefUI(level01, state.lockedRouteId);
+    renderDebriefCalculatorReveal();
   }
 
   syncPanelsToViewMode();
@@ -3792,6 +3952,35 @@ function bindGameEvents() {
     });
   }
 
+  if (btnCalcToggle) {
+    btnCalcToggle.addEventListener('click', () => {
+      if (!routeCalc) return;
+      const nextOpen = !routeCalc.isDrawerOpen();
+      routeCalc.setDrawerOpen(nextOpen, { userAction: true });
+      if (!nextOpen && surveyKit) surveyKit.clearTool();
+      syncRouteCalcPanelUi();
+      requestAnimationFrame(updateLayoutBounds);
+    });
+  }
+
+  if (surveyToolGrid) {
+    surveyToolGrid.querySelectorAll('.sk-tool-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!surveyKit || btn.disabled) return;
+        surveyKit.setActiveTool(btn.dataset.tool);
+        syncSurveyKitUi();
+      });
+    });
+  }
+
+  if (btnSurveyClearPins) {
+    btnSurveyClearPins.addEventListener('click', () => {
+      if (!surveyKit) return;
+      surveyKit.clearPins();
+      syncSurveyKitUi();
+    });
+  }
+
   initDevResetButton(() => {
     hasPlayedIntro = false;
     endCinematicIntro();
@@ -3904,18 +4093,53 @@ async function loadAssetsAndInit() {
     routeElementCounts = computeRouteElementCounts(plannerCandidates, level01Elements.elements, 150.0);
     runDevCrismSelfCheck(routeLensStats);
 
+    const sampleTerrainElevation = (lx, ly) => {
+      const { col, row } = localToGrid(lx, ly);
+      return sampleGridBilinear(rawHeights, col, row);
+    };
+    const sampleTerrainSlope = (lx, ly) => {
+      const { col, row } = localToGrid(lx, ly);
+      return sampleGridBilinear(rawSlopes, col, row);
+    };
+    const sampleCrismAtLocal = (lx, ly) => {
+      const hyd = samplePixelFromContext(crismHydCtx, 27, 28, lx, ly);
+      const phy = samplePixelFromContext(crismPhyCtx, 27, 28, lx, ly);
+      return {
+        phyActive: Boolean(phy && phy.a > 0 && (phy.r + phy.g + phy.b) > 0),
+        hydActive: Boolean(hyd && hyd.a > 0 && (hyd.r + hyd.g + hyd.b) >= 120)
+      };
+    };
+
     missionElements = createMissionElementsController({
       elementsData: level01Elements,
-      sampleElevFn: (lx, ly) => {
-        const { col, row } = localToGrid(lx, ly);
-        return sampleGridBilinear(rawHeights, col, row);
-      },
+      sampleElevFn: sampleTerrainElevation,
       minElev
     });
     scene.add(missionElements.group);
+
+    routeCalc = createRouteCalculatorController({
+      routeIds: plannerCandidates.map(c => c.id),
+      sampleElevFn: sampleTerrainElevation,
+      localToMesh,
+      minElev
+    });
+
+    surveyKit = createSurveyKitController({
+      elementsData: level01Elements,
+      sampleSlopeFn: sampleTerrainSlope,
+      sampleElevFn: sampleTerrainElevation,
+      sampleCrismFn: sampleCrismAtLocal,
+      localToMesh,
+      minElev,
+      pinLayerEl: surveyPinsLayer
+    });
+    scene.add(surveyKit.group);
+
     if (import.meta.env.DEV) {
       window.__missionElements = missionElements;
       window.__camera = camera;
+      window.__routeCalc = routeCalc;
+      window.__surveyKit = surveyKit;
     }
 
     mapLabels = createMapLabelController({
@@ -4076,6 +4300,11 @@ function animate() {
       cachedLabelRightLimit,
       cachedLabelLeftLimit
     );
+  }
+
+  // Survey Kit floating pin cards projection
+  if (surveyKit) {
+    surveyKit.update(camera, window.innerWidth, window.innerHeight);
   }
 }
 

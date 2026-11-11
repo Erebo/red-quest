@@ -49,6 +49,7 @@
   <!-- Floating Top-Right Map Controls (Vertical Exag Badge, Elements Toggle, Labels Dropdown, Codex & Lenses) -->
   <div id="map-top-controls" class="map-top-controls">
     <span id="lens-exag-badge" class="lens-exag-badge hidden">Vertical exaggeration 1.5x</span>
+    <button id="btn-calc-toggle" class="lenses-btn calc-btn mission-only-ctrl hidden" type="button" aria-expanded="false" title="Open or close Survey Kit (keeps route values masked while open)">Survey Kit</button>
     <button id="btn-show-all-elements" class="lenses-btn labels-btn mission-only-ctrl hidden" type="button" aria-pressed="false" title="Toggle between active-lens element filter and all element families (max 12 icons)">Show all elements</button>
     <div id="labels-dropdown-wrap" class="labels-dropdown-wrap">
       <button id="btn-labels" class="lenses-btn labels-btn active" type="button" aria-expanded="false" title="Filter 3D map label & element categories">Labels ▾</button>
@@ -107,6 +108,46 @@
     </div>
     <div id="codex-body" class="codex-body"></div>
   </aside>
+
+  <!-- Survey Kit Panel (MISSION mode ANALYZE / CHOOSE only) -->
+  <aside id="route-calc-panel" class="calc-panel mission-only-ctrl hidden" role="dialog" aria-label="Survey Kit">
+    <div class="sk-head">
+      <span class="sk-title">SURVEY KIT</span>
+      <span class="sk-sub">Click a tool, then click map</span>
+    </div>
+
+    <div id="survey-tool-grid" class="sk-grid" role="group" aria-label="Survey tools">
+      <button type="button" id="btn-survey-slope" class="sk-tool-btn" data-tool="slope" aria-pressed="false" title="Click terrain to measure slope degrees &amp; tier">
+        <span class="sk-ico">📐</span>
+        <span class="sk-lbl">SLOPE</span>
+        <span class="sk-badge hidden">✓</span>
+      </button>
+      <button type="button" id="btn-survey-hazard" class="sk-tool-btn" data-tool="hazard" aria-pressed="false" title="Click map to check hazards within 150 m">
+        <span class="sk-ico">⚠</span>
+        <span class="sk-lbl">HAZARD</span>
+        <span class="sk-badge hidden">✓</span>
+      </button>
+      <button type="button" id="btn-survey-dust" class="sk-tool-btn locked" data-tool="dust" disabled title="No dust data layer available in public/data/">
+        <span class="sk-ico">🌫</span>
+        <span class="sk-lbl">DUST</span>
+        <span class="sk-lock-note">No data yet</span>
+      </button>
+      <button type="button" id="btn-survey-elements" class="sk-tool-btn" data-tool="elements" aria-pressed="false" title="Click map to list elements within 150 m">
+        <span class="sk-ico">★</span>
+        <span class="sk-lbl">ELEMENTS</span>
+        <span class="sk-badge hidden">✓</span>
+      </button>
+    </div>
+
+    <div id="survey-log-line" class="sk-log">Scans: 0 · Tools used: 0/4</div>
+
+    <div class="sk-actions">
+      <button type="button" id="btn-survey-clear-pins" class="sk-clear-btn">Clear pins</button>
+    </div>
+  </aside>
+
+  <!-- Floating Survey Kit Pin Cards Layer -->
+  <div id="survey-pins-layer" class="survey-pins-layer hidden" aria-hidden="true"></div>
 
   <!-- Bottom-Left Collapsible Map Legend (Grouped by Family) -->
   <aside id="map-legend" class="map-legend open" aria-label="Map legend">
@@ -521,6 +562,22 @@
           </thead>
           <tbody id="debrief-true-tbody"></tbody>
         </table>
+      </div>
+
+      <div id="debrief-calc-reveal" class="debrief-calc-reveal">
+        <div class="dcr-head">
+          <h3>Planning Accuracy — Estimates vs. True Route Metrics <span class="tag-pill game">GAME RULE</span></h3>
+          <span class="calc-head-sub">≤10% Sharp (10 pts) · ≤25% Close (5 pts) · &gt;25% Off (0 pts) · Skipped (0 pts)</span>
+        </div>
+        <div class="dcr-summary">
+          <div class="dcr-stat-row">
+            <span>Planning accuracy: <strong id="debrief-calc-acc">—</strong></span>
+            <span>Answered: <strong id="debrief-calc-answered">0 / 12</strong></span>
+            <span>Planning score: <strong id="debrief-calc-score">0 / 120 pts</strong></span>
+          </div>
+          <div id="debrief-calc-neutral" class="dcr-neutral">—</div>
+        </div>
+        <div id="debrief-calc-tables" class="dcr-routes-grid"></div>
       </div>
     </div>
   </section>

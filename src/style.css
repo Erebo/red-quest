@@ -350,7 +350,7 @@ body.mode-mission #layers-panel.open .panel-body{max-height:calc(var(--side-max-
 .leg-fam-mys{border-radius:50%;background:rgba(245,158,11,.25);border:1px solid #f59e0b;color:#fde68a;font-size:8px;font-weight:700}
 .leg-line{width:14px;height:3px;border-radius:2px;flex-shrink:0}
 .leg-ref{background:repeating-linear-gradient(90deg,#9fb4c7 0,#9fb4c7 4px,transparent 4px,transparent 6px);height:2px}
-body.mode-research .mission-only-ctrl,body.mode-research .mission-only-legend,body.mode-research .codex-panel{display:none!important}
+body.mode-research .mission-only-ctrl,body.mode-research .mission-only-legend,body.mode-research .codex-panel,body.mode-research .calc-panel,body.mode-research .survey-pins-layer{display:none!important}
 .ld-chip.hidden{display:none}
 
 /* ===== Field Codex Panel & Route Strip Counts ===== */
@@ -434,3 +434,72 @@ body.mode-research .mission-only-ctrl,body.mode-research .mission-only-legend,bo
 .lrs-med-tick{position:absolute;top:-2px;width:2px;height:10px;background:#d6dee8;border-radius:1px;opacity:.85}
 .lrs-sub{margin-top:3px;font-family:var(--mono);font-size:9px;color:#9aa6b4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:760px){.lrs-cols{grid-template-columns:1fr}}
+
+/* ===== Survey Kit Panel, Floating Pins & Route Masking ===== */
+.calc-btn{border-color:rgba(56,189,248,.5);color:#93dcff}
+.calc-btn.open{background:#0284c7;color:#fff;border-color:#38bdf8}
+.calc-panel{position:absolute;top:calc(var(--hud-bottom, 38px) + 6px);left:12px;z-index:33;width:252px;background:rgba(13,17,24,.94);backdrop-filter:blur(12px);border:1px solid rgba(56,189,248,.48);border-radius:8px;box-shadow:0 12px 34px rgba(0,0,0,.76);padding:12px;display:flex;flex-direction:column;gap:10px;overflow:visible;pointer-events:auto;transition:left .2s ease}
+.calc-panel.hidden{display:none}
+.sk-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:6px}
+.sk-title{font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.9px;color:#7fe6ff}
+.sk-sub{font-size:10px;color:#93a4b7}
+.sk-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.sk-tool-btn{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:60px;padding:8px 6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);border-radius:6px;color:#e2e8f0;cursor:pointer;transition:background .15s,border-color .15s,transform .1s}
+.sk-tool-btn:hover:not(:disabled){background:rgba(56,189,248,.12);border-color:rgba(56,189,248,.6);color:#fff}
+.sk-tool-btn.active{background:rgba(56,189,248,.22);border-color:#38bdf8;color:#fff;box-shadow:0 0 0 1px rgba(56,189,248,.35) inset}
+.sk-tool-btn.locked{opacity:.48;cursor:not-allowed;background:rgba(0,0,0,.25);border-style:dashed}
+.sk-ico{font-size:16px;line-height:1}
+.sk-lbl{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.5px}
+.sk-lock-note{font-size:9px;color:#94a3b8}
+.sk-badge{position:absolute;top:5px;right:6px;font-family:var(--mono);font-size:9.5px;font-weight:700;color:#7fe6ff;background:rgba(56,189,248,.18);border:1px solid rgba(56,189,248,.45);border-radius:3px;padding:0 4px;line-height:1.35}
+.sk-badge.hidden{display:none}
+.sk-log{font-family:var(--mono);font-size:11px;color:#cbd5e1;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.07);border-radius:5px;padding:6px 9px;text-align:center}
+.sk-actions{display:flex;justify-content:stretch}
+.sk-clear-btn{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:5px;color:#dce4ee;font-size:11px;font-weight:600;padding:6px 10px;cursor:pointer;transition:border-color .15s,background .15s}
+.sk-clear-btn:hover{border-color:#38bdf8;background:rgba(56,189,248,.14);color:#fff}
+.calc-masked-val{font-family:var(--mono);font-size:9.5px;color:#7c8da1;font-style:italic}
+
+/* Active Survey tool: crosshair & prevent map-label pills or pin bodies from intercepting clicks */
+body.cursor-survey-tool #canvas-container{cursor:crosshair!important}
+body.cursor-survey-tool .map-labels-layer,body.cursor-survey-tool .map-labels-layer .map-label{pointer-events:none!important}
+body.cursor-survey-tool .survey-pin-card{pointer-events:none!important}
+body.cursor-survey-tool .spc-close{pointer-events:auto!important}
+
+/* Floating Survey Pin Cards */
+.survey-pins-layer{position:absolute;inset:0;z-index:28;pointer-events:none;overflow:hidden}
+.survey-pins-layer.hidden{display:none}
+.survey-pin-card{position:absolute;top:0;left:0;pointer-events:auto;min-width:175px;max-width:255px;background:rgba(13,17,24,.95);border:1px solid rgba(56,189,248,.58);border-radius:6px;padding:7px 9px;box-shadow:0 8px 24px rgba(0,0,0,.72);font-size:11px;color:#e2e8f0;transition:opacity .15s ease}
+.survey-pin-card.offscreen{display:none}
+.spc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px}
+.spc-head strong{font-size:11px;color:#7fe6ff}
+.spc-close{background:none;border:none;color:#93a4b7;font-size:15px;line-height:1;cursor:pointer;padding:0 3px}
+.spc-close:hover{color:#fff}
+.spc-val{font-size:11px;color:#f1f5f9;line-height:1.35;margin-bottom:5px}
+.spc-tags{display:flex;flex-wrap:wrap;gap:4px}
+
+/* ===== Debrief Calculator Reveal ===== */
+#game-debrief-overlay .game-card.wide{max-height:calc(100vh - 96px);overflow-y:auto}
+.debrief-calc-reveal{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+.dcr-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.dcr-head h3{font-size:12.5px;color:#fff;letter-spacing:.3px;display:inline-flex;align-items:center;gap:6px}
+.dcr-summary{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:4px;padding:7px 10px;margin-bottom:8px}
+.dcr-stat-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11px;color:#e2e8f0}
+.dcr-stat-row strong{font-family:var(--mono);color:#fde68a}
+.dcr-neutral{font-size:10.5px;color:#cbd5e1;width:100%}
+.dcr-routes-grid{display:flex;flex-direction:column;gap:8px}
+.dcr-route-box{background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:6px 8px}
+.dcr-route-title{font-size:11px;font-weight:700;color:#fff;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.dcr-table{width:100%;border-collapse:collapse;font-size:10px}
+.dcr-table th{text-align:left;color:var(--muted);font-weight:600;padding:3px 5px;border-bottom:1px solid rgba(255,255,255,.08)}
+.dcr-table td{padding:4px 5px;border-bottom:1px solid rgba(255,255,255,.04);font-family:var(--mono);color:#dce4ee;vertical-align:middle}
+.dcr-band{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;text-transform:uppercase;font-family:var(--sans)}
+.dcr-band.sharp{background:rgba(34,197,94,.2);border:1px solid rgba(34,197,94,.5);color:#86efac}
+.dcr-band.close{background:rgba(251,191,36,.18);border:1px solid rgba(251,191,36,.5);color:#fde68a}
+.dcr-band.off{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.5);color:#fca5a5}
+.dcr-band.skipped{background:rgba(148,163,184,.15);border:1px solid rgba(148,163,184,.35);color:#94a3b8}
+.dcr-bar-wrap{width:64px;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;margin-left:6px}
+.dcr-bar-fill{display:block;height:100%;border-radius:3px}
+.dcr-bar-fill.sharp{background:#22c55e}
+.dcr-bar-fill.close{background:#fbbf24}
+.dcr-bar-fill.off{background:#ef4444}
+.dcr-bar-fill.skipped{background:#64748b;width:0}
