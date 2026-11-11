@@ -210,6 +210,12 @@ const timelineBar = document.getElementById('timeline-bar');
 const iSolRow = document.getElementById('i-sol-row');
 const iMobilityRow = document.getElementById('i-mobility-row');
 const btnLenses = document.getElementById('btn-lenses');
+const missionObjectiveBanner = document.getElementById('mission-objective-banner');
+const objectiveBannerText = document.getElementById('objective-banner-text');
+const missionDock = document.getElementById('mission-dock');
+const btnDockInspector = document.getElementById('btn-dock-inspector');
+const btnDockLegend = document.getElementById('btn-dock-legend');
+const btnDockRoutes = document.getElementById('btn-dock-routes');
 const viewModeToggle = document.getElementById('view-mode-toggle');
 const hoverTooltip = document.getElementById('hover-tooltip');
 const htRouteRow = document.getElementById('ht-route-row');
@@ -533,10 +539,34 @@ const lensBlend = {
 // View Mode (MISSION | RESEARCH) & Per-Mode Panel Memory
 let currentViewMode = 'MISSION';
 const panelPrefs = {
-  MISSION: { inspectorOpen: false, layersOpen: false, plannerCollapsed: false, profileOpen: false },
+  MISSION: {
+    activeSidePanel: 'none', // 'none' | 'inspector' | 'legend' | 'survey' | 'lenses' | 'codex'
+    plannerCollapsed: true,
+    profileOpen: false
+  },
   RESEARCH: { inspectorOpen: true, layersOpen: true, plannerCollapsed: false, profileOpen: true }
 };
+let savedPanelsBeforeTutorial = null;
 let lastTerrainHit = null;
+
+function setMissionSidePanel(panelName) {
+  const valid = ['none', 'inspector', 'legend', 'survey', 'lenses', 'codex'];
+  const next = valid.includes(panelName) ? panelName : 'none';
+  panelPrefs.MISSION.activeSidePanel = next;
+  if (routeCalc) {
+    routeCalc.setDrawerOpen(next === 'survey', { userAction: false });
+  }
+  if (next !== 'survey' && surveyKit) {
+    surveyKit.clearTool();
+  }
+  syncPanelsToViewMode();
+  requestAnimationFrame(updateLayoutBounds);
+}
+
+function toggleMissionSidePanel(panelName) {
+  const cur = panelPrefs.MISSION.activeSidePanel;
+  setMissionSidePanel(cur === panelName ? 'none' : panelName);
+}
 
 // Global Data
 let rawHeights = null;
@@ -2523,14 +2553,19 @@ function renderPlannerTable(candidates) {
 
 // --- UI Event Listeners ---
 function bindUIEvents() {
-  // Panel Toggles (remember per-mode state)
+  // Panel Toggles (remember per-mode state; MISSION uses single active side panel)
   document.querySelectorAll('.panel-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const targetId = btn.dataset.target;
+      if (currentViewMode === 'MISSION') {
+        if (targetId === 'inspector-panel') toggleMissionSidePanel('inspector');
+        else if (targetId === 'layers-panel') toggleMissionSidePanel('lenses');
+        return;
+      }
       if (targetId === 'inspector-panel') {
-        panelPrefs[currentViewMode].inspectorOpen = !panelPrefs[currentViewMode].inspectorOpen;
+        panelPrefs.RESEARCH.inspectorOpen = !panelPrefs.RESEARCH.inspectorOpen;
       } else if (targetId === 'layers-panel') {
-        panelPrefs[currentViewMode].layersOpen = !panelPrefs[currentViewMode].layersOpen;
+        panelPrefs.RESEARCH.layersOpen = !panelPrefs.RESEARCH.layersOpen;
       }
       syncPanelsToViewMode();
     });
@@ -2708,8 +2743,7 @@ function bindUIEvents() {
     inspectorUnpin.style.display = 'none';
     if (pinnedReticle) pinnedReticle.visible = false;
     if (currentViewMode === 'MISSION') {
-      panelPrefs.MISSION.inspectorOpen = false;
-      syncPanelsToViewMode();
+      setMissionSidePanel('none');
     }
   });
 
@@ -2821,7 +2855,7 @@ function bindUIEvents() {
       return;
     }
 
-    // 3. Pin clicked terrain point (opens full inspector in MISSION mode too)
+    // 3. Pin clicked terrain point (opens Point Inspector cleanly in MISSION mode, closing other side panels)
     const hit = getTerrainIntersection(raycaster.ray);
     if (hit) {
       isPinned = true;
@@ -2830,8 +2864,12 @@ function bindUIEvents() {
       inspectorUnpin.style.display = 'block';
       updatePointInspector(hit.lx, hit.ly);
       hideHoverTooltip();
-      panelPrefs[currentViewMode].inspectorOpen = true;
-      syncPanelsToViewMode();
+      if (currentViewMode === 'MISSION') {
+        setMissionSidePanel('inspector');
+      } else {
+        panelPrefs.RESEARCH.inspectorOpen = true;
+        syncPanelsToViewMode();
+      }
       if (pinnedReticle) {
         pinnedReticle.position.set(hit.x, hit.y + 2.0, hit.z);
         pinnedReticle.visible = true;
@@ -3593,6 +3631,10 @@ function updateLayoutBounds() {
   if (perfReadout && import.meta.env.DEV) {
     perfReadout.classList.toggle('above-timeline', Boolean(tlVisible));
   }
+  if (missionDock && !missionDock.classList.contains('hidden')) {
+    const dockRect = missionDock.getBoundingClientRect();
+    if (dockRect.height > 0) bottomTop = Math.min(bottomTop, Math.floor(dockRect.top) - 8);
+  }
 
   if (plannerPanel && !plannerPanel.classList.contains('hidden')) {
     const plRect = plannerPanel.getBoundingClientRect();
@@ -3613,50 +3655,58 @@ function updateLayoutBounds() {
   const inspRight = inspOpen ? Math.ceil(inspectorPanel.getBoundingClientRect().right) + 12 : 12;
   const calcOpen = currentViewMode === 'MISSION' && routeCalcPanel && !routeCalcPanel.classList.contains('hidden');
   const calcRect = calcOpen ? routeCalcPanel.getBoundingClientRect() : null;
-  const calcRight = calcRect && calcRect.width > 0 ? Math.ceil(inspRight + calcRect.width + 12) : inspRight;
+  const calcRight = calcRect && calcRect.width > 0 ? Math.ceil(calcRect.right + 12) : inspRight;
+  const missionLegOpen = currentViewMode === 'MISSION' && mapLegend && !mapLegend.classList.contains('hidden');
+  const missionLegRight = missionLegOpen ? Math.ceil(mapLegend.getBoundingClientRect().right + 12) : 12;
+  const leftSideRight = Math.max(inspRight, calcRight, missionLegRight);
 
-  if (routeCalcPanel) routeCalcPanel.style.left = `${inspRight}px`;
+  if (routeCalcPanel) routeCalcPanel.style.left = `${currentViewMode === 'MISSION' ? 12 : inspRight}px`;
   if (labelDetailCard) {
     labelDetailCard.style.top = `${Math.max(hudBottom + 6, topCtrlBottom)}px`;
-    labelDetailCard.style.left = `${calcOpen ? calcRight : inspRight}px`;
+    labelDetailCard.style.left = `${leftSideRight}px`;
   }
 
-  // Keep bottom-left map legend clear of timeline, planner card, Survey Kit & inspector
+  // Keep bottom-left map legend clear of timeline, planner card, Survey Kit & inspector in RESEARCH mode
   if (mapLegend && !mapLegend.classList.contains('hidden')) {
-    let baseBottom = 12;
-    const tlRect = tlVisible ? timelineBar.getBoundingClientRect() : null;
-    if (tlRect && tlRect.height > 0) {
-      baseBottom = Math.max(baseBottom, Math.ceil(window.innerHeight - tlRect.top + 8));
-    }
-    const legRect = mapLegend.getBoundingClientRect();
-    const legW = Math.max(180, Math.ceil(legRect.width));
-    const legH = Math.max(48, Math.ceil(legRect.height));
-    const plVisible = plannerPanel && !plannerPanel.classList.contains('hidden');
-    const plRect = plVisible ? plannerPanel.getBoundingClientRect() : null;
-    const hasPlanner = Boolean(plRect && plRect.height > 0);
-    const fitsLeftOfPlanner = !hasPlanner || (inspRight + legW + 12 <= plRect.left);
-
-    const calcBottomY = calcRect ? Math.ceil(calcRect.bottom) : hudBottom;
-    const tlTopY = tlRect && tlRect.height > 0 ? Math.floor(tlRect.top) - 8 : window.innerHeight - 12;
-    const sideBottomIfLeftOfPlanner = Math.min(tlTopY, window.innerHeight - 12);
-
-    if (fitsLeftOfPlanner && (!calcOpen || sideBottomIfLeftOfPlanner - (calcBottomY + 12) >= legH)) {
-      mapLegend.style.left = `${inspRight}px`;
-      mapLegend.style.bottom = `${baseBottom}px`;
+    if (currentViewMode === 'MISSION') {
+      mapLegend.style.left = '';
+      mapLegend.style.bottom = '';
     } else {
-      if (hasPlanner && plRect.left < inspRight + legW + 12) {
-        baseBottom = Math.max(baseBottom, Math.ceil(window.innerHeight - plRect.top + 8));
+      let baseBottom = 12;
+      const tlRect = tlVisible ? timelineBar.getBoundingClientRect() : null;
+      if (tlRect && tlRect.height > 0) {
+        baseBottom = Math.max(baseBottom, Math.ceil(window.innerHeight - tlRect.top + 8));
       }
-      const fitsUnderCalcAbovePlanner = !calcOpen || (bottomTop - (calcBottomY + 12) >= legH + 4);
-      if (fitsUnderCalcAbovePlanner) {
+      const legRect = mapLegend.getBoundingClientRect();
+      const legW = Math.max(180, Math.ceil(legRect.width));
+      const legH = Math.max(48, Math.ceil(legRect.height));
+      const plVisible = plannerPanel && !plannerPanel.classList.contains('hidden');
+      const plRect = plVisible ? plannerPanel.getBoundingClientRect() : null;
+      const hasPlanner = Boolean(plRect && plRect.height > 0);
+      const fitsLeftOfPlanner = !hasPlanner || (inspRight + legW + 12 <= plRect.left);
+
+      const calcBottomY = calcRect ? Math.ceil(calcRect.bottom) : hudBottom;
+      const tlTopY = tlRect && tlRect.height > 0 ? Math.floor(tlRect.top) - 8 : window.innerHeight - 12;
+      const sideBottomIfLeftOfPlanner = Math.min(tlTopY, window.innerHeight - 12);
+
+      if (fitsLeftOfPlanner && (!calcOpen || sideBottomIfLeftOfPlanner - (calcBottomY + 12) >= legH)) {
         mapLegend.style.left = `${inspRight}px`;
         mapLegend.style.bottom = `${baseBottom}px`;
       } else {
-        mapLegend.style.left = `${calcRight}px`;
-        if (hasPlanner && calcRight + legW + 12 > plRect.left) {
+        if (hasPlanner && plRect.left < inspRight + legW + 12) {
           baseBottom = Math.max(baseBottom, Math.ceil(window.innerHeight - plRect.top + 8));
         }
-        mapLegend.style.bottom = `${baseBottom}px`;
+        const fitsUnderCalcAbovePlanner = !calcOpen || (bottomTop - (calcBottomY + 12) >= legH + 4);
+        if (fitsUnderCalcAbovePlanner) {
+          mapLegend.style.left = `${inspRight}px`;
+          mapLegend.style.bottom = `${baseBottom}px`;
+        } else {
+          mapLegend.style.left = `${calcRight}px`;
+          if (hasPlanner && calcRight + legW + 12 > plRect.left) {
+            baseBottom = Math.max(baseBottom, Math.ceil(window.innerHeight - plRect.top + 8));
+          }
+          mapLegend.style.bottom = `${baseBottom}px`;
+        }
       }
     }
   }
@@ -3666,13 +3716,15 @@ function updateLayoutBounds() {
   if (mapTopControls) {
     mapTopControls.style.right = (currentViewMode === 'RESEARCH' && layersOpen) ? '328px' : '12px';
   }
-  cachedLabelLeftLimit = Math.max(inspOpen ? inspRight : 10, calcOpen ? calcRight : 10);
-  cachedLabelRightLimit = layersOpen ? Math.max(200, window.innerWidth - 310) : window.innerWidth - 10;
+  const codexOpen = currentViewMode === 'MISSION' && codexPanel && !codexPanel.classList.contains('hidden');
+  cachedLabelLeftLimit = Math.max(10, leftSideRight);
+  cachedLabelRightLimit = (layersOpen || codexOpen) ? Math.max(200, window.innerWidth - 336) : window.innerWidth - 10;
 }
 
 function syncPanelsToViewMode() {
   const screen = levelState.getState().screen;
   const isBriefing = screen === GAME_STATES.BRIEFING;
+  const canPlan = screen === GAME_STATES.ANALYZE || screen === GAME_STATES.CHOOSE;
   const isPostLock = screen === GAME_STATES.EXPLORE || screen === GAME_STATES.DEBRIEF;
   const prefs = panelPrefs[currentViewMode];
 
@@ -3689,49 +3741,107 @@ function syncPanelsToViewMode() {
     layersPanelTitle.textContent = currentViewMode === 'MISSION' ? 'Decision Lenses' : 'Layers';
   }
 
-  // Point Inspector open/closed per mode (closed on BRIEFING modal)
+  let activeSide = 'none';
+  if (currentViewMode === 'MISSION' && !isBriefing) {
+    activeSide = prefs.activeSidePanel || 'none';
+    if (!canPlan && activeSide === 'survey') activeSide = 'none';
+  }
+
+  const showInsp = currentViewMode === 'MISSION'
+    ? (activeSide === 'inspector')
+    : (!isBriefing && panelPrefs.RESEARCH.inspectorOpen);
+  const showLayers = currentViewMode === 'MISSION'
+    ? (activeSide === 'lenses')
+    : (!isBriefing && panelPrefs.RESEARCH.layersOpen);
+  const showCodex = currentViewMode === 'MISSION' && activeSide === 'codex';
+  const showLegend = currentViewMode === 'MISSION'
+    ? (activeSide === 'legend')
+    : !isBriefing;
+
+  // Point Inspector open/closed per mode
   if (inspectorPanel) {
-    const showInsp = !isBriefing && prefs.inspectorOpen;
     inspectorPanel.classList.toggle('open', showInsp);
     const toggleBtn = inspectorPanel.querySelector('.panel-toggle');
     if (toggleBtn) toggleBtn.textContent = showInsp ? '◀' : '▶';
   }
 
-  // Layers panel open/closed per mode + floating Lenses/Labels buttons
+  // Layers / Decision Lenses panel open/closed per mode
   if (layersPanel) {
-    const showLayers = !isBriefing && prefs.layersOpen;
     layersPanel.classList.toggle('open', showLayers);
     const toggleBtn = layersPanel.querySelector('.panel-toggle');
     if (toggleBtn) toggleBtn.textContent = showLayers ? '▶' : '◀';
   }
 
+  // Top-right filter controls (Show all elements & Labels)
   if (mapTopControls) {
     mapTopControls.classList.toggle('hidden', isBriefing);
   }
-  if (btnLenses) {
-    const showLensesBtn = !isBriefing && currentViewMode === 'MISSION';
-    btnLenses.classList.toggle('hidden', !showLensesBtn);
-    btnLenses.classList.toggle('open', prefs.layersOpen);
-    if (btnShowAllElements) btnShowAllElements.classList.toggle('hidden', !showLensesBtn);
-    if (btnCodex) btnCodex.classList.toggle('hidden', !showLensesBtn);
+  if (btnShowAllElements) {
+    btnShowAllElements.classList.toggle('hidden', isBriefing || currentViewMode !== 'MISSION');
   }
   if (lensExagBadge) {
     lensExagBadge.classList.toggle('hidden', isBriefing || currentViewMode !== 'MISSION' || activeMissionLens !== 'terrain');
   }
 
+  // Short top objective banner (MISSION mode post-briefing)
+  if (missionObjectiveBanner && objectiveBannerText) {
+    const showBanner = currentViewMode === 'MISSION' && !isBriefing;
+    missionObjectiveBanner.classList.toggle('hidden', !showBanner);
+    if (screen === GAME_STATES.ANALYZE) {
+      objectiveBannerText.textContent = 'Explore the map, then choose a route';
+    } else if (screen === GAME_STATES.CHOOSE) {
+      objectiveBannerText.textContent = 'Compare Routes A, B, and C, then lock in your plan';
+    } else if (screen === GAME_STATES.EXPLORE) {
+      objectiveBannerText.textContent = 'Executing locked traverse toward the boxwork core';
+    } else if (screen === GAME_STATES.DEBRIEF) {
+      objectiveBannerText.textContent = 'Debrief — review estimates, true values & Curiosity reference';
+    }
+  }
+
+  // Bottom Mission Dock (only in MISSION ANALYZE & CHOOSE)
+  const showDock = currentViewMode === 'MISSION' && canPlan;
+  if (missionDock) {
+    missionDock.classList.toggle('hidden', !showDock);
+  }
+  if (btnDockInspector) {
+    btnDockInspector.classList.toggle('active', showInsp);
+    btnDockInspector.setAttribute('aria-expanded', showInsp ? 'true' : 'false');
+  }
+  if (btnDockLegend) {
+    btnDockLegend.classList.toggle('active', showLegend);
+    btnDockLegend.setAttribute('aria-expanded', showLegend ? 'true' : 'false');
+  }
+  if (btnLenses) {
+    btnLenses.classList.toggle('hidden', !showDock);
+    btnLenses.classList.toggle('open', showLayers);
+    btnLenses.classList.toggle('active', showLayers);
+    btnLenses.setAttribute('aria-expanded', showLayers ? 'true' : 'false');
+  }
+  if (btnCodex) {
+    btnCodex.classList.toggle('hidden', !showDock);
+    btnCodex.classList.toggle('open', showCodex);
+    btnCodex.classList.toggle('active', showCodex);
+    btnCodex.setAttribute('aria-expanded', showCodex ? 'true' : 'false');
+  }
+  if (btnDockRoutes) {
+    const routesExpanded = !prefs.plannerCollapsed;
+    btnDockRoutes.classList.toggle('active', routesExpanded);
+    btnDockRoutes.setAttribute('aria-expanded', routesExpanded ? 'true' : 'false');
+  }
+
   // Map legend visibility & Curiosity reference row gating (post lock-in only)
   if (mapLegend) {
-    mapLegend.classList.toggle('hidden', isBriefing);
+    mapLegend.classList.toggle('hidden', !showLegend);
+    if (currentViewMode === 'MISSION') {
+      mapLegend.classList.toggle('open', showLegend);
+    }
   }
   if (legendRefRow) {
     legendRefRow.classList.toggle('hidden', !isPostLock);
   }
-  if ((isBriefing || currentViewMode !== 'MISSION') && codexPanel) {
-    codexPanel.classList.add('hidden');
-    if (btnCodex) {
-      btnCodex.classList.remove('open');
-      btnCodex.setAttribute('aria-expanded', 'false');
-    }
+  if (codexPanel) {
+    codexPanel.classList.toggle('hidden', !showCodex);
+    if (showCodex) renderFieldCodex();
   }
 
   // Map labels context
@@ -3751,7 +3861,7 @@ function syncPanelsToViewMode() {
   }
 
   if (elevationProfileBox) {
-    const showProfile = currentViewMode === 'RESEARCH' || prefs.profileOpen;
+    const showProfile = currentViewMode === 'RESEARCH' || (!prefs.plannerCollapsed && prefs.profileOpen);
     elevationProfileBox.classList.toggle('profile-collapsed', !showProfile);
     if (showProfile) {
       const selectedCand = plannerCandidates.find(c => c.id === selectedCandidateId);
@@ -3909,8 +4019,8 @@ function bindGameEvents() {
     });
   }
 
-  // Subtle sound hook for MISSION top bar & primary interactive controls (no-op placeholder)
-  [hudHeader, mapTopControls, plannerPanel].forEach(rootEl => {
+  // Subtle sound hook for MISSION top bar, dock & primary interactive controls (no-op placeholder)
+  [hudHeader, mapTopControls, missionDock, plannerPanel].forEach(rootEl => {
     if (!rootEl) return;
     rootEl.addEventListener('click', e => {
       const btn = e.target && e.target.closest ? e.target.closest('button') : null;
@@ -3922,17 +4032,37 @@ function bindGameEvents() {
     }, true);
   });
 
+  if (btnDockInspector) {
+    btnDockInspector.addEventListener('click', () => {
+      if (currentViewMode !== 'MISSION') return;
+      toggleMissionSidePanel('inspector');
+    });
+  }
+
+  if (btnDockLegend) {
+    btnDockLegend.addEventListener('click', () => {
+      if (currentViewMode !== 'MISSION') return;
+      toggleMissionSidePanel('legend');
+    });
+  }
+
+  if (btnDockRoutes) {
+    btnDockRoutes.addEventListener('click', () => {
+      if (currentViewMode !== 'MISSION') return;
+      panelPrefs.MISSION.plannerCollapsed = !panelPrefs.MISSION.plannerCollapsed;
+      syncPanelsToViewMode();
+      requestAnimationFrame(updateLayoutBounds);
+    });
+  }
+
   if (btnLenses) {
     btnLenses.addEventListener('click', () => {
-      panelPrefs[currentViewMode].layersOpen = !panelPrefs[currentViewMode].layersOpen;
-      if (panelPrefs[currentViewMode].layersOpen && codexPanel && !codexPanel.classList.contains('hidden')) {
-        codexPanel.classList.add('hidden');
-        if (btnCodex) {
-          btnCodex.classList.remove('open');
-          btnCodex.setAttribute('aria-expanded', 'false');
-        }
+      if (currentViewMode === 'MISSION') {
+        toggleMissionSidePanel('lenses');
+      } else {
+        panelPrefs.RESEARCH.layersOpen = !panelPrefs.RESEARCH.layersOpen;
+        syncPanelsToViewMode();
       }
-      syncPanelsToViewMode();
       if (tutorialCtrl) tutorialCtrl.notifyAction('open-lenses');
     });
   }
@@ -3985,25 +4115,17 @@ function bindGameEvents() {
 
   if (btnCodex && codexPanel) {
     btnCodex.addEventListener('click', () => {
-      const willOpen = codexPanel.classList.toggle('hidden') === false;
-      btnCodex.classList.toggle('open', willOpen);
-      btnCodex.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-      if (willOpen) {
-        if (panelPrefs[currentViewMode].layersOpen) {
-          panelPrefs[currentViewMode].layersOpen = false;
-          syncPanelsToViewMode();
-        }
-        renderFieldCodex();
-      }
+      if (currentViewMode !== 'MISSION') return;
+      toggleMissionSidePanel('codex');
     });
   }
 
   if (codexClose && codexPanel) {
     codexClose.addEventListener('click', () => {
-      codexPanel.classList.add('hidden');
-      if (btnCodex) {
-        btnCodex.classList.remove('open');
-        btnCodex.setAttribute('aria-expanded', 'false');
+      if (currentViewMode === 'MISSION') {
+        setMissionSidePanel('none');
+      } else {
+        codexPanel.classList.add('hidden');
       }
     });
   }
@@ -4014,6 +4136,10 @@ function bindGameEvents() {
 
   if (btnToggleLegend && mapLegend) {
     btnToggleLegend.addEventListener('click', () => {
+      if (currentViewMode === 'MISSION') {
+        setMissionSidePanel('none');
+        return;
+      }
       const open = mapLegend.classList.toggle('open');
       btnToggleLegend.setAttribute('aria-expanded', open ? 'true' : 'false');
       requestAnimationFrame(updateLayoutBounds);
@@ -4077,12 +4203,8 @@ function bindGameEvents() {
 
   if (btnCalcToggle) {
     btnCalcToggle.addEventListener('click', () => {
-      if (!routeCalc) return;
-      const nextOpen = !routeCalc.isDrawerOpen();
-      routeCalc.setDrawerOpen(nextOpen, { userAction: true });
-      if (!nextOpen && surveyKit) surveyKit.clearTool();
-      syncRouteCalcPanelUi();
-      requestAnimationFrame(updateLayoutBounds);
+      if (currentViewMode !== 'MISSION') return;
+      toggleMissionSidePanel('survey');
     });
   }
 
@@ -4122,7 +4244,9 @@ function bindGameEvents() {
   initDevResetButton(() => {
     hasPlayedIntro = false;
     endCinematicIntro();
-    panelPrefs.MISSION = { inspectorOpen: false, layersOpen: false, plannerCollapsed: false, profileOpen: false };
+    panelPrefs.MISSION = { activeSidePanel: 'none', plannerCollapsed: true, profileOpen: false };
+    if (routeCalc) routeCalc.setDrawerOpen(false);
+    if (surveyKit) surveyKit.clearTool();
     levelState.resetLevel();
     resetCustomizationToStandard();
   });
@@ -4359,23 +4483,36 @@ async function loadAssetsAndInit() {
         (gameExploreOverlay && !gameExploreOverlay.classList.contains('hidden')) ||
         (gameDebriefOverlay && !gameDebriefOverlay.classList.contains('hidden'))
       ),
-      onBeforeEnterStep: step => {
+      onStartTutorial: () => {
+        savedPanelsBeforeTutorial = {
+          activeSidePanel: panelPrefs.MISSION.activeSidePanel,
+          plannerCollapsed: panelPrefs.MISSION.plannerCollapsed
+        };
+      },
+      onBeforeEnterStep: (step, prevStep) => {
         const curScreen = levelState.getState().screen;
+        // Restore panels temporarily opened by the previous tutorial step
+        if (prevStep) {
+          if (prevStep.id === 'lenses' || prevStep.id === 'survey-kit') {
+            setMissionSidePanel('none');
+          }
+          if (prevStep.id === 'planner-table') {
+            panelPrefs.MISSION.plannerCollapsed = true;
+            syncPanelsToViewMode();
+            requestAnimationFrame(updateLayoutBounds);
+          }
+        }
         // Leaving stage-rail into interactive map steps from initial Briefing smoothly opens Analyze
         if (step.id === 'camera' && curScreen === GAME_STATES.BRIEFING) {
           hasPlayedIntro = true;
           endCinematicIntro();
           levelState.startMission();
         }
-        // Ensure Survey Kit panel is visible during Step 6 when in Analyze or Choose
+        // Temporarily open Survey Kit during Step 6 in Analyze or Choose
         if (step.id === 'survey-kit' && (curScreen === GAME_STATES.ANALYZE || curScreen === GAME_STATES.CHOOSE)) {
-          if (routeCalc && !routeCalc.isDrawerOpen()) {
-            routeCalc.setDrawerOpen(true, { userAction: false });
-            syncRouteCalcPanelUi();
-            requestAnimationFrame(updateLayoutBounds);
-          }
+          setMissionSidePanel('survey');
         }
-        // Ensure Planner table is expanded during Step 7 when in Analyze or Choose
+        // Temporarily expand Candidate Traverses during Step 7 in Analyze or Choose
         if (step.id === 'planner-table' && (curScreen === GAME_STATES.ANALYZE || curScreen === GAME_STATES.CHOOSE)) {
           if (panelPrefs.MISSION.plannerCollapsed) {
             panelPrefs.MISSION.plannerCollapsed = false;
@@ -4383,6 +4520,14 @@ async function loadAssetsAndInit() {
             requestAnimationFrame(updateLayoutBounds);
           }
         }
+      },
+      onCompleteOrSkip: () => {
+        if (labelsDropdown) labelsDropdown.classList.add('hidden');
+        if (btnLabels) btnLabels.setAttribute('aria-expanded', 'false');
+        const snap = savedPanelsBeforeTutorial || { activeSidePanel: 'none', plannerCollapsed: true };
+        savedPanelsBeforeTutorial = null;
+        panelPrefs.MISSION.plannerCollapsed = snap.plannerCollapsed;
+        setMissionSidePanel(snap.activeSidePanel);
       }
     });
 
@@ -4441,12 +4586,15 @@ async function loadAssetsAndInit() {
       }
     }
 
-    setTimeout(() => {
-      loadingOverlay.style.opacity = '0';
+    if (loadingOverlay) {
+      loadingOverlay.style.pointerEvents = 'none';
       setTimeout(() => {
-        loadingOverlay.style.display = 'none';
-      }, 450);
-    }, 250);
+        loadingOverlay.style.opacity = '0';
+        setTimeout(() => {
+          loadingOverlay.style.display = 'none';
+        }, 450);
+      }, 250);
+    }
 
     setFrontDoorStage('INTRO');
     introCtrl.start();

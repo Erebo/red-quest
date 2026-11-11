@@ -22,6 +22,7 @@ export function createTutorialController({
   nextBtnEl,
   skipBtnEl,
   isBlockingOverlayOpen,
+  onStartTutorial,
   onBeforeEnterStep,
   onCompleteOrSkip,
   onSound
@@ -60,10 +61,10 @@ export function createTutorialController({
       const hudB = hud ? Math.ceil(hud.getBoundingClientRect().bottom) : 56;
       const planner = document.getElementById('planner-panel');
       const plVisible = planner && isElActuallyVisible(planner);
-      const plTop = plVisible ? Math.floor(planner.getBoundingClientRect().top) - 8 : window.innerHeight - 24;
-      const left = 304;
-      const top = hudB + 58;
-      const right = window.innerWidth - 28;
+      const plTop = plVisible ? Math.floor(planner.getBoundingClientRect().top) - 8 : window.innerHeight - 90;
+      const left = 48;
+      const top = hudB + 56;
+      const right = window.innerWidth - 48;
       const bottom = Math.max(top + 140, plTop);
       return {
         left,
@@ -278,15 +279,15 @@ export function createTutorialController({
     rafId = requestAnimationFrame(layoutLoop);
   }
 
-  function goToStep(idx) {
+  function goToStep(idx, prevStep = null) {
     if (idx >= TUTORIAL_STEPS.length) {
-      finishTutorial(false);
+      finishTutorial(false, prevStep);
       return;
     }
     stepIndex = Math.max(0, idx);
     stepStartedAtMs = performance.now();
     const step = TUTORIAL_STEPS[stepIndex];
-    if (onBeforeEnterStep) onBeforeEnterStep(step, stepIndex);
+    if (onBeforeEnterStep) onBeforeEnterStep(step, prevStep, stepIndex);
     lastTargetVisible = false;
     renderCurrentStep({ firstRender: true });
   }
@@ -298,10 +299,11 @@ export function createTutorialController({
       return; // Require real action while action spotlight target is visible
     }
     if (onSound) onSound('tutorialNext');
-    goToStep(stepIndex + 1);
+    goToStep(stepIndex + 1, curStep);
   }
 
-  function finishTutorial(skipped = false) {
+  function finishTutorial(skipped = false, prevStep = null) {
+    const leavingStep = prevStep || TUTORIAL_STEPS[stepIndex] || null;
     active = false;
     document.body.classList.remove('tutorial-canvas-passthrough');
     if (rafId !== null) {
@@ -310,15 +312,16 @@ export function createTutorialController({
     }
     if (rootEl) rootEl.classList.add('hidden');
     if (onSound) onSound(skipped ? 'tutorialSkip' : 'tutorialDone');
-    if (onCompleteOrSkip) onCompleteOrSkip({ skipped });
+    if (onCompleteOrSkip) onCompleteOrSkip({ skipped, lastStep: leavingStep });
   }
 
   function start(reset = true) {
     if (reset) stepIndex = 0;
+    if (onStartTutorial) onStartTutorial();
     active = true;
     hasStartedOnce = true;
     if (rootEl) rootEl.classList.remove('hidden');
-    goToStep(stepIndex);
+    goToStep(stepIndex, null);
     if (rafId !== null) cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(layoutLoop);
   }
@@ -343,7 +346,7 @@ export function createTutorialController({
       return false;
     }
     if (onSound) onSound('tutorialActionDone');
-    goToStep(stepIndex + 1);
+    goToStep(stepIndex + 1, step);
     return true;
   }
 

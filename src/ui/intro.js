@@ -1,7 +1,8 @@
 /**
  * Opening Title Sequence (START stage part 1)
  * Local black starfield canvas, letter-by-letter "RED QUEST" reveal with red glow,
- * subtitle "Gale Crater Expedition", click/key skip, and prefers-reduced-motion support.
+ * subtitle "READ THE LAND. SURVIVE THE RED.", click/tap/key skip, and waits for player input
+ * before entering Mission Select. Respects prefers-reduced-motion.
  */
 
 export function createIntroController({
@@ -18,7 +19,6 @@ export function createIntroController({
   let completed = false;
   let rafId = null;
   let letterTimer = null;
-  let completeTimer = null;
   let fadeTimer = null;
   let stars = [];
   let ctx = null;
@@ -46,7 +46,6 @@ export function createIntroController({
 
   function initStars() {
     stars = [];
-    // Deterministic seeded starfield (zero randomness issues)
     let seed = 133742;
     const rand = () => {
       seed = (seed * 1664525 + 1013904223) >>> 0;
@@ -113,10 +112,6 @@ export function createIntroController({
       clearInterval(letterTimer);
       letterTimer = null;
     }
-    if (completeTimer !== null) {
-      clearTimeout(completeTimer);
-      completeTimer = null;
-    }
     if (fadeTimer !== null) {
       clearTimeout(fadeTimer);
       fadeTimer = null;
@@ -124,15 +119,35 @@ export function createIntroController({
   }
 
   function bindSkipListeners() {
-    window.addEventListener('keydown', handleSkipInput);
-    if (overlayEl) overlayEl.addEventListener('click', handleSkipInput);
+    window.addEventListener('keydown', handleSkipInput, true);
+    if (overlayEl) {
+      overlayEl.addEventListener('pointerdown', handleSkipInput);
+      overlayEl.addEventListener('touchstart', handleSkipInput, { passive: true });
+      overlayEl.addEventListener('click', handleSkipInput);
+    }
     window.addEventListener('resize', resizeCanvas);
   }
 
   function unbindSkipListeners() {
-    window.removeEventListener('keydown', handleSkipInput);
-    if (overlayEl) overlayEl.removeEventListener('click', handleSkipInput);
+    window.removeEventListener('keydown', handleSkipInput, true);
+    if (overlayEl) {
+      overlayEl.removeEventListener('pointerdown', handleSkipInput);
+      overlayEl.removeEventListener('touchstart', handleSkipInput);
+      overlayEl.removeEventListener('click', handleSkipInput);
+    }
     window.removeEventListener('resize', resizeCanvas);
+  }
+
+  function revealAllImmediately() {
+    if (titleEl) {
+      titleEl.querySelectorAll('.intro-char').forEach(sp => sp.classList.add('revealed'));
+    }
+    if (subtitleEl) subtitleEl.classList.add('visible');
+    if (hintEl) {
+      hintEl.textContent = 'Click or press any key to begin';
+      hintEl.classList.remove('hidden');
+      hintEl.classList.add('ready');
+    }
   }
 
   function finish(skipped = false) {
@@ -142,11 +157,11 @@ export function createIntroController({
     clearTimers();
     unbindSkipListeners();
 
-    if (skipped && onSound) onSound('introSkip');
+    if (onSound) onSound(skipped ? 'introSkip' : 'introAdvance');
 
     if (overlayEl) {
       overlayEl.classList.add('fade-out');
-      const fadeMs = skipped || prefersReducedMotion() ? 160 : 380;
+      const fadeMs = prefersReducedMotion() ? 120 : 240;
       fadeTimer = setTimeout(() => {
         overlayEl.classList.add('hidden');
         overlayEl.classList.remove('fade-out');
@@ -158,11 +173,15 @@ export function createIntroController({
   }
 
   function handleSkipInput(e) {
-    if (!active) return;
-    if (e && e.type === 'keydown' && (e.key === 'Tab' || e.metaKey || e.ctrlKey || e.altKey)) {
-      return;
+    if (!active || completed) return;
+    if (e && e.type === 'keydown') {
+      if (e.key === 'Tab' || e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') {
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
     }
     if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    revealAllImmediately();
     finish(true);
   }
 
@@ -181,11 +200,13 @@ export function createIntroController({
     }
 
     if (subtitleEl) {
-      subtitleEl.textContent = 'Gale Crater Expedition';
+      subtitleEl.textContent = 'READ THE LAND. SURVIVE THE RED.';
       subtitleEl.classList.toggle('visible', reduced);
     }
     if (hintEl) {
-      hintEl.classList.toggle('hidden', reduced);
+      hintEl.textContent = 'Click or press any key to begin';
+      hintEl.classList.remove('hidden');
+      hintEl.classList.toggle('ready', reduced);
     }
 
     const spans = buildTitleSpans(reduced);
@@ -196,8 +217,9 @@ export function createIntroController({
 
     bindSkipListeners();
 
+    // Never auto-advance: wait for player click, tap, or key press
     if (reduced) {
-      completeTimer = setTimeout(() => finish(false), 380);
+      revealAllImmediately();
       return;
     }
 
@@ -207,18 +229,22 @@ export function createIntroController({
       if (idx < spans.length) {
         spans[idx].classList.add('revealed');
         idx++;
-        if (idx >= spans.length && subtitleEl) {
-          subtitleEl.classList.add('visible');
+        if (idx >= spans.length) {
+          clearInterval(letterTimer);
+          letterTimer = null;
+          revealAllImmediately();
         }
       } else {
         clearInterval(letterTimer);
         letterTimer = null;
-        completeTimer = setTimeout(() => finish(false), 900);
+        revealAllImmediately();
       }
-    }, 105);
+    }, 95);
   }
 
   function skip() {
+    if (!active) return;
+    revealAllImmediately();
     finish(true);
   }
 

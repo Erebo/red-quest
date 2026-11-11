@@ -270,6 +270,41 @@ export function createMissionSelectController({
     overlayEl.dataset.transitioning = isTransitioning ? 'true' : 'false';
   }
 
+  function updateGlobeCameraFraming() {
+    if (!globeCamera || !overlayEl || isTransitioning) return;
+    const w = Math.max(320, window.innerWidth);
+    const h = Math.max(240, window.innerHeight);
+    const headerEl = overlayEl.querySelector('.ms-top-header');
+    const dockEl = overlayEl.querySelector('.ms-cards-dock');
+    const headerBottom = headerEl ? Math.ceil(headerEl.getBoundingClientRect().bottom) : 84;
+    const dockTopRaw = dockEl ? Math.floor(dockEl.getBoundingClientRect().top) : 0;
+    const dockTop = dockTopRaw > 120 ? dockTopRaw : (h - 250);
+
+    const bandTop = headerBottom + 12;
+    const bandBot = Math.max(bandTop + 140, dockTop - 16);
+    const availH = Math.max(140, bandBot - bandTop);
+    const availW = Math.max(240, w - 48);
+
+    const outerScale = 1.09;
+    const targetOuterDiamPx = Math.min(availH * 0.88, availW * 0.48, h * 0.56);
+    const planetDiamPx = Math.max(80, targetOuterDiamPx / outerScale);
+
+    const halfFovRad = (45 * 0.5 * Math.PI) / 180;
+    const halfWorldH = 1.0 * (h / planetDiamPx);
+    const camZ = halfWorldH / Math.tan(halfFovRad);
+
+    const centerScreenY = bandTop + availH * 0.5;
+    const ndcY = 1.0 - (2.0 * centerScreenY) / h;
+    const camY = -ndcY * halfWorldH;
+
+    globeCamera.position.set(0, camY, camZ);
+    globeCamera.lookAt(0, camY, 0);
+
+    overlayEl.dataset.globeTopPx = `${Math.round(centerScreenY - targetOuterDiamPx * 0.5)}`;
+    overlayEl.dataset.globeBottomPx = `${Math.round(centerScreenY + targetOuterDiamPx * 0.5)}`;
+    overlayEl.dataset.dockTopPx = `${Math.round(dockTop)}`;
+  }
+
   function buildScene() {
     if (!globeContainerEl) return;
     disposeGlobeOnly();
@@ -279,7 +314,7 @@ export function createMissionSelectController({
 
     globeScene = new THREE.Scene();
     globeCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 140);
-    globeCamera.position.set(0, 0, REST_CAMERA_Z);
+    updateGlobeCameraFraming();
 
     globeRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     globeRenderer.setSize(w, h);
@@ -462,6 +497,7 @@ export function createMissionSelectController({
     globeCamera.aspect = w / h;
     globeCamera.updateProjectionMatrix();
     globeRenderer.setSize(w, h);
+    updateGlobeCameraFraming();
   }
 
   function stepFrame(nowMs) {
@@ -490,6 +526,7 @@ export function createMissionSelectController({
         const p = Math.min(1.0, (nowMs - zoomStart) / dur);
         const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
         globeCamera.position.lerpVectors(zoomFromPos, zoomToPos, ease);
+        globeCamera.lookAt(0, globeCamera.position.y, 0);
         globeGroup.rotation.y = zoomFromRotY + normalizeAngleDelta(zoomTargetRotY, zoomFromRotY) * ease;
         if (overlayEl && p > 0.35) {
           overlayEl.style.opacity = `${Math.max(0, 1 - (p - 0.35) / 0.65)}`;
@@ -580,11 +617,12 @@ export function createMissionSelectController({
     isOpen = true;
     isTransitioning = false;
     isHoveringMission1 = false;
-    buildScene();
     if (overlayEl) {
       overlayEl.style.opacity = '1';
       overlayEl.classList.remove('hidden');
     }
+    buildScene();
+    requestAnimationFrame(updateGlobeCameraFraming);
     flyInStart = performance.now();
     lastFrameMs = flyInStart;
     window.addEventListener('resize', handleResize);

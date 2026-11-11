@@ -310,12 +310,7 @@ export function createRouteCalculatorController({
   }
 
   function onScreenTransition(screen) {
-    if (screen === 'ANALYZE') {
-      if (!hasAutoOpenedOnAnalyze && !collapsedByUser) {
-        hasAutoOpenedOnAnalyze = true;
-        drawerOpen = true;
-      }
-    } else if (screen === 'EXPLORE' || screen === 'DEBRIEF') {
+    if (screen === 'EXPLORE' || screen === 'DEBRIEF') {
       freezeOnLock();
     }
   }
@@ -331,8 +326,7 @@ export function createRouteCalculatorController({
 
   function shouldMaskTrueValues(screen, viewMode) {
     if (viewMode !== 'MISSION') return false;
-    if (screen !== 'ANALYZE' && screen !== 'CHOOSE') return false;
-    return drawerOpen;
+    return screen === 'ANALYZE' || screen === 'CHOOSE';
   }
 
   function getAnsweredCountsByRoute() {
