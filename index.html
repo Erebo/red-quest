@@ -26,12 +26,37 @@
   <!-- ===== HEADER (compact) ===== -->
   <header id="hud-header">
     <span class="h-badge">RED MAP</span>
-    <strong>RED QUEST</strong> · 3D Mars Interactive Map · Gale Crater · 5 km × 5 km · Sols 3721–4868
+    <strong>RED QUEST</strong> <span class="hud-sub">· Gale Crater · 5 km × 5 km</span>
+    <div id="game-phase-bar" class="game-phase-bar" aria-label="Mission phases">
+      <span class="phase-step active" data-phase="BRIEFING">BRIEFING</span>
+      <span class="phase-sep">›</span>
+      <span class="phase-step" data-phase="ANALYZE">ANALYZE</span>
+      <span class="phase-sep">›</span>
+      <span class="phase-step" data-phase="CHOOSE">CHOOSE</span>
+      <span class="phase-sep">›</span>
+      <span class="phase-step" data-phase="EXPLORE">EXPLORE</span>
+      <span class="phase-sep">›</span>
+      <span class="phase-step" data-phase="DEBRIEF">DEBRIEF</span>
+    </div>
+    <div id="view-mode-toggle" class="mode-toggle" role="group" aria-label="View mode">
+      <button type="button" class="mode-btn active" data-mode="MISSION">MISSION</button>
+      <button type="button" class="mode-btn" data-mode="RESEARCH">RESEARCH</button>
+    </div>
+    <button id="btn-dev-reset" class="dev-reset-btn" style="display:none;" title="Dev only: reset Level 1 back to Briefing">DEV: Reset Level</button>
     <span id="perf-readout" class="perf">FPS — | Load —</span>
   </header>
 
+  <!-- Floating Lenses Trigger (MISSION mode collapsed Layers button) -->
+  <button id="btn-lenses" class="lenses-btn hidden" title="Open map lenses and overlay layers">Lenses</button>
+
+  <!-- Hover Cursor Tooltip (MISSION mode hover-only readout: Elevation + Slope tier) -->
+  <div id="hover-tooltip" class="hover-tooltip hidden" aria-hidden="true">
+    <div class="ht-row"><span class="ht-lbl">Elevation</span><strong id="ht-elev">—</strong></div>
+    <div class="ht-row"><span class="ht-lbl">Slope tier</span><strong id="ht-tier">—</strong></div>
+  </div>
+
   <!-- ===== RIGHT PANEL — Layers (collapsible) ===== -->
-  <aside id="layers-panel" class="side-panel right open">
+  <aside id="layers-panel" class="side-panel right">
     <button class="panel-toggle" data-target="layers-panel" title="Toggle layers panel">◀</button>
     <div class="panel-body">
       <h3>Layers</h3>
@@ -61,7 +86,7 @@
             <div class="li"><span class="sw" style="background:#2ecc71"></span>&lt; 15° Easy</div>
             <div class="li"><span class="sw" style="background:#f1c40f"></span>15°–25° Moderate</div>
             <div class="li"><span class="sw" style="background:#e74c3c"></span>&gt; 25° Hazardous</div>
-            <div class="legend-note">Terrain inclination safety classification.</div>
+            <div class="legend-note">Slopes: measured (derived from DEM). Thresholds (15°/25°): game rules.</div>
           </div>
         </details>
       </details>
@@ -119,16 +144,18 @@
       <!-- Route & markers -->
       <details class="layer-group" open>
         <summary>Route &amp; markers</summary>
-        <label class="lrow"><input type="checkbox" id="lyr-route" checked><span>Reference: Curiosity actual traverse (not a plan)</span></label>
-        <label class="lrow"><input type="checkbox" id="lyr-boxwork" checked><span>Boxwork core zone (153 × 283 m, sols 4600–4805)</span></label>
-        <div class="slider-row">
-          <label>Curiosity line</label>
-          <select id="route-color-mode">
-            <option value="neutral">Neutral slate (reference)</option>
-            <option value="slope">By slope class</option>
-            <option value="single">Single colour (cyan)</option>
-          </select>
+        <div id="lyr-ref-controls">
+          <label class="lrow"><input type="checkbox" id="lyr-route" checked><span>Reference: Curiosity actual traverse (not a plan)</span></label>
+          <div class="slider-row">
+            <label>Curiosity line</label>
+            <select id="route-color-mode">
+              <option value="neutral">Neutral slate (reference)</option>
+              <option value="slope">By slope class</option>
+              <option value="single">Single colour (cyan)</option>
+            </select>
+          </div>
         </div>
+        <label class="lrow"><input type="checkbox" id="lyr-boxwork" checked><span>Boxwork core zone (153 × 283 m, sols 4600–4805)</span></label>
       </details>
 
       <!-- Atmosphere -->
@@ -175,26 +202,26 @@
       <button id="inspector-unpin" class="unpin-btn" style="display:none">Unpin ×</button>
 
       <div class="insp-section">
-        <h4>Measured data</h4>
-        <div class="ig"><span class="il">Elevation <small>(MOLA DEM)</small></span><span class="iv" id="i-elev">—</span></div>
+        <h4>Measured data <span class="tag-pill measured">MEASURED</span></h4>
+        <div class="ig"><span class="il">Elevation <small title="USGS / NASA PDS MSL Gale Crater 1 m DEM Mosaic v3 (MOLA reference areoid 0 m datum)">(MSL Gale DEM, resampled ~4.9 m)</small></span><span class="iv" id="i-elev">—</span></div>
         <div class="ig"><span class="il">Slope <small>(5 m DEM)</small></span><span class="iv" id="i-slope">—</span></div>
-        <div class="ig"><span class="il">Slope tier</span><span class="iv" id="i-tier">—</span></div>
+        <div class="ig"><span class="il">Slope tier <span class="tag-pill game">GAME</span></span><span class="iv" id="i-tier">—</span></div>
         <div class="ig"><span class="il">Local X, Y</span><span class="iv mono" id="i-xy">—</span></div>
         <div class="ig"><span class="il">Lon, Lat</span><span class="iv mono" id="i-lonlat">—</span></div>
-        <div class="ig"><span class="il">Nearest sol <small>(Curiosity route)</small></span><span class="iv" id="i-sol">—</span></div>
+        <div class="ig" id="i-sol-row"><span class="il">Nearest sol <small>(Curiosity route)</small></span><span class="iv" id="i-sol">—</span></div>
         <div class="ig"><span class="il">CRISM hydrated R,G,B <small>(CRISM)</small></span><span class="iv" id="i-crism-hyd">—</span></div>
         <div class="ig"><span class="il">CRISM phyllosilicate R,G,B <small>(CRISM)</small></span><span class="iv" id="i-crism-phy">—</span></div>
         <div class="ig"><span class="il">THEMIS brightness <small>(THEMIS)</small></span><span class="iv" id="i-themis">—</span></div>
       </div>
 
       <div class="insp-section env-section">
-        <h4>Environment</h4>
+        <h4>Environment <span class="sim-badge">SIM</span></h4>
         <div class="ig"><span class="il">Radiation dose rate</span><span class="iv" id="i-rad">—</span></div>
         <div class="ig"><span class="il">Dust opacity (τ) / visibility</span><span class="iv" id="i-dust">—</span></div>
         <div class="ig"><span class="il">Surface temperature</span><span class="iv" id="i-temp">—</span></div>
         <div class="ig"><span class="il">Wind speed &amp; direction</span><span class="iv" id="i-wind">—</span></div>
         <div class="ig"><span class="il">Orbiter comm signal</span><span class="iv" id="i-signal">—</span></div>
-        <div class="ig"><span class="il">Traversability index</span><span class="iv" id="i-mobility">—</span></div>
+        <div class="ig" id="i-mobility-row"><span class="il">Traversability index</span><span class="iv" id="i-mobility">—</span></div>
       </div>
     </div>
   </aside>
@@ -208,17 +235,20 @@
   </div>
 
   <!-- ===== ROUTE PLANNER COMPARISON PANEL ===== -->
-  <aside id="planner-panel" class="planner-panel open">
+  <aside id="planner-panel" class="planner-panel open game-blinded">
     <div class="planner-header">
       <div class="ph-left">
         <span class="badge-plan">ROUTE PLANNER</span>
         <strong>Candidate Traverses</strong>
-        <span id="planner-status" class="planner-status">Optimal routes computed (A*)</span>
+        <span id="planner-status" class="planner-status">Level 1 candidates loaded (A*)</span>
       </div>
       <div class="ph-center">
-        <button id="btn-set-start" class="btn-planner-tool" title="Click then click terrain to set custom START">📍 Set Start</button>
-        <button id="btn-set-goal" class="btn-planner-tool" title="Click then click terrain to set custom GOAL">🎯 Set Goal</button>
-        <button id="btn-reset-plan" class="btn-planner-tool" title="Reset start &amp; goal to default locations">↺ Reset Endpoints</button>
+        <button id="btn-set-start" class="btn-planner-tool sandbox-only" title="Click then click terrain to set custom START">📍 Set Start</button>
+        <button id="btn-set-goal" class="btn-planner-tool sandbox-only" title="Click then click terrain to set custom GOAL">🎯 Set Goal</button>
+        <button id="btn-reset-plan" class="btn-planner-tool sandbox-only" title="Reset start &amp; goal to default locations">↺ Reset Endpoints</button>
+        <button id="btn-go-choose" class="btn-game-primary" style="display:none;">Proceed to Choose →</button>
+        <button id="btn-back-analyze" class="btn-planner-tool" style="display:none;">← Analyze</button>
+        <button id="btn-lock-route" class="btn-game-lock" style="display:none;">Lock in route</button>
       </div>
       <div class="ph-right">
         <button id="btn-toggle-planner" class="planner-toggle-btn" title="Toggle route planner panel">▼ Collapse</button>
@@ -230,17 +260,17 @@
         <table class="planner-table">
           <thead>
             <tr>
-              <th style="width: 135px;">Candidate Route</th>
-              <th style="width: 95px;">Best For</th>
-              <th title="Total 3D route distance">Distance (km)</th>
-              <th title="Cumulative uphill ascent / net elevation change">Ascent / Net (m)</th>
-              <th title="Maximum terrain gradient encountered">Max Slope</th>
-              <th title="Percent of route along Easy (<15°), Moderate (15°-25°), and Hazardous (>25°)">Slope Tiers (% E / M / H)</th>
-              <th title="Estimated drive time based on slope slowdown and climbing speed">Est. Time <span class="sim-badge">sim</span></th>
-              <th title="Electrical housekeeping, wheel motor work, and gravitational ascent work">Energy <span class="sim-badge">sim</span></th>
-              <th title="Cumulative radiation dose integrated over traverse time">Radiation <span class="sim-badge">sim</span></th>
-              <th title="Count of CRISM hydrated coverage pixels (≤100m) + science targets (≤100m)">Science</th>
-              <th title="Composite safety and terrain difficulty score (0-100)">Risk <span class="sim-badge">sim</span></th>
+              <th style="width: 145px;">Candidate Route <span class="tag-pill game">GAME</span></th>
+              <th class="col-true-val" style="width: 95px;">Best For <span class="tag-pill game">GAME</span></th>
+              <th title="Total 3D route distance">Distance (km) <span class="tag-pill measured">MEASURED</span></th>
+              <th title="Cumulative uphill ascent / net elevation change">Ascent / Net (m) <span class="tag-pill measured">MEASURED</span></th>
+              <th title="Maximum terrain gradient encountered">Max Slope <span class="tag-pill measured">MEASURED</span></th>
+              <th title="Slopes measured (derived from DEM); <15° Easy, 15°-25° Moderate, >25° Hazardous thresholds are game rules">Slope Tiers (% E / M / H) <span class="tag-pill measured">MEASURED (DEM)</span> <span class="tag-pill game">15°/25° GAME</span></th>
+              <th class="col-true-val" title="Estimated drive time based on slope slowdown and climbing speed">Est. Time <span class="sim-badge">SIM</span></th>
+              <th class="col-true-val" title="Electrical housekeeping, wheel motor work, and gravitational ascent work">Energy <span class="sim-badge">SIM</span></th>
+              <th class="col-true-val" title="Cumulative radiation dose integrated over traverse time">Radiation <span class="sim-badge">SIM</span></th>
+              <th class="col-true-val" title="Count of CRISM hydrated coverage pixels (≤100m) + science targets (≤100m)">Science <span class="tag-pill game">GAME</span></th>
+              <th class="col-true-val" title="Composite safety and terrain difficulty score (0-100)">Risk <span class="sim-badge">SIM</span></th>
               <th style="width: 45px; text-align: center;">View</th>
             </tr>
           </thead>
@@ -251,9 +281,9 @@
       </div>
 
       <!-- Elevation Profile of Selected Route -->
-      <div class="elevation-profile-container">
+      <div id="elevation-profile-box" class="elevation-profile-container profile-collapsed">
         <div class="profile-head">
-          <span class="profile-title">ELEVATION PROFILE — <strong id="profile-route-name">SAFEST</strong></span>
+          <span class="profile-title">ELEVATION PROFILE — <strong id="profile-route-name">ROUTE A</strong></span>
           <div class="profile-legend">
             <span class="leg-pill easy">■ &lt;15° Easy</span>
             <span class="leg-pill mod">■ 15°–25° Moderate</span>
@@ -267,6 +297,81 @@
       </div>
     </div>
   </aside>
+
+  <!-- ===== GAME OVERLAYS (BRIEFING / EXPLORE / DEBRIEF) ===== -->
+  <section id="game-briefing-overlay" class="game-overlay" role="dialog" aria-labelledby="briefing-title">
+    <div class="game-card">
+      <div class="game-card-top">
+        <span class="tag-pill game">GAME · LEVEL 1</span>
+        <span class="tag-pill measured">NASA PDS · GALE CRATER</span>
+      </div>
+      <h1 id="briefing-title">—</h1>
+      <p id="briefing-story" class="game-story">—</p>
+      <div class="briefing-meta-grid">
+        <div class="bmeta-box">
+          <div class="bmeta-label">Start <span class="tag-pill measured">MEASURED</span></div>
+          <div id="briefing-start" class="bmeta-val">—</div>
+        </div>
+        <div class="bmeta-box">
+          <div class="bmeta-label">Goal <span class="tag-pill measured">MEASURED</span> <span class="tag-pill game">TARGET</span></div>
+          <div id="briefing-goal" class="bmeta-val">—</div>
+        </div>
+      </div>
+      <div class="briefing-targets">
+        <div class="bmeta-label">Science Targets (3) <span class="tag-pill measured">MEASURED</span></div>
+        <ul id="briefing-targets-list"></ul>
+      </div>
+      <div class="game-provenance-note">
+        Data tags: <span class="tag-pill measured">MEASURED</span> = from <code>public/data/</code> ·
+        <span class="tag-pill game">GAME</span> = gameplay rules/labels ·
+        <span class="sim-badge">SIM</span> = physics/environment models
+      </div>
+      <div class="game-actions">
+        <button id="btn-start-mission" class="btn-game-primary btn-lg">Start</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="game-explore-overlay" class="game-overlay hidden" role="dialog" aria-label="Explore phase placeholder">
+    <div class="game-card compact">
+      <div class="game-card-top">
+        <span class="tag-pill game">EXPLORE · PLACEHOLDER</span>
+      </div>
+      <h2>EXPLORE — Locked In <span id="explore-locked-route">Route A</span></h2>
+      <p class="game-story">Placeholder screen: rover driving simulation along your chosen traverse will be implemented in the next step.</p>
+      <div class="game-actions">
+        <button id="btn-go-debrief" class="btn-game-primary">Continue to Debrief →</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="game-debrief-overlay" class="game-overlay hidden overlay-top" role="dialog" aria-label="Debrief phase placeholder">
+    <div class="game-card wide">
+      <div class="game-card-top">
+        <span class="tag-pill game">DEBRIEF · PLACEHOLDER</span>
+        <span class="tag-pill measured">REFERENCE TRAVERSE REVEALED</span>
+      </div>
+      <h2>DEBRIEF — True Values &amp; Curiosity Reference</h2>
+      <p class="game-story">Placeholder screen: Curiosity's actual traverse (<span id="debrief-ref-stats">—</span> <span class="tag-pill measured">MEASURED</span>) is now visible on the 3D terrain alongside your locked route (<strong id="debrief-locked-route">—</strong>).</p>
+      <div class="table-wrap" style="margin-top:8px;">
+        <table class="planner-table">
+          <thead>
+            <tr>
+              <th>Route</th>
+              <th>Strategy <span class="tag-pill game">GAME</span></th>
+              <th>Distance <span class="tag-pill measured">MEASURED</span></th>
+              <th>Est. Time <span class="sim-badge">SIM</span></th>
+              <th>Energy <span class="sim-badge">SIM</span></th>
+              <th>Radiation <span class="sim-badge">SIM</span></th>
+              <th>Science <span class="tag-pill game">GAME</span></th>
+              <th>Risk <span class="sim-badge">SIM</span></th>
+            </tr>
+          </thead>
+          <tbody id="debrief-true-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 
   <!-- Notification Toast -->
   <div id="planner-toast" class="planner-toast hidden"></div>

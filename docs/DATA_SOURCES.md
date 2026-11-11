@@ -63,3 +63,17 @@ This document tracks all raw data assets collected for the Red Quest 3D Mars map
 1. **DEM Resampling & Slope Extraction:** The 1 m DEM was smoothed with a Gaussian filter ($\sigma \approx 2.5\text{ px}$) and gradients calculated over a 5 m step baseline to capture realistic vehicle-scale terrain gradients, capped at 60°.
 2. **Slope Classification Disclaimer:** The slope categories (< 15° Easy, 15°–25° Moderate, > 25° Hazardous) are **gameplay design thresholds** for rover navigation challenge, NOT NASA operational vehicle limits.
 3. **Route Thinning:** Only rows with `frame == 'ROVER'` were included to represent the actual physical rover motion. Points were sampled along the traverse at ~5 m increments while strictly preserving the opening and closing waypoints of each sol.
+
+---
+
+## Science Targets Provenance (`src/main.js`)
+
+The sol numbers and titles used for Level 1 science targets (`src/game/levels/level01.json`) and scene markers are sourced from `SCIENCE_TARGETS` in `src/main.js` (originally provided by user/Curiosity blog notes) and their coordinates are matched to the nearest waypoint in `public/data/route.json`:
+
+| Level 1 Usage | Sol / Range Label | Description | Code Reference | Verification Status |
+|---|---|---|---|---|
+| **Level 1 Target 1** | `Sol 4534` (`4534`) | Boxwork campaign begins (Phase 1) | `src/main.js:529` | **to verify against NASA** |
+| **Level 1 Target 2** | `Sols 4602-4603` (`4602`) | Top of the ridge, start of the main boxwork region | `src/main.js:530` | **to verify against NASA** |
+| *(Scene marker / Debrief)* | `Sols 4604-4606` (`4604`) | Main exposure of boxwork structures | `src/main.js:531` | **to verify against NASA** |
+| **Level 1 Target 3** | `Sols 4716-4722` (`4716`, mapped to nearest thinned waypoint `sol: 4711` in `route.json`) | Nevado Sajama drill | `src/main.js:532` | **to verify against NASA** |
+| *(Scene marker / Debrief)* | `Sols 4804-4811` (`4804`, mapped to nearest thinned waypoint `sol: 4805` in `route.json`) | Nevado Sajama 2 drill | `src/main.js:533` | **to verify against NASA** |

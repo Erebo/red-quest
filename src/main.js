@@ -1,5 +1,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import level01 from './game/levels/level01.json';
+import { createGameState } from './game/gameState.js';
+import {
+  GAME_STATES,
+  buildBlindedPlannerCandidates,
+  populateBriefingUI,
+  populateDebriefUI,
+  updatePhaseStepper,
+  initDevResetButton
+} from './game/levelController.js';
 
 // --- Performance & Timing Metrics ---
 const appStartTime = performance.now();
@@ -117,6 +127,41 @@ const profileRouteName = document.getElementById('profile-route-name');
 const profileHoverInfo = document.getElementById('profile-hover-info');
 const elevationChart = document.getElementById('elevation-chart');
 const plannerToast = document.getElementById('planner-toast');
+
+// Level 1 Game DOM Elements & State Machine
+const hudHeader = document.getElementById('hud-header');
+const layersPanel = document.getElementById('layers-panel');
+const lyrRefControls = document.getElementById('lyr-ref-controls');
+const timelineBar = document.getElementById('timeline-bar');
+const iSolRow = document.getElementById('i-sol-row');
+const iMobilityRow = document.getElementById('i-mobility-row');
+const btnLenses = document.getElementById('btn-lenses');
+const viewModeToggle = document.getElementById('view-mode-toggle');
+const hoverTooltip = document.getElementById('hover-tooltip');
+const htElev = document.getElementById('ht-elev');
+const htTier = document.getElementById('ht-tier');
+const elevationProfileBox = document.getElementById('elevation-profile-box');
+const gameBriefingOverlay = document.getElementById('game-briefing-overlay');
+const gameExploreOverlay = document.getElementById('game-explore-overlay');
+const gameDebriefOverlay = document.getElementById('game-debrief-overlay');
+const btnStartMission = document.getElementById('btn-start-mission');
+const btnGoChoose = document.getElementById('btn-go-choose');
+const btnBackAnalyze = document.getElementById('btn-back-analyze');
+const btnLockRoute = document.getElementById('btn-lock-route');
+const btnGoDebrief = document.getElementById('btn-go-debrief');
+const exploreLockedRoute = document.getElementById('explore-locked-route');
+
+const levelState = createGameState('route-a');
+const LEVEL1_TARGET_SOLS = new Set(level01.scienceTargets.map(t => t.sol));
+let hasPlayedIntro = false;
+
+// View Mode (MISSION | RESEARCH) & Per-Mode Panel Memory
+let currentViewMode = 'MISSION';
+const panelPrefs = {
+  MISSION: { inspectorOpen: false, layersOpen: false, plannerCollapsed: false, profileOpen: false },
+  RESEARCH: { inspectorOpen: true, layersOpen: true, plannerCollapsed: false, profileOpen: true }
+};
+let lastTerrainHit = null;
 
 // Global Data
 let rawHeights = null;
@@ -559,7 +604,7 @@ function createScienceMarkersAndFlag() {
       })
     );
     pin.position.set(meshX, my, meshZ);
-    pin.userData = { isSciencePin: true, title: item.title, solLabel: item.label, pt: closestPt };
+    pin.userData = { isSciencePin: true, targetSol: item.sol, title: item.title, solLabel: item.label, pt: closestPt };
     scienceMarkersGroup.add(pin);
 
     // Beacon beam
@@ -568,6 +613,7 @@ function createScienceMarkersAndFlag() {
       new THREE.MeshBasicMaterial({ color: item.color, transparent: true, opacity: 0.5 })
     );
     beam.position.set(meshX, my + 30, meshZ);
+    beam.userData = { targetSol: item.sol };
     scienceMarkersGroup.add(beam);
   });
 
@@ -859,8 +905,12 @@ function updatePointInspector(lx, ly) {
   iLonlat.textContent = `${lon.toFixed(4)}°E, ${Math.abs(lat).toFixed(4)}°S`;
 
   if (nearestPt) {
-    const distStr = distM < 8 ? 'At rover waypoint' : `${Math.round(distM)} m away`;
-    iSol.textContent = `Sol ${nearestPt.sol} (${distStr})`;
+    if (levelState.getState().screen !== GAME_STATES.DEBRIEF) {
+      iSol.textContent = 'Hidden until Debrief';
+    } else {
+      const distStr = distM < 8 ? 'At rover waypoint' : `${Math.round(distM)} m away`;
+      iSol.textContent = `Sol ${nearestPt.sol} (${distStr})`;
+    }
   }
 
   if (hyd) {
@@ -912,11 +962,17 @@ function updatePointInspector(lx, ly) {
   const roughnessCost = Math.min(slope * slope / 900.0 * 25.0, 25.0);
   const elevCost = 15.0 * (elev - (-4131.74)) / 700.0;
   const mobCost = Math.min(100.0, Math.max(0.0, slopeCost + roughnessCost + elevCost));
-  iMobility.textContent = `${Math.round(mobCost)} / 100`;
 
-  // Make sure inspector panel is open
-  if (!inspectorPanel.classList.contains('open')) {
-    inspectorPanel.classList.add('open');
+  const curScreen = levelState.getState().screen;
+  const hideMobilityPreLock =
+    currentViewMode === 'MISSION' &&
+    (curScreen === GAME_STATES.BRIEFING || curScreen === GAME_STATES.ANALYZE || curScreen === GAME_STATES.CHOOSE);
+
+  if (iMobilityRow) {
+    iMobilityRow.style.display = hideMobilityPreLock ? 'none' : '';
+  }
+  if (iMobility) {
+    iMobility.textContent = hideMobilityPreLock ? 'Hidden until lock-in' : `${Math.round(mobCost)} / 100`;
   }
 }
 
@@ -1038,8 +1094,42 @@ function getTerrainIntersection(ray) {
   return { x: hitX, y: hitY, z: hitZ, lx, ly, elev };
 }
 
-function handlePointerInspection() {
-  if (isPinned) return;
+function hideHoverTooltip() {
+  if (hoverTooltip) hoverTooltip.classList.add('hidden');
+}
+
+function updateHoverTooltip(hit, clientX, clientY) {
+  if (!hoverTooltip || !hit || currentViewMode !== 'MISSION' || isPinned || levelState.getState().screen === GAME_STATES.BRIEFING) {
+    hideHoverTooltip();
+    return;
+  }
+  const { col, row } = localToGrid(hit.lx, hit.ly);
+  const slope = sampleGridBilinear(rawSlopes, col, row);
+  let tierLabel = '< 15° Easy';
+  let tierClass = 'tier-easy';
+  if (slope >= 25.0) {
+    tierLabel = '> 25° Hazardous';
+    tierClass = 'tier-haz';
+  } else if (slope >= 15.0) {
+    tierLabel = '15°–25° Moderate';
+    tierClass = 'tier-mod';
+  }
+
+  if (htElev) htElev.textContent = `${hit.elev.toFixed(1)} m`;
+  if (htTier) {
+    htTier.textContent = tierLabel;
+    htTier.className = tierClass;
+  }
+  hoverTooltip.style.left = `${Math.min(window.innerWidth - 185, clientX + 16)}px`;
+  hoverTooltip.style.top = `${Math.max(42, Math.min(window.innerHeight - 60, clientY + 14))}px`;
+  hoverTooltip.classList.remove('hidden');
+}
+
+function handlePointerInspection(clientX, clientY) {
+  if (isPinned) {
+    hideHoverTooltip();
+    return;
+  }
   const now = performance.now();
   if (now - lastRaycastTime < 33) return; // Throttle to 30 FPS
   lastRaycastTime = now;
@@ -1048,12 +1138,15 @@ function handlePointerInspection() {
 
   const hit = getTerrainIntersection(raycaster.ray);
   if (hit) {
+    lastTerrainHit = { lx: hit.lx, ly: hit.ly };
     updatePointInspector(hit.lx, hit.ly);
+    updateHoverTooltip(hit, clientX, clientY);
     if (cursorReticle) {
       cursorReticle.position.set(hit.x, hit.y + 2.0, hit.z);
       cursorReticle.visible = true;
     }
   } else {
+    hideHoverTooltip();
     if (cursorReticle) cursorReticle.visible = false;
   }
 }
@@ -1201,22 +1294,27 @@ function resetCustomizationToStandard() {
   if (inspectorMode) inspectorMode.textContent = '(hover)';
   if (inspectorUnpin) inspectorUnpin.style.display = 'none';
   if (pinnedReticle) pinnedReticle.visible = false;
+  if (currentViewMode === 'MISSION') panelPrefs.MISSION.inspectorOpen = false;
+  panelPrefs[currentViewMode].plannerCollapsed = false;
 
   // 10. Reset Camera Orbit
   controls.target.set(0, ((-3772.0 - minElev) * currentExag), 0);
   camera.position.set(0, 3400, 3900);
   controls.update();
 
-  // 11. Reset Route Planner
-  plannerStart = { x: 3467.35, y: 4999.58 };
-  plannerGoal = { x: 2432.1, y: 2479.0 };
+  // 11. Reset Route Planner (keep Level 1 blinded routes intact)
+  plannerStart = { x: level01.start.x, y: level01.start.y };
+  plannerGoal = { x: level01.goal.x, y: level01.goal.y };
   isSettingStart = false;
   isSettingGoal = false;
   if (btnSetStart) btnSetStart.classList.remove('active');
   if (btnSetGoal) btnSetGoal.classList.remove('active');
   updateStartAndGoalMarkerPositions();
-  requestRouteComputation();
-  selectCandidate('safest');
+  plannerCandidates = buildBlindedPlannerCandidates(level01);
+  selectedCandidateId = levelState.getState().selectedRouteId || 'route-a';
+  renderPlannerTable(plannerCandidates);
+  buildCandidateRouteLines(plannerCandidates);
+  applyGameScreenState(levelState.getState());
   if (plannerPanel && plannerPanel.classList.contains('collapsed')) {
     plannerPanel.classList.remove('collapsed');
     if (btnTogglePlanner) btnTogglePlanner.textContent = '▼ Collapse';
@@ -1409,8 +1507,14 @@ function buildCandidateRouteLines(candidates) {
   selectCandidate(selectedCandidateId);
 }
 
-function selectCandidate(id) {
+function selectCandidate(id, { userInitiated = false } = {}) {
   selectedCandidateId = id;
+  levelState.selectRoute(id);
+
+  if (userInitiated && currentViewMode === 'MISSION') {
+    panelPrefs.MISSION.profileOpen = true;
+    syncPanelsToViewMode();
+  }
 
   // 1. Highlight selected 3D line, dim others
   Object.keys(candidateLines).forEach(candId => {
@@ -1438,7 +1542,13 @@ function selectCandidate(id) {
       profileRouteName.textContent = cand.name.toUpperCase();
       profileRouteName.style.color = cand.color;
     }
-    drawElevationChart(cand);
+    requestAnimationFrame(() => drawElevationChart(cand));
+    if (userInitiated) {
+      setTimeout(() => {
+        drawElevationChart(cand);
+        updateLayoutBounds();
+      }, 270);
+    }
   }
 }
 
@@ -1640,29 +1750,29 @@ function renderPlannerTable(candidates) {
     if (c.error) {
       tr.innerHTML = `
         <td><div class="route-cell"><span class="route-swatch" style="background:${c.color}"></span>${c.name}</div></td>
-        <td><span class="badge-best ${c.id}">${c.bestFor}</span></td>
+        <td class="col-true-val"><span class="badge-best ${c.id}">${c.bestFor}</span></td>
         <td colspan="10" style="color:#e74c3c;font-style:italic;">No safe route found</td>
       `;
     } else {
       tr.innerHTML = `
         <td><div class="route-cell"><span class="route-swatch" style="background:${c.color}"></span>${c.name}</div></td>
-        <td><span class="badge-best ${c.id}">${c.bestFor}</span></td>
+        <td class="col-true-val"><span class="badge-best ${c.id}">${c.bestFor}</span></td>
         <td>${c.distKm.toFixed(2)}</td>
         <td>+${c.ascentM.toFixed(1)} / ${c.netElevM >= 0 ? '+' : ''}${c.netElevM.toFixed(1)}</td>
         <td>${c.maxSlopeDeg.toFixed(1)}°</td>
         <td><span class="tier-easy">${c.pctEasy.toFixed(1)}%</span> / <span class="tier-mod">${c.pctMod.toFixed(1)}%</span> / <span class="tier-haz">${c.pctHaz.toFixed(1)}%</span></td>
-        <td>${c.timeHours.toFixed(1)} h</td>
-        <td>${c.energyKwh.toFixed(2)} kWh</td>
-        <td>${Math.round(c.radDoseUsv)} µSv</td>
-        <td><strong>${c.sciScore}</strong></td>
-        <td>${c.riskScore.toFixed(1)} <small>/ 100</small></td>
+        <td class="col-true-val">${c.timeHours.toFixed(1)} h</td>
+        <td class="col-true-val">${c.energyKwh.toFixed(2)} kWh</td>
+        <td class="col-true-val">${Math.round(c.radDoseUsv)} µSv</td>
+        <td class="col-true-val"><strong>${c.sciScore}</strong></td>
+        <td class="col-true-val">${c.riskScore.toFixed(1)} <small>/ 100</small></td>
         <td style="text-align:center;"><input type="checkbox" class="cb-route-vis" data-id="${c.id}" checked></td>
       `;
     }
 
     tr.addEventListener('click', e => {
       if (e.target.tagName === 'INPUT') return;
-      selectCandidate(c.id);
+      selectCandidate(c.id, { userInitiated: true });
     });
 
     const cb = tr.querySelector('.cb-route-vis');
@@ -1680,17 +1790,16 @@ function renderPlannerTable(candidates) {
 
 // --- UI Event Listeners ---
 function bindUIEvents() {
-  // Panel Toggles
+  // Panel Toggles (remember per-mode state)
   document.querySelectorAll('.panel-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const targetId = btn.dataset.target;
-      const panel = document.getElementById(targetId);
-      if (panel) {
-        panel.classList.toggle('open');
-        btn.textContent = panel.classList.contains('open')
-          ? (panel.classList.contains('right') ? '▶' : '◀')
-          : (panel.classList.contains('right') ? '◀' : '▶');
+      if (targetId === 'inspector-panel') {
+        panelPrefs[currentViewMode].inspectorOpen = !panelPrefs[currentViewMode].inspectorOpen;
+      } else if (targetId === 'layers-panel') {
+        panelPrefs[currentViewMode].layersOpen = !panelPrefs[currentViewMode].layersOpen;
       }
+      syncPanelsToViewMode();
     });
   });
 
@@ -1723,7 +1832,8 @@ function bindUIEvents() {
   });
 
   if (lyrRoute) lyrRoute.addEventListener('change', () => {
-    if (routeGroup) routeGroup.visible = lyrRoute.checked;
+    const isDebrief = levelState.getState().screen === GAME_STATES.DEBRIEF;
+    if (routeGroup) routeGroup.visible = isDebrief && lyrRoute.checked;
     if (scienceMarkersGroup) scienceMarkersGroup.visible = lyrRoute.checked;
     if (startFlagGroup) startFlagGroup.visible = lyrRoute.checked;
   });
@@ -1827,8 +1937,9 @@ function bindUIEvents() {
 
   if (btnTogglePlanner && plannerPanel) {
     btnTogglePlanner.addEventListener('click', () => {
-      plannerPanel.classList.toggle('collapsed');
-      btnTogglePlanner.textContent = plannerPanel.classList.contains('collapsed') ? '▲ Expand' : '▼ Collapse';
+      panelPrefs[currentViewMode].plannerCollapsed = !panelPrefs[currentViewMode].plannerCollapsed;
+      syncPanelsToViewMode();
+      setTimeout(updateLayoutBounds, 270);
     });
   }
 
@@ -1853,6 +1964,10 @@ function bindUIEvents() {
     inspectorMode.textContent = '(hover)';
     inspectorUnpin.style.display = 'none';
     if (pinnedReticle) pinnedReticle.visible = false;
+    if (currentViewMode === 'MISSION') {
+      panelPrefs.MISSION.inspectorOpen = false;
+      syncPanelsToViewMode();
+    }
   });
 
   // Canvas Click: Pin point, set start/goal, or select route
@@ -1896,7 +2011,7 @@ function bindUIEvents() {
         let obj = hits[i].object;
         while (obj && obj !== plannerGroup) {
           if (obj.userData && obj.userData.isCandidateLine) {
-            selectCandidate(obj.userData.id);
+            selectCandidate(obj.userData.id, { userInitiated: true });
             return;
           }
           obj = obj.parent;
@@ -1916,7 +2031,7 @@ function bindUIEvents() {
       }
     }
 
-    // 3. Pin clicked terrain point
+    // 3. Pin clicked terrain point (opens full inspector in MISSION mode too)
     const hit = getTerrainIntersection(raycaster.ray);
     if (hit) {
       isPinned = true;
@@ -1924,6 +2039,9 @@ function bindUIEvents() {
       inspectorMode.textContent = '(pinned)';
       inspectorUnpin.style.display = 'block';
       updatePointInspector(hit.lx, hit.ly);
+      hideHoverTooltip();
+      panelPrefs[currentViewMode].inspectorOpen = true;
+      syncPanelsToViewMode();
       if (pinnedReticle) {
         pinnedReticle.position.set(hit.x, hit.y + 2.0, hit.z);
         pinnedReticle.visible = true;
@@ -1936,15 +2054,20 @@ function bindUIEvents() {
 
   // Pointer Move & Leave
   window.addEventListener('pointermove', e => {
+    if (e.target !== renderer.domElement) {
+      hideHoverTooltip();
+      return;
+    }
     const rect = renderer.domElement.getBoundingClientRect();
     if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      handlePointerInspection();
+      handlePointerInspection(e.clientX, e.clientY);
     }
   });
 
   renderer.domElement.addEventListener('pointerleave', () => {
+    hideHoverTooltip();
     if (cursorReticle && !isPinned) cursorReticle.visible = false;
   });
 
@@ -1952,6 +2075,7 @@ function bindUIEvents() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    updateLayoutBounds();
   });
 }
 
@@ -2004,17 +2128,13 @@ function initRouteWorker() {
   });
 
   routeWorker.onmessage = function (e) {
-    console.log('--- routeWorker onmessage ---', e.data.type);
     if (e.data.type === 'initialized') {
-      requestRouteComputation();
+      window.__routeWorkerReady = true;
     } else if (e.data.type === 'result') {
-      plannerCandidates = e.data.candidates;
       lastComputeTimeMs = e.data.computeTimeMs;
-      if (plannerStatus) {
-        plannerStatus.textContent = `Generated 4 routes in ${lastComputeTimeMs} ms (A*)`;
-      }
-      renderPlannerTable(plannerCandidates);
-      buildCandidateRouteLines(plannerCandidates);
+      // Preserve Level 1 blinded candidate routes when game mode is active;
+      // routeWorker results remain intact for telemetry/debugging.
+      window.__sandboxWorkerCandidates = e.data.candidates;
     }
   };
 
@@ -2024,29 +2144,280 @@ function initRouteWorker() {
   };
 
   try {
-    console.log('Posting init message to worker...', { N, sciCount: sciMarkers.length, crismCount: crismPixels.length });
     routeWorker.postMessage({
       type: 'init',
       gridSize: N,
       heights: subH.buffer,
       slopes: subS.buffer,
       sciMarkers,
-      crismPixels,
-      start: plannerStart,
-      goal: plannerGoal
+      crismPixels
     }, [subH.buffer, subS.buffer]);
-    console.log('Init message successfully dispatched to worker');
   } catch (postErr) {
     console.error('Error posting to routeWorker:', postErr);
   }
 }
 
+// --- View Mode (MISSION | RESEARCH), Layout Bounds & Per-Mode Panel Memory ---
+function updateLayoutBounds() {
+  const hudRect = hudHeader ? hudHeader.getBoundingClientRect() : { bottom: 34 };
+  const hudBottom = Math.max(34, Math.ceil(hudRect.bottom)) + 4;
+  document.documentElement.style.setProperty('--hud-bottom', `${hudBottom}px`);
+
+  let bottomTop = window.innerHeight - 12;
+  if (timelineBar && !timelineBar.classList.contains('hidden')) {
+    const tlRect = timelineBar.getBoundingClientRect();
+    if (tlRect.height > 0) bottomTop = Math.min(bottomTop, Math.floor(tlRect.top) - 8);
+  }
+  if (plannerPanel && !plannerPanel.classList.contains('hidden')) {
+    const plRect = plannerPanel.getBoundingClientRect();
+    if (plRect.height > 0) bottomTop = Math.min(bottomTop, Math.floor(plRect.top) - 8);
+  }
+
+  const sideMaxH = Math.max(120, bottomTop - hudBottom);
+  document.documentElement.style.setProperty('--side-max-h', `${sideMaxH}px`);
+}
+
+function syncPanelsToViewMode() {
+  const screen = levelState.getState().screen;
+  const isBriefing = screen === GAME_STATES.BRIEFING;
+  const prefs = panelPrefs[currentViewMode];
+
+  document.body.classList.toggle('mode-mission', currentViewMode === 'MISSION');
+  document.body.classList.toggle('mode-research', currentViewMode === 'RESEARCH');
+
+  if (viewModeToggle) {
+    viewModeToggle.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === currentViewMode);
+    });
+  }
+
+  // Point Inspector open/closed per mode (closed on BRIEFING modal)
+  if (inspectorPanel) {
+    const showInsp = !isBriefing && prefs.inspectorOpen;
+    inspectorPanel.classList.toggle('open', showInsp);
+    const toggleBtn = inspectorPanel.querySelector('.panel-toggle');
+    if (toggleBtn) toggleBtn.textContent = showInsp ? '◀' : '▶';
+  }
+
+  // Layers panel open/closed per mode + floating Lenses button in MISSION mode
+  if (layersPanel) {
+    const showLayers = !isBriefing && prefs.layersOpen;
+    layersPanel.classList.toggle('open', showLayers);
+    const toggleBtn = layersPanel.querySelector('.panel-toggle');
+    if (toggleBtn) toggleBtn.textContent = showLayers ? '▶' : '◀';
+  }
+
+  if (btnLenses) {
+    const showLensesBtn = !isBriefing && currentViewMode === 'MISSION';
+    btnLenses.classList.toggle('hidden', !showLensesBtn);
+    btnLenses.classList.toggle('open', prefs.layersOpen);
+  }
+
+  // Planner collapsed state & Elevation Profile compact reveal
+  if (plannerPanel) {
+    plannerPanel.classList.toggle('collapsed', prefs.plannerCollapsed);
+    if (btnTogglePlanner) {
+      btnTogglePlanner.textContent = prefs.plannerCollapsed ? '▲ Expand' : '▼ Collapse';
+    }
+  }
+
+  if (elevationProfileBox) {
+    const showProfile = currentViewMode === 'RESEARCH' || prefs.profileOpen;
+    elevationProfileBox.classList.toggle('profile-collapsed', !showProfile);
+    if (showProfile) {
+      const selectedCand = plannerCandidates.find(c => c.id === selectedCandidateId);
+      if (selectedCand) {
+        requestAnimationFrame(() => drawElevationChart(selectedCand));
+      }
+    }
+  }
+
+  // Hide cursor tooltip in RESEARCH mode or BRIEFING
+  if (currentViewMode !== 'MISSION' || isBriefing || isPinned) {
+    hideHoverTooltip();
+  }
+
+  // Re-evaluate Traversability index visibility immediately
+  const hideMobilityPreLock =
+    currentViewMode === 'MISSION' &&
+    (screen === GAME_STATES.BRIEFING || screen === GAME_STATES.ANALYZE || screen === GAME_STATES.CHOOSE);
+  if (iMobilityRow) {
+    iMobilityRow.style.display = hideMobilityPreLock ? 'none' : '';
+  }
+  const activePt = pinnedPoint || lastTerrainHit;
+  if (activePt && rawHeights && rawSlopes) {
+    updatePointInspector(activePt.lx, activePt.ly);
+  } else if (iMobility) {
+    iMobility.textContent = hideMobilityPreLock ? 'Hidden until lock-in' : '—';
+  }
+
+  requestAnimationFrame(updateLayoutBounds);
+}
+
+function setViewMode(mode) {
+  if (mode !== 'MISSION' && mode !== 'RESEARCH') return;
+  if (currentViewMode === mode) return;
+  currentViewMode = mode;
+  syncPanelsToViewMode();
+}
+
+// --- Level 1 Game Structure Wiring ---
+function applyGameScreenState(state) {
+  const screen = state.screen;
+  const isRefRevealed = screen === GAME_STATES.DEBRIEF;
+
+  updatePhaseStepper(screen);
+
+  // Overlays
+  if (gameBriefingOverlay) gameBriefingOverlay.classList.toggle('hidden', screen !== GAME_STATES.BRIEFING);
+  if (gameExploreOverlay) gameExploreOverlay.classList.toggle('hidden', screen !== GAME_STATES.EXPLORE);
+  if (gameDebriefOverlay) gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF);
+
+  // Reference route (Curiosity's real traverse) stays hidden until DEBRIEF
+  if (routeGroup) {
+    routeGroup.visible = isRefRevealed && (lyrRoute ? lyrRoute.checked : true);
+  }
+  if (lyrRefControls) {
+    lyrRefControls.style.display = isRefRevealed ? '' : 'none';
+  }
+  if (timelineBar) {
+    timelineBar.classList.toggle('hidden', !isRefRevealed);
+  }
+  if (!isRefRevealed && isPlaying) {
+    isPlaying = false;
+    if (btnPlay) btnPlay.textContent = '▶';
+  }
+  if (!isRefRevealed && iSol && iSol.textContent !== '—') {
+    iSol.textContent = 'Hidden until Debrief';
+  } else if (isRefRevealed && iSol && iSol.textContent === 'Hidden until Debrief') {
+    iSol.textContent = 'Hover terrain';
+  }
+
+  // Science markers: show Level 1's 3 targets before DEBRIEF, all markers in DEBRIEF
+  if (scienceMarkersGroup) {
+    scienceMarkersGroup.children.forEach(obj => {
+      if (obj.userData && typeof obj.userData.targetSol === 'number') {
+        obj.visible = isRefRevealed || LEVEL1_TARGET_SOLS.has(obj.userData.targetSol);
+      }
+    });
+  }
+
+  // Planner panel & blinded Route A/B/C controls
+  const showPlanner = screen === GAME_STATES.ANALYZE || screen === GAME_STATES.CHOOSE;
+  if (plannerPanel) {
+    plannerPanel.classList.toggle('hidden', !showPlanner);
+    plannerPanel.classList.toggle('game-blinded', showPlanner);
+    plannerPanel.classList.toggle('no-timeline', !isRefRevealed);
+  }
+
+  if (btnGoChoose) btnGoChoose.style.display = screen === GAME_STATES.ANALYZE ? 'inline-block' : 'none';
+  if (btnBackAnalyze) btnBackAnalyze.style.display = screen === GAME_STATES.CHOOSE ? 'inline-block' : 'none';
+  if (btnLockRoute) btnLockRoute.style.display = screen === GAME_STATES.CHOOSE ? 'inline-block' : 'none';
+
+  if (plannerStatus) {
+    if (screen === GAME_STATES.ANALYZE) {
+      plannerStatus.textContent = 'Step 1 (Analyze): inspect terrain layers & Routes A, B, C';
+    } else if (screen === GAME_STATES.CHOOSE) {
+      plannerStatus.textContent = 'Step 2 (Choose): pick Route A, B, or C & Lock in route';
+    }
+  }
+
+  if (showPlanner) {
+    const selectedCand = plannerCandidates.find(c => c.id === selectedCandidateId);
+    if (selectedCand) {
+      if (profileRouteName) {
+        profileRouteName.textContent = selectedCand.name.toUpperCase();
+        profileRouteName.style.color = selectedCand.color;
+      }
+      requestAnimationFrame(() => drawElevationChart(selectedCand));
+    }
+  }
+
+  if (screen === GAME_STATES.EXPLORE) {
+    const locked = level01.candidateRoutes.find(r => r.id === state.lockedRouteId);
+    if (exploreLockedRoute) exploreLockedRoute.textContent = locked ? locked.blindLabel : 'Route A';
+  }
+
+  if (screen === GAME_STATES.DEBRIEF) {
+    populateDebriefUI(level01, state.lockedRouteId);
+  }
+
+  syncPanelsToViewMode();
+}
+
+function bindGameEvents() {
+  populateBriefingUI(level01);
+  levelState.subscribe(applyGameScreenState);
+
+  if (viewModeToggle) {
+    viewModeToggle.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => setViewMode(btn.dataset.mode));
+    });
+  }
+
+  if (btnLenses) {
+    btnLenses.addEventListener('click', () => {
+      panelPrefs[currentViewMode].layersOpen = !panelPrefs[currentViewMode].layersOpen;
+      syncPanelsToViewMode();
+    });
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(() => updateLayoutBounds());
+    if (hudHeader) ro.observe(hudHeader);
+    if (plannerPanel) ro.observe(plannerPanel);
+    if (timelineBar) ro.observe(timelineBar);
+  }
+
+  if (btnStartMission) {
+    btnStartMission.addEventListener('click', () => {
+      levelState.startMission();
+      if (!hasPlayedIntro) {
+        hasPlayedIntro = true;
+        startCinematicIntro();
+      }
+    });
+  }
+
+  if (btnGoChoose) {
+    btnGoChoose.addEventListener('click', () => {
+      levelState.goToChoose();
+    });
+  }
+
+  if (btnBackAnalyze) {
+    btnBackAnalyze.addEventListener('click', () => {
+      levelState.goToAnalyze();
+    });
+  }
+
+  if (btnLockRoute) {
+    btnLockRoute.addEventListener('click', () => {
+      levelState.lockInRoute();
+    });
+  }
+
+  if (btnGoDebrief) {
+    btnGoDebrief.addEventListener('click', () => {
+      levelState.goToDebrief();
+    });
+  }
+
+  initDevResetButton(() => {
+    hasPlayedIntro = false;
+    endCinematicIntro();
+    panelPrefs.MISSION = { inspectorOpen: false, layersOpen: false, plannerCollapsed: false, profileOpen: false };
+    levelState.resetLevel();
+    resetCustomizationToStandard();
+  });
+}
+
 // --- Asset Loader & Application Entry ---
 async function loadAssetsAndInit() {
-  console.log('--- START loadAssetsAndInit ---');
   try {
     setupLights();
     bindUIEvents();
+    bindGameEvents();
     updateTimeOfDay(14.0);
 
     // 1. Manifest
@@ -2119,6 +2490,14 @@ async function loadAssetsAndInit() {
     createDustParticles();
     createReticles();
     createStartAndGoalMarkers();
+
+    // Load fixed Level 1 candidate routes generated from routeWorker.js
+    plannerCandidates = buildBlindedPlannerCandidates(level01);
+    selectedCandidateId = levelState.getState().selectedRouteId || 'route-a';
+    renderPlannerTable(plannerCandidates);
+    buildCandidateRouteLines(plannerCandidates);
+    applyGameScreenState(levelState.getState());
+
     initRouteWorker();
 
     // 7. Complete Loading
@@ -2130,7 +2509,6 @@ async function loadAssetsAndInit() {
       loadingOverlay.style.opacity = '0';
       setTimeout(() => {
         loadingOverlay.style.display = 'none';
-        startCinematicIntro();
       }, 500);
     }, 300);
 
