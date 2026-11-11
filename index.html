@@ -46,20 +46,140 @@
     <span id="perf-readout" class="perf">FPS — | Load —</span>
   </header>
 
-  <!-- Floating Lenses Trigger (MISSION mode collapsed Layers button) -->
-  <button id="btn-lenses" class="lenses-btn hidden" title="Open map lenses and overlay layers">Lenses</button>
+  <!-- Floating Top-Right Map Controls (Vertical Exag Badge, Labels Dropdown & MISSION Lenses button) -->
+  <div id="map-top-controls" class="map-top-controls">
+    <span id="lens-exag-badge" class="lens-exag-badge hidden">Vertical exaggeration 1.5x</span>
+    <div id="labels-dropdown-wrap" class="labels-dropdown-wrap">
+      <button id="btn-labels" class="lenses-btn labels-btn active" type="button" aria-expanded="false" title="Filter 3D map label categories & Show all mode">Labels ▾</button>
+      <div id="labels-dropdown" class="labels-dropdown hidden" role="menu" aria-label="Label categories">
+        <div class="ld-head">Categories</div>
+        <div class="ld-chips">
+          <button type="button" class="ld-chip active" data-cat="mission" aria-pressed="true">◎ Mission</button>
+          <button type="button" class="ld-chip active" data-cat="terrain" aria-pressed="true">▲ Terrain features</button>
+          <button type="button" class="ld-chip active" data-cat="materials" aria-pressed="true">◆ Materials</button>
+          <button type="button" class="ld-chip active" data-cat="hazards" aria-pressed="true">⚠ Hazards</button>
+          <button type="button" class="ld-chip active" data-cat="science" aria-pressed="true">★ Science</button>
+        </div>
+        <div class="ld-sep"></div>
+        <button type="button" id="btn-labels-show-all" class="ld-show-all" aria-pressed="false">Show all (with leader lines)</button>
+      </div>
+    </div>
+    <button id="btn-lenses" class="lenses-btn hidden" type="button" title="Open map lenses and overlay layers">Lenses</button>
+  </div>
 
-  <!-- Hover Cursor Tooltip (MISSION mode hover-only readout: Elevation + Slope tier) -->
+  <!-- Projected Camera-Facing 3D Map Labels, Leader Lines, Hover & Click Detail Cards -->
+  <svg id="map-leader-svg" class="map-leader-svg hidden" aria-hidden="true"></svg>
+  <div id="map-labels-layer" class="map-labels-layer" aria-hidden="true"></div>
+  <div id="marker-hover-card" class="marker-hover-card hidden" role="status" aria-hidden="true">
+    <div class="mhc-head">
+      <strong id="mhc-name">—</strong>
+      <span id="mhc-sol" class="mhc-sol hidden"></span>
+    </div>
+    <div id="mhc-desc" class="mhc-desc">—</div>
+    <div id="mhc-tags" class="mhc-tags"></div>
+  </div>
+  <aside id="label-detail-card" class="label-detail-card hidden" role="dialog" aria-label="Map feature details">
+    <div class="ldc-top">
+      <span id="ldc-category" class="ldc-cat">—</span>
+      <span id="ldc-sol" class="mhc-sol hidden"></span>
+      <button id="ldc-close" class="ldc-close" type="button" title="Close details">×</button>
+    </div>
+    <h4 id="ldc-title">—</h4>
+    <div class="ldc-sec"><span class="ldc-k">What it is</span><p id="ldc-what">—</p></div>
+    <div class="ldc-sec"><span class="ldc-k">Dataset</span><p id="ldc-dataset" class="ldc-mono">—</p></div>
+    <div class="ldc-sec"><span class="ldc-k">Why it matters</span><p id="ldc-why">—</p></div>
+    <div id="ldc-tags" class="mhc-tags"></div>
+  </aside>
+
+  <!-- Bottom-Left Collapsible Map Legend -->
+  <aside id="map-legend" class="map-legend open" aria-label="Map legend">
+    <button id="btn-toggle-legend" class="map-legend-toggle" type="button" aria-expanded="true">
+      <span>Legend</span>
+      <span class="leg-chev">▾</span>
+    </button>
+    <div id="map-legend-body" class="map-legend-body">
+      <div class="leg-item"><span class="leg-sym leg-start"></span><span>Start</span></div>
+      <div class="leg-item"><span class="leg-sym leg-goal"></span><span>Goal</span></div>
+      <div class="leg-item"><span class="leg-sym leg-target"></span><span>Target (1–3)</span></div>
+      <div class="leg-item"><span class="leg-sym leg-hazard"></span><span>Hazard zone (&gt;25°)</span></div>
+      <div class="leg-item"><span class="leg-line" id="leg-route-a" style="background:#38bdf8;"></span><span>Route A</span></div>
+      <div class="leg-item"><span class="leg-line" id="leg-route-b" style="background:#c084fc;"></span><span>Route B</span></div>
+      <div class="leg-item"><span class="leg-line" id="leg-route-c" style="background:#fb923c;"></span><span>Route C</span></div>
+      <div id="legend-ref-row" class="leg-item hidden"><span class="leg-line leg-ref"></span><span>Curiosity (reference)</span></div>
+    </div>
+  </aside>
+
+  <!-- Hover Cursor Tooltip (MISSION mode hover-only readout: Elevation + Slope tier + Route hover) -->
   <div id="hover-tooltip" class="hover-tooltip hidden" aria-hidden="true">
+    <div id="ht-route-row" class="ht-row hidden"><span class="ht-lbl">Route</span><strong id="ht-route">—</strong></div>
     <div class="ht-row"><span class="ht-lbl">Elevation</span><strong id="ht-elev">—</strong></div>
     <div class="ht-row"><span class="ht-lbl">Slope tier</span><strong id="ht-tier">—</strong></div>
   </div>
 
-  <!-- ===== RIGHT PANEL — Layers (collapsible) ===== -->
+  <!-- ===== RIGHT PANEL — Decision Lenses (MISSION) / Layers (RESEARCH) ===== -->
   <aside id="layers-panel" class="side-panel right">
     <button class="panel-toggle" data-target="layers-panel" title="Toggle layers panel">◀</button>
     <div class="panel-body">
-      <h3>Layers</h3>
+      <h3 id="layers-panel-title">Lenses</h3>
+
+      <!-- MISSION Mode Decision Lenses (replaces raw Layers in MISSION mode only) -->
+      <div id="mission-lenses-content" class="mission-lenses-content">
+        <div class="lens-grid" role="radiogroup" aria-label="Decision lenses">
+          <button type="button" class="lens-btn active" data-lens="satellite" aria-pressed="true">
+            <span class="lens-title">Satellite</span>
+            <span class="lens-q">What does the ground look like?</span>
+          </button>
+          <button type="button" class="lens-btn" data-lens="terrain" aria-pressed="false">
+            <span class="lens-title">Terrain</span>
+            <span class="lens-q">Where is it too steep to walk?</span>
+          </button>
+          <button type="button" class="lens-btn" data-lens="minerals" aria-pressed="false">
+            <span class="lens-title">Minerals</span>
+            <span class="lens-q">Where are the science-rich areas?</span>
+          </button>
+          <button type="button" class="lens-btn" data-lens="heat" aria-pressed="false">
+            <span class="lens-title">Heat</span>
+            <span class="lens-q">Where is rock vs dust likely?</span>
+          </button>
+          <button type="button" class="lens-btn" data-lens="sun" aria-pressed="false">
+            <span class="lens-title">Sun &amp; Power</span>
+            <span class="lens-q">Where is direct illumination vs cast shadow?</span>
+          </button>
+          <button type="button" class="lens-btn" data-lens="radiation" aria-pressed="false">
+            <span class="lens-title">Radiation Shelter</span>
+            <span class="lens-q">Where does terrain block open-sky exposure?</span>
+          </button>
+        </div>
+
+        <div id="sun-preset-controls" class="sun-preset-controls hidden">
+          <div class="sun-preset-row" role="group" aria-label="Sun angle preset">
+            <button type="button" class="sun-preset-btn active" data-sun="morning">Morning</button>
+            <button type="button" class="sun-preset-btn" data-sun="noon">Noon</button>
+            <button type="button" class="sun-preset-btn" data-sun="evening">Evening</button>
+          </div>
+          <div id="sun-noon-note" class="sun-noon-note hidden">Sun is near overhead at this latitude, so shadows are short</div>
+        </div>
+
+        <div id="lens-computing-note" class="lens-computing-note hidden">Computing full 1025×1025 DEM raster…</div>
+
+        <div id="lens-detail-box" class="lens-detail-box">
+          <div id="lens-ramp-box" class="lens-ramp-box">
+            <div id="lens-ramp-units" class="lens-ramp-units">—</div>
+            <div id="lens-ramp-bar" class="lens-ramp-bar"></div>
+            <div class="lens-ramp-ticks"><span id="lens-ramp-min">—</span><span id="lens-ramp-mid">—</span><span id="lens-ramp-max">—</span></div>
+          </div>
+          <div id="lens-legend-items" class="lens-legend-items"></div>
+          <div id="lens-caveat" class="lens-caveat"></div>
+        </div>
+
+        <div class="btn-row" style="margin-top:8px;">
+          <button id="btn-mission-reset-view" type="button">Reset view</button>
+          <button id="btn-mission-focus-boxwork" type="button">Focus boxwork</button>
+        </div>
+      </div>
+
+      <!-- RESEARCH Mode Raw Layers (completely preserved unchanged) -->
+      <div id="research-layers-content" class="research-layers-content">
 
       <!-- Terrain -->
       <details class="layer-group" open>
@@ -191,6 +311,7 @@
         <button id="btn-reset">Reset view</button>
         <button id="btn-boxwork">Focus boxwork</button>
       </div>
+      </div><!-- /#research-layers-content -->
     </div>
   </aside>
 
@@ -231,7 +352,7 @@
     <div class="popup-head"><span class="popup-tag">SCIENCE TARGET</span><button id="popup-close">×</button></div>
     <h3 id="popup-title"></h3>
     <div class="popup-sol" id="popup-sol"></div>
-    <div class="popup-src">Source: NASA Curiosity blog</div>
+    <div class="popup-src" id="popup-src">measured (Curiosity traverse); description unverified</div>
   </div>
 
   <!-- ===== ROUTE PLANNER COMPARISON PANEL ===== -->
@@ -295,6 +416,15 @@
           <canvas id="elevation-chart" width="940" height="70"></canvas>
         </div>
       </div>
+
+      <!-- What this tells you about each route (MISSION Mode Lens Strip) -->
+      <div id="lens-route-strip" class="lens-route-strip">
+        <div class="lrs-head">
+          <span class="lrs-title">What this tells you about each route — <strong id="lrs-lens-name">Satellite</strong></span>
+          <span id="lrs-caveat" class="lrs-caveat">HiRISE orbital mosaic (~2 m/px)</span>
+        </div>
+        <div id="lrs-cols" class="lrs-cols"></div>
+      </div>
     </div>
   </aside>
 
@@ -332,7 +462,7 @@
     </div>
   </section>
 
-  <section id="game-explore-overlay" class="game-overlay hidden" role="dialog" aria-label="Explore phase placeholder">
+  <section id="game-explore-overlay" class="game-overlay hidden overlay-top" role="dialog" aria-label="Explore phase placeholder">
     <div class="game-card compact">
       <div class="game-card-top">
         <span class="tag-pill game">EXPLORE · PLACEHOLDER</span>

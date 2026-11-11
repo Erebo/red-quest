@@ -1,0 +1,271 @@
+PDS_VERSION_ID                = PDS3
+
+RECORD_TYPE                   = STREAM
+
+DATA_SET_ID                   = "MSL-M-ROVER-6-RDR-PLACES-V1.0"
+PRODUCT_ID                    = "localized_interp.csv"
+PRODUCT_VERSION_ID            = "1.0"
+PRODUCT_CREATION_TIME         = 2023-10-19T16:01:19
+
+SPACECRAFT_CLOCK_START_COUNT  = "397502188.872"
+SPACECRAFT_CLOCK_STOP_COUNT   = "744163619.286711"
+START_TIME                    = 2012-08-06T05:18:39
+STOP_TIME                     = 2023-08-01T13:03:34
+
+INSTRUMENT_HOST_NAME          = "MARS SCIENCE LABORATORY"
+INSTRUMENT_HOST_ID            = "MSL"
+INSTRUMENT_NAME               = "N/A"
+MISSION_PHASE_NAME            = "PRIMARY SURFACE MISSION"
+TARGET_NAME                   = "MARS"
+
+DESCRIPTION                   = "This file contains rover localization
+                                 data for the localized_interp view."
+
+^HEADER                       = ("localized_interp.csv", 1)
+OBJECT                        = HEADER
+  BYTES                       = 214
+  RECORDS                     = 1
+  HEADER_TYPE                 = TEXT
+  DESCRIPTION                 = "Header indicating what the columns are."
+END_OBJECT                    = HEADER
+
+^SPREADSHEET                  = ("localized_interp.csv", 215<BYTES>)
+OBJECT                        = SPREADSHEET
+  ROWS                        = 40372
+  ROW_BYTES                   = 226
+  FIELDS                      = 22
+  FIELD_DELIMITER             = COMMA
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 1
+  BYTES         = 8
+  DATA_TYPE     = CHARACTER
+  NAME          = "FRAME"
+  FORMAT        = "A8"
+  DESCRIPTION   = "Frame type, SITE or ROVER."
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 2
+  BYTES         = 5
+  DATA_TYPE     = ASCII_INTEGER
+  NAME          = "SITE"
+  FORMAT        = "I5"
+  DESCRIPTION   = "Site number from the RMC."
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 3
+  BYTES         = 5
+  DATA_TYPE     = ASCII_INTEGER
+  NAME          = "DRIVE"
+  FORMAT        = "I5"
+  DESCRIPTION   = "Drive number from the RMC. -1 for SITE entries."
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 4
+  BYTES         = 5
+  DATA_TYPE     = ASCII_INTEGER
+  NAME          = "POSE"
+  FORMAT        = "I5"
+  DESCRIPTION   = "Pose number from the RMC. -1 for SITE entries.
+                   See the SIS for details."
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 5
+  BYTES         = 12
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "LANDING_X"
+  FORMAT        = "F12.3"
+  DESCRIPTION   = "X coordinate relative to the landing site (SITE 1).
+                   +X points north."
+  UNIT          = "METER"
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 6
+  BYTES         = 12
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "LANDING_Y"
+  FORMAT        = "F12.3"
+  DESCRIPTION   = "Y coordinate relative to the landing site (SITE 1).
+                   +Y points east."
+  UNIT          = "METER"
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 7
+  BYTES         = 12
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "LANDING_Z"
+  FORMAT        = "F12.3"
+  DESCRIPTION   = "Z coordinate relative to the landing site (SITE 1).
+                   +Z points down."
+  UNIT          = "METER"
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 8
+  BYTES         = 12
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "NORTHING"
+  FORMAT        = "F12.3"
+  DESCRIPTION   = "Meters north of the equator (or south if negative).
+                   See SIS for details."
+  UNIT          = "METER"
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 9
+  BYTES         = 12
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "EASTING"
+  FORMAT        = "F12.3"
+  DESCRIPTION   = "Meters east of the prime meridian, as measured at the
+                   equator.  See SIS for details."
+  UNIT          = "METER"
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 10
+  BYTES         = 14
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "PLANETOCENTRIC_LATITUDE"
+  FORMAT        = "F14.9"
+  DESCRIPTION   = "Latitude of the point, measured in a planetocentric system.
+                   See SIS for details."
+  UNIT          = "DEGREE"
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 11
+  BYTES         = 14
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "PLANETODETIC_LATITUDE"
+  FORMAT        = "F14.9"
+  DESCRIPTION   = "Latitude of the point, measured in a planetodetic system.
+                   See SIS for details."
+  UNIT          = "DEGREE"
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 12
+  BYTES         = 14
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "LONGITUDE"
+  FORMAT        = "F14.9"
+  DESCRIPTION   = "Longitude of the point (same in planetocentric and -detic).
+                   See SIS for details."
+  UNIT          = "DEGREE"
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 13
+  BYTES         = 10
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "ELEVATION"
+  FORMAT        = "F10.3"
+  DESCRIPTION   = "Elevation of the point relative to the datum.  Positive
+                   is up.  See SIS for details."
+  UNIT          = "METER"
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 14
+  BYTES         = 10
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "MAP_PIXEL_LINE"
+  FORMAT        = "F10.2"
+  DESCRIPTION   = "0-based line number of the point in the base map
+                   cutout image.  See SIS for details."
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 15
+  BYTES         = 10
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "MAP_PIXEL_SAMPLE"
+  FORMAT        = "F10.2"
+  DESCRIPTION   = "0-based sample number of the point in the base map
+                   cutout image.  See SIS for details."
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 16
+  BYTES         = 10
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "DEM_PIXEL_LINE"
+  FORMAT        = "F10.2"
+  DESCRIPTION   = "0-based line number of the point in the DEM
+                   cutout image.  See SIS for details."
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 17
+  BYTES         = 10
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "DEM_PIXEL_SAMPLE"
+  FORMAT        = "F10.2"
+  DESCRIPTION   = "0-based sample number of the point in the DEM
+                   cutout image.  See SIS for details."
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 18
+  BYTES         = 8
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "ROLL"
+  FORMAT        = "F8.3"
+  DESCRIPTION   = "Roll value of rover at this location.  Roll is a
+                   clockwise rotation around rover-frame +X (positive
+                   means left side is up).  See SIS for details."
+  UNIT          = "DEGREE"
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 19
+  BYTES         = 8
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "PITCH"
+  FORMAT        = "F8.3"
+  DESCRIPTION   = "Pitch value of rover at this location.  Pitch is a
+                   clockwise rotation around rover-frame +Y (positive
+                   means nose is up).  See SIS for details."
+  UNIT          = "DEGREE"
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 20
+  BYTES         = 8
+  DATA_TYPE     = ASCII_REAL
+  NAME          = "YAW"
+  FORMAT        = "F8.3"
+  DESCRIPTION   = "Yaw value (or heading) of rover at this location.  Yaw
+                   is a clockwise rotation around rover-frame +Z (0=north,
+                   90=east, 180=south, 270=west).  See SIS for details."
+  UNIT          = "DEGREE"
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 21
+  BYTES         = 9
+  DATA_TYPE     = ASCII_INTEGER
+  NAME          = "SCLK"
+  FORMAT        = "I9"
+  DESCRIPTION   = "Earliest spacecraft clock (sclk) seen for the site/drive
+                   on this line.  Fractional sclk's are truncated down."
+END_OBJECT      = FIELD
+
+OBJECT          = FIELD
+  FIELD_NUMBER  = 22
+  BYTES         = 5
+  DATA_TYPE     = ASCII_INTEGER
+  NAME          = "SOL"
+  FORMAT        = "I5"
+  DESCRIPTION   = "Sol number corresponding to the SCLK field."
+END_OBJECT      = FIELD
+
+END_OBJECT                    = SPREADSHEET
+END

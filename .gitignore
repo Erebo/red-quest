@@ -1,5 +1,5 @@
-# Data directories
-data/raw/
+# Oversized raw/processed GeoTIFFs (>100 MB GitHub push limit)
+data/raw/*.tif
 data/processed/*.tif
 
 # Dependencies and build outputs

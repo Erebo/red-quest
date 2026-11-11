@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import level01 from './game/levels/level01.json';
 import { createGameState } from './game/gameState.js';
 import {
@@ -10,6 +13,25 @@ import {
   updatePhaseStepper,
   initDevResetButton
 } from './game/levelController.js';
+import {
+  LENS_CONFIG,
+  SUN_PRESETS,
+  THEMIS_MIN_DN,
+  THEMIS_MAX_DN,
+  THEMIS_MEDIAN_DN,
+  SVF_SHELTER_THRESHOLD,
+  extractImageRGBA,
+  buildDataTextureFromWorkerBuffer,
+  buildSlopeHazardOutlineTexture,
+  buildTerrainSlopeAndContourTextures,
+  buildMineralsGlowTexture,
+  buildFullHeatTexture,
+  deriveDemTerrainFeatures,
+  clusterCrismIndicators,
+  computeOpticalRouteStats,
+  runDevCrismSelfCheck
+} from './game/decisionLenses.js';
+import { createMapLabelController } from './game/mapLabels.js';
 
 // --- Performance & Timing Metrics ---
 const appStartTime = performance.now();
@@ -113,6 +135,7 @@ const tsNet = document.getElementById('ts-net');
 const sciencePopup = document.getElementById('science-popup');
 const popupTitle = document.getElementById('popup-title');
 const popupSol = document.getElementById('popup-sol');
+const popupSrc = document.getElementById('popup-src');
 const popupClose = document.getElementById('popup-close');
 
 // Route Planner DOM Elements
@@ -138,6 +161,8 @@ const iMobilityRow = document.getElementById('i-mobility-row');
 const btnLenses = document.getElementById('btn-lenses');
 const viewModeToggle = document.getElementById('view-mode-toggle');
 const hoverTooltip = document.getElementById('hover-tooltip');
+const htRouteRow = document.getElementById('ht-route-row');
+const htRoute = document.getElementById('ht-route');
 const htElev = document.getElementById('ht-elev');
 const htTier = document.getElementById('ht-tier');
 const elevationProfileBox = document.getElementById('elevation-profile-box');
@@ -151,9 +176,89 @@ const btnLockRoute = document.getElementById('btn-lock-route');
 const btnGoDebrief = document.getElementById('btn-go-debrief');
 const exploreLockedRoute = document.getElementById('explore-locked-route');
 
+// Labels Dropdown, Detail Card, Map Legend & 6 Decision Lenses DOM Elements
+const mapTopControls = document.getElementById('map-top-controls');
+const lensExagBadge = document.getElementById('lens-exag-badge');
+const btnLabels = document.getElementById('btn-labels');
+const labelsDropdown = document.getElementById('labels-dropdown');
+const labelCatChips = document.querySelectorAll('#labels-dropdown .ld-chip');
+const btnLabelsShowAll = document.getElementById('btn-labels-show-all');
+const mapLeaderSvg = document.getElementById('map-leader-svg');
+const mapLabelsLayer = document.getElementById('map-labels-layer');
+const markerHoverCard = document.getElementById('marker-hover-card');
+const mhcName = document.getElementById('mhc-name');
+const mhcSol = document.getElementById('mhc-sol');
+const mhcDesc = document.getElementById('mhc-desc');
+const mhcTags = document.getElementById('mhc-tags');
+
+const labelDetailCard = document.getElementById('label-detail-card');
+const ldcTitle = document.getElementById('ldc-title');
+const ldcCategory = document.getElementById('ldc-category');
+const ldcSol = document.getElementById('ldc-sol');
+const ldcWhat = document.getElementById('ldc-what');
+const ldcDataset = document.getElementById('ldc-dataset');
+const ldcWhy = document.getElementById('ldc-why');
+const ldcTags = document.getElementById('ldc-tags');
+const ldcClose = document.getElementById('ldc-close');
+
+const mapLegend = document.getElementById('map-legend');
+const btnToggleLegend = document.getElementById('btn-toggle-legend');
+const legendRefRow = document.getElementById('legend-ref-row');
+
+const layersPanelTitle = document.getElementById('layers-panel-title');
+const lensBtns = document.querySelectorAll('.lens-btn');
+const sunPresetControls = document.getElementById('sun-preset-controls');
+const sunPresetBtns = document.querySelectorAll('.sun-preset-btn');
+const sunNoonNote = document.getElementById('sun-noon-note');
+const lensComputingNote = document.getElementById('lens-computing-note');
+const lensRampBar = document.getElementById('lens-ramp-bar');
+const lensRampUnits = document.getElementById('lens-ramp-units');
+const lensRampMin = document.getElementById('lens-ramp-min');
+const lensRampMid = document.getElementById('lens-ramp-mid');
+const lensRampMax = document.getElementById('lens-ramp-max');
+const lensLegendItems = document.getElementById('lens-legend-items');
+const lensCaveat = document.getElementById('lens-caveat');
+const btnMissionResetView = document.getElementById('btn-mission-reset-view');
+const btnMissionFocusBoxwork = document.getElementById('btn-mission-focus-boxwork');
+
+const lensRouteStrip = document.getElementById('lens-route-strip');
+const lrsLensName = document.getElementById('lrs-lens-name');
+const lrsCaveat = document.getElementById('lrs-caveat');
+const lrsCols = document.getElementById('lrs-cols');
+
 const levelState = createGameState('route-a');
 const LEVEL1_TARGET_SOLS = new Set(level01.scienceTargets.map(t => t.sol));
 let hasPlayedIntro = false;
+
+// Decision Lenses, Crossfade Transition, Worker Cache & Labels State
+const LENS_KEYS = ['satellite', 'terrain', 'minerals', 'heat', 'sun', 'radiation'];
+let activeMissionLens = 'satellite';
+let activeSunPreset = 'morning';
+let lensTextures = null;
+let routeLensStats = {};
+let demFeatures = null;
+let crismClusters = null;
+let mapLabels = null;
+let isHoveringLabelDom = false;
+let hoveredCandidateId = null;
+let cachedPlannerTop = window.innerHeight;
+let cachedLabelLeftLimit = 10;
+let cachedLabelRightLimit = window.innerWidth - 10;
+let terrainAnalysisWorker = null;
+const sunCache = {};
+let svfCache = null;
+
+const lensBlend = {
+  current: { satellite: 1, terrain: 0, minerals: 0, heat: 0, sun: 0, radiation: 0 },
+  from: { satellite: 1, terrain: 0, minerals: 0, heat: 0, sun: 0, radiation: 0 },
+  target: { satellite: 1, terrain: 0, minerals: 0, heat: 0, sun: 0, radiation: 0 },
+  fromDesat: 0, curDesat: 0, targetDesat: 0,
+  fromDim: 1, curDim: 1, targetDim: 1,
+  fromExag: 1, targetExag: 1,
+  startTime: 0,
+  durationMs: 400,
+  active: false
+};
 
 // View Mode (MISSION | RESEARCH) & Per-Mode Panel Memory
 let currentViewMode = 'MISSION';
@@ -213,6 +318,12 @@ controls.maxDistance = 20000;
 let terrainGeometry = null;
 let terrainMesh = null;
 let hazardMesh = null;
+let hazardOutlineMesh = null;
+let lensTerrainMesh = null;
+let lensMineralsMesh = null;
+let lensHeatMesh = null;
+let lensSunMesh = null;
+let lensSkyMesh = null;
 let crismHydMesh = null;
 let crismPhyMesh = null;
 let themisMesh = null;
@@ -314,84 +425,188 @@ function localToMarsGeo(lx, ly) {
 // --- Terrain & Multi-Layer Construction ---
 let satTexture = null;
 
+function addTerrainOverlayMesh(tex, opacity, polygonOffsetFactor, alphaTest = 0) {
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    opacity,
+    alphaTest,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor,
+    polygonOffsetUnits: polygonOffsetFactor
+  });
+  const mesh = new THREE.Mesh(terrainGeometry, mat);
+  mesh.visible = false;
+  scene.add(mesh);
+  return mesh;
+}
+
+function disposeOldTerrainMeshes() {
+  [
+    terrainMesh,
+    hazardMesh,
+    hazardOutlineMesh,
+    lensTerrainMesh,
+    lensMineralsMesh,
+    lensHeatMesh,
+    lensSunMesh,
+    lensSkyMesh,
+    crismHydMesh,
+    crismPhyMesh,
+    themisMesh
+  ].forEach(m => {
+    if (!m) return;
+    scene.remove(m);
+    if (m.material) m.material.dispose();
+  });
+}
+
+function getMissionLensMeshMap() {
+  return {
+    satellite: [{ mesh: hazardOutlineMesh, maxOpacity: 0.90 }],
+    terrain: [{ mesh: lensTerrainMesh, maxOpacity: 0.92 }],
+    minerals: [{ mesh: lensMineralsMesh, maxOpacity: 0.95 }],
+    heat: [{ mesh: lensHeatMesh, maxOpacity: 0.85 }],
+    sun: [{ mesh: lensSunMesh, maxOpacity: 0.86 }],
+    radiation: [{ mesh: lensSkyMesh, maxOpacity: 0.84 }]
+  };
+}
+
+function applyMissionLensWeightsToMeshes(now = performance.now()) {
+  if (!terrainMesh) return;
+  const uniforms = terrainMesh.material.userData?.lensUniforms;
+  if (uniforms) {
+    uniforms.uDesaturate.value = lensBlend.curDesat;
+    uniforms.uDim.value = lensBlend.curDim;
+  }
+
+  const map = getMissionLensMeshMap();
+  LENS_KEYS.forEach(k => {
+    const w = lensBlend.current[k] || 0;
+    (map[k] || []).forEach(({ mesh, maxOpacity }) => {
+      if (!mesh) return;
+      if (w > 0.005) {
+        mesh.visible = true;
+        mesh.material.opacity = maxOpacity * w;
+      } else {
+        mesh.visible = false;
+        mesh.material.opacity = 0;
+      }
+    });
+  });
+
+  // Soft pulsing highlight on >25° steep terrain inside lensTerrainMesh GPU shader
+  if (lensTerrainMesh && lensTerrainMesh.material.userData?.pulseUniform) {
+    const wt = lensBlend.current.terrain || 0;
+    lensTerrainMesh.material.userData.pulseUniform.value =
+      wt > 0.005 ? 0.5 + 0.5 * Math.sin(now * 0.0045) : 0.0;
+  }
+}
+
 function createTerrainLayers(satTex, slopeTex, crismHydTex, crismPhyTex, themisTex) {
   satTexture = satTex;
   const seg = QUALITY_SETTINGS[currentQuality].segments;
 
+  disposeOldTerrainMeshes();
   if (terrainGeometry) terrainGeometry.dispose();
   terrainGeometry = new THREE.PlaneGeometry(TERRAIN_WIDTH_M, TERRAIN_HEIGHT_M, seg, seg);
   terrainGeometry.rotateX(-Math.PI / 2);
 
   updateGeometryHeights(terrainGeometry);
 
-  // Base Terrain
+  // Base Terrain with GPU desaturation & dim uniforms for zero-copy 400 ms crossfade
+  const lensUniforms = {
+    uDesaturate: { value: lensBlend.curDesat },
+    uDim: { value: lensBlend.curDim }
+  };
   const terrainMat = new THREE.MeshStandardMaterial({
     map: satTex,
     roughness: 0.88,
     metalness: 0.08
   });
+  terrainMat.customProgramCacheKey = () => 'redquest-terrain-v1';
+  terrainMat.userData.lensUniforms = lensUniforms;
+  terrainMat.onBeforeCompile = shader => {
+    shader.uniforms.uDesaturate = lensUniforms.uDesaturate;
+    shader.uniforms.uDim = lensUniforms.uDim;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uDesaturate;\nuniform float uDim;')
+      .replace(
+        '#include <map_fragment>',
+        '#include <map_fragment>\nfloat rqLuma = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(rqLuma), uDesaturate) * uDim;'
+      );
+  };
   terrainMesh = new THREE.Mesh(terrainGeometry, terrainMat);
   terrainMesh.name = 'MarsTerrain';
   scene.add(terrainMesh);
 
-  // Slope Hazard Overlay
-  const hazardMat = new THREE.MeshBasicMaterial({
-    map: slopeTex,
-    transparent: true,
-    opacity: parseInt(slopeOpacity.value, 10) / 100.0,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1
-  });
-  hazardMesh = new THREE.Mesh(terrainGeometry, hazardMat);
-  hazardMesh.visible = lyrSlope.checked;
-  scene.add(hazardMesh);
+  // RESEARCH Mode Overlays (kept intact for RESEARCH mode)
+  hazardMesh = addTerrainOverlayMesh(slopeTex, parseInt(slopeOpacity.value, 10) / 100.0, -1);
+  crismHydMesh = addTerrainOverlayMesh(crismHydTex, parseInt(crismHydOpacity.value, 10) / 100.0, -2);
+  crismPhyMesh = addTerrainOverlayMesh(crismPhyTex, parseInt(crismPhyOpacity.value, 10) / 100.0, -3);
+  themisMesh = addTerrainOverlayMesh(themisTex, parseInt(themisOpacity.value, 10) / 100.0, -4);
 
-  // CRISM Hydrated Minerals
-  const crismHydMat = new THREE.MeshBasicMaterial({
-    map: crismHydTex,
-    transparent: true,
-    opacity: parseInt(crismHydOpacity.value, 10) / 100.0,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -2
-  });
-  crismHydMesh = new THREE.Mesh(terrainGeometry, crismHydMat);
-  crismHydMesh.visible = lyrCrismHyd.checked;
-  scene.add(crismHydMesh);
+  // MISSION Mode 6 Full-Terrain Lens Meshes
+  if (lensTextures) {
+    hazardOutlineMesh = addTerrainOverlayMesh(lensTextures.hazardOutlineTex, 0.90, -3.5, 0.02);
+    lensTerrainMesh = addTerrainOverlayMesh(lensTextures.terrainRampTex, 0.92, -2.0);
+    const pulseUniform = { value: 0.0 };
+    lensTerrainMesh.material.customProgramCacheKey = () => 'redquest-terrain-pulse-v1';
+    lensTerrainMesh.material.userData.pulseUniform = pulseUniform;
+    lensTerrainMesh.material.onBeforeCompile = shader => {
+      shader.uniforms.uSteepPulse = pulseUniform;
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uSteepPulse;')
+        .replace(
+          '#include <map_fragment>',
+          '#include <map_fragment>\nif (diffuseColor.r > 0.72 && diffuseColor.g < 0.36 && diffuseColor.b < 0.36) { diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.32, 0.24), uSteepPulse * 0.45); }'
+        );
+    };
+    lensMineralsMesh = addTerrainOverlayMesh(lensTextures.mineralsTex, 0.95, -2.5, 0.01);
+    lensHeatMesh = addTerrainOverlayMesh(lensTextures.heatTex, 0.85, -3.0);
 
-  // CRISM Phyllosilicates
-  const crismPhyMat = new THREE.MeshBasicMaterial({
-    map: crismPhyTex,
-    transparent: true,
-    opacity: parseInt(crismPhyOpacity.value, 10) / 100.0,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -3,
-    polygonOffsetUnits: -3
-  });
-  crismPhyMesh = new THREE.Mesh(terrainGeometry, crismPhyMat);
-  crismPhyMesh.visible = lyrCrismPhy.checked;
-  scene.add(crismPhyMesh);
+    const sunTex = sunCache[activeSunPreset]?.texture || lensTextures.emptyTex;
+    const skyTex = svfCache?.texture || lensTextures.emptyTex;
+    lensSunMesh = addTerrainOverlayMesh(sunTex, 0.86, -3.2);
+    lensSkyMesh = addTerrainOverlayMesh(skyTex, 0.84, -3.4);
+  }
 
-  // THEMIS Daytime IR
-  const themisMat = new THREE.MeshBasicMaterial({
-    map: themisTex,
-    transparent: true,
-    opacity: parseInt(themisOpacity.value, 10) / 100.0,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -4,
-    polygonOffsetUnits: -4
-  });
-  themisMesh = new THREE.Mesh(terrainGeometry, themisMat);
-  themisMesh.visible = lyrThemis.checked;
-  scene.add(themisMesh);
+  applyLayerVisibilityForMode();
 }
 
-function updateGeometryHeights(geo) {
+function applyLayerVisibilityForMode() {
+  if (!terrainMesh) return;
+  const uniforms = terrainMesh.material.userData?.lensUniforms;
+
+  if (currentViewMode === 'MISSION') {
+    terrainMesh.visible = true;
+    terrainMesh.material.color.setHex(0xffffff);
+
+    if (hazardMesh) hazardMesh.visible = false;
+    if (crismHydMesh) crismHydMesh.visible = false;
+    if (crismPhyMesh) crismPhyMesh.visible = false;
+    if (themisMesh) themisMesh.visible = false;
+
+    applyMissionLensWeightsToMeshes();
+  } else {
+    terrainMesh.material.color.setHex(0xffffff);
+    if (uniforms) {
+      uniforms.uDesaturate.value = 0.0;
+      uniforms.uDim.value = 1.0;
+    }
+    terrainMesh.visible = lyrSat ? lyrSat.checked : true;
+    if (hazardMesh) hazardMesh.visible = lyrSlope ? lyrSlope.checked : false;
+    if (crismHydMesh) crismHydMesh.visible = lyrCrismHyd ? lyrCrismHyd.checked : false;
+    if (crismPhyMesh) crismPhyMesh.visible = lyrCrismPhy ? lyrCrismPhy.checked : false;
+    if (themisMesh) themisMesh.visible = lyrThemis ? lyrThemis.checked : false;
+
+    [hazardOutlineMesh, lensTerrainMesh, lensMineralsMesh, lensHeatMesh, lensSunMesh, lensSkyMesh]
+      .forEach(m => { if (m) m.visible = false; });
+  }
+}
+
+function updateGeometryHeights(geo, skipNormals = false) {
   const pos = geo.attributes.position;
   const count = pos.count;
   for (let i = 0; i < count; i++) {
@@ -403,7 +618,7 @@ function updateGeometryHeights(geo) {
     pos.setY(i, (elev - minElev) * currentExag);
   }
   pos.needsUpdate = true;
-  geo.computeVertexNormals();
+  if (!skipNormals) geo.computeVertexNormals();
 }
 
 // --- Route, Trail, and Rover Construction ---
@@ -594,6 +809,7 @@ function createScienceMarkersAndFlag() {
     const { meshX, meshZ } = localToMesh(closestPt.x, closestPt.y);
     const my = (closestPt.elevation - minElev) * currentExag + 8.0 * currentExag;
 
+    const l1Target = level01.scienceTargets.find(t => t.sol === item.sol);
     const pin = new THREE.Mesh(
       new THREE.OctahedronGeometry(11, 0),
       new THREE.MeshStandardMaterial({
@@ -604,7 +820,14 @@ function createScienceMarkersAndFlag() {
       })
     );
     pin.position.set(meshX, my, meshZ);
-    pin.userData = { isSciencePin: true, targetSol: item.sol, title: item.title, solLabel: item.label, pt: closestPt };
+    pin.userData = {
+      isSciencePin: true,
+      targetSol: item.sol,
+      title: item.title,
+      solLabel: item.label,
+      pt: closestPt,
+      markerKey: l1Target ? l1Target.id : null
+    };
     scienceMarkersGroup.add(pin);
 
     // Beacon beam
@@ -613,7 +836,7 @@ function createScienceMarkersAndFlag() {
       new THREE.MeshBasicMaterial({ color: item.color, transparent: true, opacity: 0.5 })
     );
     beam.position.set(meshX, my + 30, meshZ);
-    beam.userData = { targetSol: item.sol };
+    beam.userData = { targetSol: item.sol, markerKey: l1Target ? l1Target.id : null };
     scienceMarkersGroup.add(beam);
   });
 
@@ -640,17 +863,21 @@ function createBoxworkCoreZone() {
   perimeter.push(perimeter[0]);
 
   const positions = [];
+  const basePts = [];
   perimeter.forEach(p => {
     const { meshX, meshZ } = localToMesh(p.x, p.y);
     const { col, row } = localToGrid(p.x, p.y);
     const elev = sampleGridBilinear(rawHeights, col, row);
+    basePts.push({ elev });
     positions.push(meshX, (elev - minElev) * currentExag + 5.0 * currentExag, meshZ);
   });
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   const mat = new THREE.LineBasicMaterial({ color: 0xf1c40f, linewidth: 2, depthTest: true, depthWrite: false });
-  boxworkGroup.add(new THREE.Line(geo, mat));
+  const zoneLine = new THREE.Line(geo, mat);
+  zoneLine.userData = { basePts };
+  boxworkGroup.add(zoneLine);
 
   scene.add(boxworkGroup);
 }
@@ -730,11 +957,11 @@ function updateTimeOfDay(hour) {
 }
 
 // --- Dynamic Exaggeration ---
-function applyVerticalExaggeration(exag) {
+function applyVerticalExaggeration(exag, { skipNormals = false, syncSlider = true } = {}) {
   currentExag = exag;
-  exagVal.textContent = `${exag.toFixed(1)}×`;
+  if (syncSlider && exagVal) exagVal.textContent = `${exag.toFixed(1)}×`;
 
-  if (terrainGeometry) updateGeometryHeights(terrainGeometry);
+  if (terrainGeometry) updateGeometryHeights(terrainGeometry, skipNormals);
 
   if (routeLine) {
     const pos = routeLine.geometry.attributes.position;
@@ -766,6 +993,18 @@ function applyVerticalExaggeration(exag) {
     startFlagGroup.children[1].position.y = sy + 46 * currentExag;
   }
 
+  if (boxworkGroup && boxworkGroup.children[0]) {
+    const bLine = boxworkGroup.children[0];
+    const bPts = bLine.userData?.basePts;
+    if (bPts) {
+      const bPos = bLine.geometry.attributes.position;
+      for (let i = 0; i < bPts.length; i++) {
+        bPos.setY(i, (bPts[i].elev - minElev) * currentExag + 5.0 * currentExag);
+      }
+      bPos.needsUpdate = true;
+    }
+  }
+
   if (pinnedReticle && pinnedReticle.visible && pinnedPoint) {
     const { col, row } = localToGrid(pinnedPoint.lx, pinnedPoint.ly);
     const elev = sampleGridBilinear(rawHeights, col, row);
@@ -782,20 +1021,18 @@ function applyVerticalExaggeration(exag) {
   updateStartAndGoalMarkerPositions();
 
   if (candidateLines) {
-    Object.values(candidateLines).forEach(line => {
-      if (line.userData && line.userData.waypoints) {
-        const pos = line.geometry.attributes.position;
-        const wps = line.userData.waypoints;
+    Object.values(candidateLines).forEach(candGroup => {
+      const wps = candGroup.userData?.waypoints;
+      const geom = candGroup.userData?.geom;
+      if (wps && geom) {
+        const flat = candGroup.userData.flatPositions;
         for (let i = 0; i < wps.length; i++) {
-          pos.setY(i, (wps[i].z - minElev) * currentExag + 8.5 * currentExag);
+          flat[i * 3 + 1] = (wps[i].z - minElev) * currentExag + 9.0 * currentExag;
         }
-        pos.needsUpdate = true;
+        geom.setPositions(flat);
       }
     });
   }
-
-  const meanElev = (minElev + maxElev) / 2.0;
-  controls.target.y = (meanElev - minElev) * currentExag;
 }
 
 // --- Timeline Replay Engine ---
@@ -1098,10 +1335,18 @@ function hideHoverTooltip() {
   if (hoverTooltip) hoverTooltip.classList.add('hidden');
 }
 
-function updateHoverTooltip(hit, clientX, clientY) {
+function updateHoverTooltip(hit, clientX, clientY, hoveredRouteName = null) {
   if (!hoverTooltip || !hit || currentViewMode !== 'MISSION' || isPinned || levelState.getState().screen === GAME_STATES.BRIEFING) {
     hideHoverTooltip();
     return;
+  }
+  if (htRouteRow && htRoute) {
+    if (hoveredRouteName) {
+      htRoute.textContent = hoveredRouteName;
+      htRouteRow.classList.remove('hidden');
+    } else {
+      htRouteRow.classList.add('hidden');
+    }
   }
   const { col, row } = localToGrid(hit.lx, hit.ly);
   const slope = sampleGridBilinear(rawSlopes, col, row);
@@ -1125,22 +1370,85 @@ function updateHoverTooltip(hit, clientX, clientY) {
   hoverTooltip.classList.remove('hidden');
 }
 
-function handlePointerInspection(clientX, clientY) {
-  if (isPinned) {
-    hideHoverTooltip();
-    return;
+function findHitMarkerKey() {
+  if (!mapLabels) return null;
+  const targets = [];
+  if (startMarker) targets.push(startMarker);
+  if (goalMarker) targets.push(goalMarker);
+  if (scienceMarkersGroup) {
+    scienceMarkersGroup.children.forEach(c => {
+      if (c.visible && c.userData && c.userData.markerKey) targets.push(c);
+    });
   }
+  if (!targets.length) return null;
+  const hits = raycaster.intersectObjects(targets, true);
+  if (!hits.length) return null;
+  let obj = hits[0].object;
+  while (obj) {
+    if (obj.userData && obj.userData.markerKey) return obj.userData.markerKey;
+    obj = obj.parent;
+  }
+  return null;
+}
+
+function findHitCandidateRouteId() {
+  if (!plannerGroup) return null;
+  const lineTargets = Object.values(candidateLines).filter(g => g && g.visible);
+  if (!lineTargets.length) return null;
+  const hits = raycaster.intersectObjects(lineTargets, true);
+  if (!hits.length) return null;
+  let obj = hits[0].object;
+  while (obj && obj !== plannerGroup) {
+    if (obj.userData && obj.userData.isCandidateLine) return obj.userData.id;
+    obj = obj.parent;
+  }
+  return null;
+}
+
+function handlePointerInspection(clientX, clientY) {
   const now = performance.now();
   if (now - lastRaycastTime < 33) return; // Throttle to 30 FPS
   lastRaycastTime = now;
 
   raycaster.setFromCamera(mouse, camera);
 
+  // 1. Check 3D marker hover card first (works in both pinned and unpinned views)
+  const hitMarkerKey = findHitMarkerKey();
+  if (hitMarkerKey && mapLabels) {
+    if (hoveredCandidateId !== null) {
+      hoveredCandidateId = null;
+      updateCandidateRouteStyles();
+    }
+    const anchor = mapLabels.getAnchorById(hitMarkerKey);
+    if (anchor) {
+      mapLabels.showHoverCard(anchor, clientX, clientY);
+      hideHoverTooltip();
+      renderer.domElement.style.cursor = 'pointer';
+      return;
+    }
+  } else if (mapLabels && !isHoveringLabelDom) {
+    mapLabels.hideHoverCard();
+  }
+
+  // 2. Check candidate route hover (Line2)
+  const nextRouteHoverId = findHitCandidateRouteId();
+  if (nextRouteHoverId !== hoveredCandidateId) {
+    hoveredCandidateId = nextRouteHoverId;
+    updateCandidateRouteStyles();
+  }
+  renderer.domElement.style.cursor = hoveredCandidateId ? 'pointer' : '';
+
+  if (isPinned) {
+    hideHoverTooltip();
+    return;
+  }
+
+  const hoveredCand = hoveredCandidateId ? plannerCandidates.find(c => c.id === hoveredCandidateId) : null;
   const hit = getTerrainIntersection(raycaster.ray);
   if (hit) {
     lastTerrainHit = { lx: hit.lx, ly: hit.ly };
     updatePointInspector(hit.lx, hit.ly);
-    updateHoverTooltip(hit, clientX, clientY);
+    updateHoverTooltip(hit, clientX, clientY, hoveredCand ? hoveredCand.name : null);
     if (cursorReticle) {
       cursorReticle.position.set(hit.x, hit.y + 2.0, hit.z);
       cursorReticle.visible = true;
@@ -1314,6 +1622,28 @@ function resetCustomizationToStandard() {
   selectedCandidateId = levelState.getState().selectedRouteId || 'route-a';
   renderPlannerTable(plannerCandidates);
   buildCandidateRouteLines(plannerCandidates);
+  activeMissionLens = 'satellite';
+  activeSunPreset = 'morning';
+  setActiveMissionLens('satellite', { immediate: true });
+  setSunPreset('morning');
+  if (mapLabels) {
+    ['mission', 'terrain', 'materials', 'hazards', 'science'].forEach(cat => {
+      mapLabels.setCategoryEnabled(cat, true);
+    });
+    mapLabels.setShowAll(false);
+    mapLabels.hideDetailCard();
+  }
+  labelCatChips.forEach(chip => {
+    chip.classList.add('active');
+    chip.setAttribute('aria-pressed', 'true');
+  });
+  if (btnLabelsShowAll) {
+    btnLabelsShowAll.classList.remove('active');
+    btnLabelsShowAll.setAttribute('aria-pressed', 'false');
+  }
+  if (btnLabels) btnLabels.classList.add('active');
+  if (labelsDropdown) labelsDropdown.classList.add('hidden');
+  applyLayerVisibilityForMode();
   applyGameScreenState(levelState.getState());
   if (plannerPanel && plannerPanel.classList.contains('collapsed')) {
     plannerPanel.classList.remove('collapsed');
@@ -1358,63 +1688,71 @@ function createStartAndGoalMarkers() {
   plannerGroup = new THREE.Group();
   scene.add(plannerGroup);
 
-  // 1. START Marker (Green theme)
+  // 1. START Marker (Green glowing ground anchor)
   startMarker = new THREE.Group();
-  const sRingGeo = new THREE.RingGeometry(16, 22, 32);
+  startMarker.userData = { markerKey: 'start' };
+  const sRingGeo = new THREE.RingGeometry(18, 28, 36);
   sRingGeo.rotateX(-Math.PI / 2);
   const sRingMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71, side: THREE.DoubleSide, depthWrite: false });
   startMarker.add(new THREE.Mesh(sRingGeo, sRingMat));
 
+  const sHaloGeo = new THREE.RingGeometry(30, 44, 36);
+  sHaloGeo.rotateX(-Math.PI / 2);
+  const sHaloMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
+  startMarker.add(new THREE.Mesh(sHaloGeo, sHaloMat));
+
   const sPole = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.2, 1.2, 55, 8),
-    new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.8, roughness: 0.2 })
+    new THREE.CylinderGeometry(1.6, 1.6, 65, 8),
+    new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.8, roughness: 0.2 })
   );
-  sPole.position.y = 27.5;
+  sPole.position.y = 32.5;
   startMarker.add(sPole);
 
   const sFlagShape = new THREE.Shape();
   sFlagShape.moveTo(0, 0);
-  sFlagShape.lineTo(28, -10);
-  sFlagShape.lineTo(0, -20);
+  sFlagShape.lineTo(34, -12);
+  sFlagShape.lineTo(0, -24);
   sFlagShape.closePath();
   const sFlag = new THREE.Mesh(
     new THREE.ShapeGeometry(sFlagShape),
     new THREE.MeshBasicMaterial({ color: 0x2ecc71, side: THREE.DoubleSide })
   );
-  sFlag.position.set(0, 52, 0);
+  sFlag.position.set(0, 62, 0);
   startMarker.add(sFlag);
 
   const sBeacon = new THREE.Mesh(
-    new THREE.OctahedronGeometry(6.5, 0),
-    new THREE.MeshStandardMaterial({ color: 0x2ecc71, emissive: 0x2ecc71, emissiveIntensity: 0.6 })
+    new THREE.OctahedronGeometry(8.5, 0),
+    new THREE.MeshStandardMaterial({ color: 0x2ecc71, emissive: 0x2ecc71, emissiveIntensity: 0.85 })
   );
-  sBeacon.position.y = 57;
+  sBeacon.position.y = 68;
   startMarker.add(sBeacon);
   plannerGroup.add(startMarker);
 
-  // 2. GOAL Marker (Gold theme)
+  // 2. GOAL Marker (Gold glowing beacon anchor)
   goalMarker = new THREE.Group();
-  const gRingGeo1 = new THREE.RingGeometry(10, 16, 32);
+  goalMarker.userData = { markerKey: 'goal' };
+  const gRingGeo1 = new THREE.RingGeometry(12, 20, 36);
   gRingGeo1.rotateX(-Math.PI / 2);
   const gRingMat = new THREE.MeshBasicMaterial({ color: 0xf1c40f, side: THREE.DoubleSide, depthWrite: false });
   goalMarker.add(new THREE.Mesh(gRingGeo1, gRingMat));
 
-  const gRingGeo2 = new THREE.RingGeometry(22, 27, 32);
+  const gRingGeo2 = new THREE.RingGeometry(26, 38, 36);
   gRingGeo2.rotateX(-Math.PI / 2);
-  goalMarker.add(new THREE.Mesh(gRingGeo2, gRingMat));
+  const gHaloMat = new THREE.MeshBasicMaterial({ color: 0xf1c40f, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false });
+  goalMarker.add(new THREE.Mesh(gRingGeo2, gHaloMat));
 
   const gNeedle = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.2, 1.2, 60, 8),
+    new THREE.CylinderGeometry(1.6, 1.6, 70, 8),
     new THREE.MeshStandardMaterial({ color: 0xf1c40f, metalness: 0.8 })
   );
-  gNeedle.position.y = 30;
+  gNeedle.position.y = 35;
   goalMarker.add(gNeedle);
 
   const gBeacon = new THREE.Mesh(
-    new THREE.OctahedronGeometry(8, 0),
-    new THREE.MeshStandardMaterial({ color: 0xf1c40f, emissive: 0xf1c40f, emissiveIntensity: 0.8 })
+    new THREE.OctahedronGeometry(10.5, 0),
+    new THREE.MeshStandardMaterial({ color: 0xf1c40f, emissive: 0xf1c40f, emissiveIntensity: 0.95 })
   );
-  gBeacon.position.y = 64;
+  gBeacon.position.y = 74;
   goalMarker.add(gBeacon);
   plannerGroup.add(goalMarker);
 
@@ -1462,45 +1800,95 @@ function requestRouteComputation() {
   });
 }
 
+function updateCandidateRouteStyles() {
+  Object.keys(candidateLines).forEach(candId => {
+    const group = candidateLines[candId];
+    const { coreLine, glowLine } = group.userData;
+    const isSel = candId === selectedCandidateId;
+    const isHov = candId === hoveredCandidateId;
+
+    if (coreLine && coreLine.material) {
+      coreLine.material.linewidth = isSel ? 5.0 : (isHov ? 4.2 : 2.8);
+      coreLine.material.opacity = isSel ? 1.0 : (isHov ? 0.92 : 0.48);
+      coreLine.renderOrder = isSel ? 12 : (isHov ? 11 : 7);
+    }
+    if (glowLine && glowLine.material) {
+      glowLine.material.linewidth = isSel ? 13.0 : (isHov ? 10.5 : 7.5);
+      glowLine.material.opacity = isSel ? 0.28 : (isHov ? 0.22 : 0.12);
+      glowLine.renderOrder = isSel ? 11 : (isHov ? 10 : 6);
+    }
+  });
+}
+
 function buildCandidateRouteLines(candidates) {
   if (!plannerGroup) return;
 
   candidates.forEach(c => {
     if (c.error || !c.waypoints || c.waypoints.length === 0) {
-      if (candidateLines[c.id]) {
-        candidateLines[c.id].visible = false;
-      }
+      if (candidateLines[c.id]) candidateLines[c.id].visible = false;
       return;
     }
 
-    const positions = [];
-    c.waypoints.forEach(wp => {
+    const flatPositions = new Float32Array(c.waypoints.length * 3);
+    for (let i = 0; i < c.waypoints.length; i++) {
+      const wp = c.waypoints[i];
       const { meshX, meshZ } = localToMesh(wp.x, wp.y);
-      const meshY = (wp.z - minElev) * currentExag + 8.5 * currentExag;
-      positions.push(meshX, meshY, meshZ);
-    });
+      flatPositions[i * 3] = meshX;
+      flatPositions[i * 3 + 1] = (wp.z - minElev) * currentExag + 9.0 * currentExag;
+      flatPositions[i * 3 + 2] = meshZ;
+    }
 
     if (candidateLines[c.id]) {
-      const line = candidateLines[c.id];
-      line.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      line.geometry.attributes.position.needsUpdate = true;
-      line.userData.waypoints = c.waypoints;
-      line.visible = true;
+      const group = candidateLines[c.id];
+      group.userData.waypoints = c.waypoints;
+      group.userData.flatPositions = flatPositions;
+      group.userData.geom.setPositions(flatPositions);
+      group.visible = true;
     } else {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      const mat = new THREE.LineBasicMaterial({
-        color: new THREE.Color(c.color),
-        linewidth: c.id === selectedCandidateId ? 4 : 2,
+      const geom = new LineGeometry();
+      geom.setPositions(flatPositions);
+
+      const glowMat = new LineMaterial({
+        color: new THREE.Color(c.color).getHex(),
+        linewidth: 10.0,
         transparent: true,
-        opacity: c.id === selectedCandidateId ? 1.0 : 0.35,
+        opacity: 0.20,
+        blending: THREE.AdditiveBlending,
         depthTest: true,
         depthWrite: false
       });
-      const line = new THREE.Line(geo, mat);
-      line.userData = { isCandidateLine: true, id: c.id, waypoints: c.waypoints, color: c.color };
-      plannerGroup.add(line);
-      candidateLines[c.id] = line;
+      glowMat.resolution.set(window.innerWidth, window.innerHeight);
+
+      const coreMat = new LineMaterial({
+        color: new THREE.Color(c.color).getHex(),
+        linewidth: 4.0,
+        transparent: true,
+        opacity: 0.90,
+        depthTest: true,
+        depthWrite: false
+      });
+      coreMat.resolution.set(window.innerWidth, window.innerHeight);
+
+      const glowLine = new Line2(geom, glowMat);
+      glowLine.userData = { isCandidateLine: true, id: c.id };
+      const coreLine = new Line2(geom, coreMat);
+      coreLine.userData = { isCandidateLine: true, id: c.id };
+
+      const group = new THREE.Group();
+      group.add(glowLine);
+      group.add(coreLine);
+      group.userData = {
+        isCandidateLine: true,
+        id: c.id,
+        waypoints: c.waypoints,
+        flatPositions,
+        color: c.color,
+        geom,
+        coreLine,
+        glowLine
+      };
+      plannerGroup.add(group);
+      candidateLines[c.id] = group;
     }
   });
 
@@ -1516,23 +1904,15 @@ function selectCandidate(id, { userInitiated = false } = {}) {
     syncPanelsToViewMode();
   }
 
-  // 1. Highlight selected 3D line, dim others
-  Object.keys(candidateLines).forEach(candId => {
-    const line = candidateLines[candId];
-    if (candId === id) {
-      line.material.opacity = 1.0;
-      line.material.linewidth = 4;
-      line.renderOrder = 10;
-    } else {
-      line.material.opacity = 0.35;
-      line.material.linewidth = 2;
-      line.renderOrder = 5;
-    }
-  });
+  // 1. Highlight selected 3D glowing Line2, soften others
+  updateCandidateRouteStyles();
 
-  // 2. Highlight table row
+  // 2. Highlight table row & lens strip cards
   document.querySelectorAll('#planner-tbody tr').forEach(tr => {
     tr.classList.toggle('selected', tr.dataset.id === id);
+  });
+  document.querySelectorAll('#lrs-cols .lrs-card').forEach(card => {
+    card.classList.toggle('selected', card.dataset.id === id);
   });
 
   // 3. Update Elevation Profile
@@ -1803,29 +2183,29 @@ function bindUIEvents() {
     });
   });
 
-  // Layer Toggles & Opacity Sliders
-  if (lyrSat) lyrSat.addEventListener('change', () => { if (terrainMesh) terrainMesh.visible = lyrSat.checked; });
+  // Layer Toggles & Opacity Sliders (RESEARCH mode controls)
+  if (lyrSat) lyrSat.addEventListener('change', applyLayerVisibilityForMode);
   if (exagSlider) exagSlider.addEventListener('input', e => applyVerticalExaggeration(parseFloat(e.target.value)));
 
-  if (lyrSlope) lyrSlope.addEventListener('change', () => { if (hazardMesh) hazardMesh.visible = lyrSlope.checked; });
+  if (lyrSlope) lyrSlope.addEventListener('change', applyLayerVisibilityForMode);
   if (slopeOpacity) slopeOpacity.addEventListener('input', e => {
     slopeOv.textContent = `${e.target.value} %`;
     if (hazardMesh) hazardMesh.material.opacity = parseInt(e.target.value, 10) / 100.0;
   });
 
-  if (lyrCrismHyd) lyrCrismHyd.addEventListener('change', () => { if (crismHydMesh) crismHydMesh.visible = lyrCrismHyd.checked; });
+  if (lyrCrismHyd) lyrCrismHyd.addEventListener('change', applyLayerVisibilityForMode);
   if (crismHydOpacity) crismHydOpacity.addEventListener('input', e => {
     crismHydOv.textContent = `${e.target.value} %`;
     if (crismHydMesh) crismHydMesh.material.opacity = parseInt(e.target.value, 10) / 100.0;
   });
 
-  if (lyrCrismPhy) lyrCrismPhy.addEventListener('change', () => { if (crismPhyMesh) crismPhyMesh.visible = lyrCrismPhy.checked; });
+  if (lyrCrismPhy) lyrCrismPhy.addEventListener('change', applyLayerVisibilityForMode);
   if (crismPhyOpacity) crismPhyOpacity.addEventListener('input', e => {
     crismPhyOv.textContent = `${e.target.value} %`;
     if (crismPhyMesh) crismPhyMesh.material.opacity = parseInt(e.target.value, 10) / 100.0;
   });
 
-  if (lyrThemis) lyrThemis.addEventListener('change', () => { if (themisMesh) themisMesh.visible = lyrThemis.checked; });
+  if (lyrThemis) lyrThemis.addEventListener('change', applyLayerVisibilityForMode);
   if (themisOpacity) themisOpacity.addEventListener('input', e => {
     themisOv.textContent = `${e.target.value} %`;
     if (themisMesh) themisMesh.material.opacity = parseInt(e.target.value, 10) / 100.0;
@@ -2004,28 +2384,31 @@ function bindUIEvents() {
       return;
     }
 
-    // 1. Check clicking on Candidate Route Lines
-    if (plannerGroup) {
-      const hits = raycaster.intersectObjects(plannerGroup.children, true);
-      for (let i = 0; i < hits.length; i++) {
-        let obj = hits[i].object;
-        while (obj && obj !== plannerGroup) {
-          if (obj.userData && obj.userData.isCandidateLine) {
-            selectCandidate(obj.userData.id, { userInitiated: true });
-            return;
-          }
-          obj = obj.parent;
-        }
-      }
+    // 1. Check clicking on Candidate Route Lines (Line2)
+    const clickedRouteId = findHitCandidateRouteId();
+    if (clickedRouteId) {
+      selectCandidate(clickedRouteId, { userInitiated: true });
+      return;
     }
 
-    // 2. Check Science Markers
+    // 2. Check Start / Goal / Science Markers -> open neutral detail card (hiding Sol pre-lock-in)
+    const clickedMarkerKey = findHitMarkerKey();
+    if (clickedMarkerKey && mapLabels) {
+      const anchor = mapLabels.getAnchorById(clickedMarkerKey);
+      if (anchor) {
+        mapLabels.showDetailCard(anchor);
+        return;
+      }
+    }
     if (scienceMarkersGroup) {
       const hits = raycaster.intersectObjects(scienceMarkersGroup.children, false);
       if (hits.length > 0 && hits[0].object.userData.isSciencePin) {
         const u = hits[0].object.userData;
+        const curScreen = levelState.getState().screen;
+        const isPostLock = curScreen === GAME_STATES.EXPLORE || curScreen === GAME_STATES.DEBRIEF;
         popupTitle.textContent = u.title;
-        popupSol.textContent = u.solLabel;
+        popupSol.textContent = isPostLock ? u.solLabel : 'Sol: hidden until Explore';
+        if (popupSrc) popupSrc.textContent = 'measured (Curiosity traverse); description unverified';
         sciencePopup.classList.remove('hidden');
         return;
       }
@@ -2054,8 +2437,11 @@ function bindUIEvents() {
 
   // Pointer Move & Leave
   window.addEventListener('pointermove', e => {
+    const overLabel = Boolean(e.target && e.target.closest && e.target.closest('.map-label'));
+    isHoveringLabelDom = overLabel;
     if (e.target !== renderer.domElement) {
       hideHoverTooltip();
+      if (!overLabel && mapLabels) mapLabels.hideHoverCard();
       return;
     }
     const rect = renderer.domElement.getBoundingClientRect();
@@ -2068,6 +2454,7 @@ function bindUIEvents() {
 
   renderer.domElement.addEventListener('pointerleave', () => {
     hideHoverTooltip();
+    if (!isHoveringLabelDom && mapLabels) mapLabels.hideHoverCard();
     if (cursorReticle && !isPinned) cursorReticle.visible = false;
   });
 
@@ -2075,6 +2462,11 @@ function bindUIEvents() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    Object.values(candidateLines).forEach(group => {
+      const { coreLine, glowLine } = group.userData || {};
+      if (coreLine && coreLine.material) coreLine.material.resolution.set(window.innerWidth, window.innerHeight);
+      if (glowLine && glowLine.material) glowLine.material.resolution.set(window.innerWidth, window.innerHeight);
+    });
     updateLayoutBounds();
   });
 }
@@ -2157,6 +2549,587 @@ function initRouteWorker() {
   }
 }
 
+// --- Decision Lenses (6 Modes, 400 ms Crossfade) & Real Map Labels ---
+function updateMissionWorkerStatusUi() {
+  const isComputingSun = activeMissionLens === 'sun' && !sunCache[activeSunPreset];
+  const isComputingRad = activeMissionLens === 'radiation' && !svfCache;
+  if (lensComputingNote) {
+    lensComputingNote.classList.toggle('hidden', !(isComputingSun || isComputingRad));
+  }
+}
+
+function renderMissionLensDetail() {
+  const cfg = LENS_CONFIG[activeMissionLens] || LENS_CONFIG.satellite;
+  if (lensRampBar) lensRampBar.style.background = cfg.rampCss;
+  if (lensRampUnits) lensRampUnits.textContent = cfg.rampUnits;
+  if (lensRampMin) lensRampMin.textContent = cfg.rampMin;
+  if (lensRampMid) lensRampMid.textContent = cfg.rampMid;
+  if (lensRampMax) lensRampMax.textContent = cfg.rampMax;
+
+  if (sunPresetControls) {
+    sunPresetControls.classList.toggle('hidden', activeMissionLens !== 'sun');
+  }
+  if (sunNoonNote) {
+    sunNoonNote.classList.toggle('hidden', !(activeMissionLens === 'sun' && activeSunPreset === 'noon'));
+  }
+  sunPresetBtns.forEach(b => b.classList.toggle('active', b.dataset.sun === activeSunPreset));
+
+  if (lensLegendItems) {
+    lensLegendItems.innerHTML = cfg.swatches.map(item => {
+      let swatchStyle = `background:${item.color};`;
+      if (item.kind === 'outline') {
+        swatchStyle = `background:transparent;border:2px solid ${item.color};`;
+      } else if (item.kind === 'glow') {
+        swatchStyle = `background:${item.color};box-shadow:0 0 8px ${item.color};`;
+      }
+      return `<div class="lens-legend-row"><span class="lens-sw" style="${swatchStyle}"></span><span>${item.label}</span></div>`;
+    }).join('');
+  }
+  if (lensCaveat) lensCaveat.textContent = cfg.caveat;
+  updateMissionWorkerStatusUi();
+}
+
+function buildLensRouteCardHtml(cand) {
+  const isSel = cand.id === selectedCandidateId;
+  const st = routeLensStats[cand.id] || { phyPct: 0, hydHighPct: 0, anyMineralPct: 0, themisMeanDn: 0, sun: {}, radiation: null };
+
+  let metricText = '';
+  let subText = '';
+  let barHtml = '';
+
+  if (activeMissionLens === 'terrain') {
+    const easyW = Math.max(0, Math.min(100, cand.pctEasy));
+    const modW = Math.max(0, Math.min(100 - easyW, cand.pctMod));
+    const hazW = Math.max(0, Math.min(100 - easyW - modW, cand.pctHaz));
+    metricText = `<15° ${cand.pctEasy.toFixed(1)}%`;
+    subText = `15–25° ${cand.pctMod.toFixed(1)}% · >25° ${cand.pctHaz.toFixed(1)}%`;
+    barHtml = `
+      <div class="lrs-bar-wrap" style="display:flex;overflow:hidden;">
+        <div class="lrs-bar-fill" style="width:${easyW.toFixed(1)}%;border-radius:0;"></div>
+        <div class="lrs-bar-fill alt" style="width:${modW.toFixed(1)}%;border-radius:0;"></div>
+        <div style="width:${hazW.toFixed(1)}%;height:100%;background:#435060;"></div>
+      </div>
+    `;
+  } else if (activeMissionLens === 'minerals') {
+    const pct = Math.max(0, Math.min(100, st.anyMineralPct));
+    metricText = `Flagged ${pct.toFixed(1)}%`;
+    subText = `Phy ${st.phyPct.toFixed(1)}% · Hyd high ${st.hydHighPct.toFixed(1)}%`;
+    barHtml = `
+      <div class="lrs-bar-wrap">
+        <div class="lrs-bar-fill" style="width:${pct.toFixed(1)}%;"></div>
+      </div>
+    `;
+  } else if (activeMissionLens === 'heat') {
+    const span = THEMIS_MAX_DN - THEMIS_MIN_DN;
+    const pct = Math.max(0, Math.min(100, ((st.themisMeanDn - THEMIS_MIN_DN) / span) * 100.0));
+    const medPct = ((THEMIS_MEDIAN_DN - THEMIS_MIN_DN) / span) * 100.0;
+    metricText = `${st.themisMeanDn.toFixed(1)} DN`;
+    subText = `Range ${THEMIS_MIN_DN}–${THEMIS_MAX_DN} · Area median ${THEMIS_MEDIAN_DN}`;
+    barHtml = `
+      <div class="lrs-bar-wrap" title="Route average brightness vs ${THEMIS_MIN_DN}–${THEMIS_MAX_DN} range (tick = area median ${THEMIS_MEDIAN_DN})">
+        <div class="lrs-bar-fill" style="width:${pct.toFixed(1)}%;"></div>
+        <span class="lrs-med-tick" style="left:${medPct.toFixed(1)}%;"></span>
+      </div>
+    `;
+  } else if (activeMissionLens === 'sun') {
+    const sunObj = st.sun ? st.sun[activeSunPreset] : null;
+    if (!sunObj) {
+      metricText = 'Computing…';
+      subText = `${SUN_PRESETS[activeSunPreset]?.label || activeSunPreset} solar raster`;
+      barHtml = `<div class="lrs-bar-wrap"><div class="lrs-bar-fill" style="width:0%;"></div></div>`;
+    } else {
+      const illW = Math.max(0, Math.min(100, sunObj.avgIllumPct));
+      metricText = `Illum ${sunObj.avgIllumPct.toFixed(1)}%`;
+      subText = `In shadow ${sunObj.shadowPct.toFixed(1)}% (${SUN_PRESETS[activeSunPreset]?.label || activeSunPreset})`;
+      barHtml = `
+        <div class="lrs-bar-wrap">
+          <div class="lrs-bar-fill" style="width:${illW.toFixed(1)}%;"></div>
+        </div>
+      `;
+    }
+  } else if (activeMissionLens === 'radiation') {
+    const radObj = st.radiation;
+    if (!radObj) {
+      metricText = 'Computing…';
+      subText = `Sky-view shelter (SVF < ${SVF_SHELTER_THRESHOLD}, game rule)`;
+      barHtml = `<div class="lrs-bar-wrap"><div class="lrs-bar-fill" style="width:0%;"></div></div>`;
+    } else {
+      const shW = Math.max(0, Math.min(100, radObj.shelteredPct));
+      metricText = `SVF ${radObj.avgSvf.toFixed(3)}`;
+      subText = `Sheltered (SVF < ${SVF_SHELTER_THRESHOLD}, game rule): ${radObj.shelteredPct.toFixed(1)}%`;
+      barHtml = `
+        <div class="lrs-bar-wrap">
+          <div class="lrs-bar-fill" style="width:${shW.toFixed(1)}%;"></div>
+        </div>
+      `;
+    }
+  } else {
+    const maxDist = Math.max(...plannerCandidates.map(x => x.distKm || 0), 1);
+    const pct = Math.max(0, Math.min(100, (cand.distKm / maxDist) * 100.0));
+    metricText = `${cand.distKm.toFixed(2)} km`;
+    subText = `Ascent +${cand.ascentM.toFixed(1)} m · Net ${cand.netElevM >= 0 ? '+' : ''}${cand.netElevM.toFixed(1)} m`;
+    barHtml = `
+      <div class="lrs-bar-wrap">
+        <div class="lrs-bar-fill" style="width:${pct.toFixed(1)}%;"></div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="lrs-card ${isSel ? 'selected' : ''}" data-id="${cand.id}">
+      <div class="lrs-card-top">
+        <span class="lrs-route-name"><span class="route-swatch" style="background:${cand.color}"></span>${cand.name}</span>
+        <span class="lrs-val">${metricText}</span>
+      </div>
+      ${barHtml}
+      <div class="lrs-sub">${subText}</div>
+    </div>
+  `;
+}
+
+function renderLensRouteStrip() {
+  if (!lensRouteStrip || !lrsCols) return;
+  const cfg = LENS_CONFIG[activeMissionLens] || LENS_CONFIG.satellite;
+  if (lrsLensName) {
+    lrsLensName.textContent = activeMissionLens === 'sun'
+      ? `${cfg.name} (${SUN_PRESETS[activeSunPreset]?.label || activeSunPreset})`
+      : cfg.name;
+  }
+  if (lrsCaveat) {
+    let caveat = cfg.stripCaveat;
+    if (activeMissionLens === 'sun' && activeSunPreset === 'noon') {
+      caveat = `${cfg.stripCaveat} · ${SUN_PRESETS.noon.note}`;
+    }
+    lrsCaveat.textContent = caveat;
+  }
+
+  lrsCols.innerHTML = plannerCandidates.map(buildLensRouteCardHtml).join('');
+  lrsCols.querySelectorAll('.lrs-card').forEach(card => {
+    card.addEventListener('click', () => {
+      selectCandidate(card.dataset.id, { userInitiated: true });
+    });
+  });
+}
+
+function startLensCrossfade(lensId, immediate = false) {
+  const cfg = LENS_CONFIG[lensId] || LENS_CONFIG.satellite;
+  LENS_KEYS.forEach(k => {
+    lensBlend.from[k] = immediate ? (k === lensId ? 1 : 0) : lensBlend.current[k];
+    lensBlend.target[k] = k === lensId ? 1 : 0;
+    if (immediate) lensBlend.current[k] = lensBlend.target[k];
+  });
+
+  lensBlend.fromDesat = immediate ? cfg.targetDesaturate : lensBlend.curDesat;
+  lensBlend.targetDesat = cfg.targetDesaturate;
+  lensBlend.fromDim = immediate ? cfg.targetDim : lensBlend.curDim;
+  lensBlend.targetDim = cfg.targetDim;
+  lensBlend.fromExag = immediate ? cfg.targetExag : currentExag;
+  lensBlend.targetExag = cfg.targetExag;
+
+  if (immediate) {
+    lensBlend.curDesat = cfg.targetDesaturate;
+    lensBlend.curDim = cfg.targetDim;
+    lensBlend.active = false;
+    if (Math.abs(currentExag - cfg.targetExag) > 0.001) {
+      applyVerticalExaggeration(cfg.targetExag, { skipNormals: false, syncSlider: false });
+    }
+    applyLayerVisibilityForMode();
+  } else {
+    lensBlend.startTime = performance.now();
+    lensBlend.active = true;
+  }
+}
+
+function stepLensCrossfade(now) {
+  if (!lensBlend.active || currentViewMode !== 'MISSION') return;
+
+  const rawT = Math.min(1.0, (now - lensBlend.startTime) / lensBlend.durationMs);
+  const ease = rawT < 0.5 ? 4 * rawT * rawT * rawT : 1 - Math.pow(-2 * rawT + 2, 3) / 2;
+
+  LENS_KEYS.forEach(k => {
+    lensBlend.current[k] = lensBlend.from[k] + (lensBlend.target[k] - lensBlend.from[k]) * ease;
+  });
+  lensBlend.curDesat = lensBlend.fromDesat + (lensBlend.targetDesat - lensBlend.fromDesat) * ease;
+  lensBlend.curDim = lensBlend.fromDim + (lensBlend.targetDim - lensBlend.fromDim) * ease;
+
+  const nextExag = lensBlend.fromExag + (lensBlend.targetExag - lensBlend.fromExag) * ease;
+  if (Math.abs(nextExag - currentExag) > 0.002 || (rawT >= 1.0 && Math.abs(lensBlend.targetExag - currentExag) > 0.0005)) {
+    applyVerticalExaggeration(rawT >= 1.0 ? lensBlend.targetExag : nextExag, {
+      skipNormals: rawT < 1.0,
+      syncSlider: false
+    });
+  }
+
+  applyMissionLensWeightsToMeshes(now);
+  if (rawT >= 1.0) lensBlend.active = false;
+}
+
+function setSunPreset(presetKey) {
+  if (!SUN_PRESETS[presetKey]) presetKey = 'morning';
+  activeSunPreset = presetKey;
+  if (terrainAnalysisWorker && !sunCache[presetKey]) {
+    terrainAnalysisWorker.postMessage({ type: 'prioritize', job: `sun:${presetKey}` });
+  }
+  if (lensSunMesh && sunCache[presetKey]?.texture) {
+    lensSunMesh.material.map = sunCache[presetKey].texture;
+    lensSunMesh.material.needsUpdate = true;
+  }
+  renderMissionLensDetail();
+  renderLensRouteStrip();
+}
+
+function setActiveMissionLens(lensId, { immediate = false } = {}) {
+  if (!LENS_CONFIG[lensId]) lensId = 'satellite';
+  activeMissionLens = lensId;
+  lensBtns.forEach(btn => {
+    const active = btn.dataset.lens === lensId;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  if (lensId === 'sun') {
+    if (terrainAnalysisWorker && !sunCache[activeSunPreset]) {
+      terrainAnalysisWorker.postMessage({ type: 'prioritize', job: `sun:${activeSunPreset}` });
+    }
+    if (lensSunMesh && sunCache[activeSunPreset]?.texture) {
+      lensSunMesh.material.map = sunCache[activeSunPreset].texture;
+      lensSunMesh.material.needsUpdate = true;
+    }
+  } else if (lensId === 'radiation') {
+    if (terrainAnalysisWorker && !svfCache) {
+      terrainAnalysisWorker.postMessage({ type: 'prioritize', job: 'svf' });
+    }
+    if (lensSkyMesh && svfCache?.texture) {
+      lensSkyMesh.material.map = svfCache.texture;
+      lensSkyMesh.material.needsUpdate = true;
+    }
+  }
+
+  if (lensExagBadge) {
+    const isBriefing = levelState.getState().screen === GAME_STATES.BRIEFING;
+    lensExagBadge.classList.toggle('hidden', isBriefing || currentViewMode !== 'MISSION' || lensId !== 'terrain');
+  }
+
+  if (mapLabels) mapLabels.setActiveLens(lensId);
+  renderMissionLensDetail();
+  renderLensRouteStrip();
+  startLensCrossfade(lensId, immediate);
+  requestAnimationFrame(updateLayoutBounds);
+}
+
+function buildLevelMapAnchors() {
+  if (!rawHeights || !rawSlopes || !demFeatures || !crismClusters) return [];
+  const anchors = [];
+
+  const sampleWorldY = (lx, ly, yOffset) => {
+    const { col, row } = localToGrid(lx, ly);
+    const elev = sampleGridBilinear(rawHeights, col, row);
+    return (elev - minElev) * currentExag + yOffset * currentExag;
+  };
+
+  // --- MISSION ---
+  const startMesh = localToMesh(level01.start.x, level01.start.y);
+  anchors.push({
+    id: 'start',
+    category: 'mission',
+    categoryLabel: 'Mission Anchor',
+    basePriority: 100,
+    sourceChip: 'measured',
+    label: 'Start',
+    hoverTitle: 'Start',
+    whatItIs: `Corridor starting point on the north boundary (Elev ${level01.start.elevation.toFixed(1)} m, Slope ${level01.start.slopeDeg.toFixed(1)}°).`,
+    solText: `Sol ${level01.start.sol}`,
+    dataset: 'NASA PDS MSL Rover Localization + USGS Gale DEM',
+    whyItMatters: 'Fixes the common starting elevation and slope entry baseline used to compare climb, traverse length, and exposure across candidates.',
+    tags: [{ text: 'measured', cls: 'measured' }, { text: 'game anchor', cls: 'game' }],
+    worldX: startMesh.meshX,
+    worldZ: startMesh.meshZ,
+    getWorldY: () => sampleWorldY(level01.start.x, level01.start.y, 72)
+  });
+
+  const goalMesh = localToMesh(level01.goal.x, level01.goal.y);
+  anchors.push({
+    id: 'goal',
+    category: 'mission',
+    categoryLabel: 'Mission Anchor',
+    basePriority: 98,
+    sourceChip: 'game',
+    label: 'Goal: boxwork core zone',
+    hoverTitle: 'Goal: boxwork core zone',
+    whatItIs: `Shared traverse destination inside the core boxwork zone (Elev ${level01.goal.elevation.toFixed(1)} m).`,
+    dataset: 'Level 1 mission target + USGS Gale DEM',
+    whyItMatters: 'Establishes a uniform target coordinate so every route alternative solves the same origin-to-destination crossing.',
+    tags: [{ text: 'measured', cls: 'measured' }, { text: 'goal: game', cls: 'game' }],
+    worldX: goalMesh.meshX,
+    worldZ: goalMesh.meshZ,
+    getWorldY: () => sampleWorldY(level01.goal.x, level01.goal.y, 78)
+  });
+
+  const bz = level01.goal.coreZoneBounds;
+  const bzMesh = localToMesh(bz.xMin, bz.yMin);
+  anchors.push({
+    id: 'boxwork-zone',
+    category: 'mission',
+    categoryLabel: 'Mission Boundary',
+    basePriority: 64,
+    sourceChip: 'measured',
+    label: 'Boxwork core zone',
+    hoverTitle: 'Boxwork core zone',
+    whatItIs: '153 × 283 m target zone containing mapped boxwork ridge networks.',
+    solText: `Sols ${bz.sols}`,
+    dataset: 'Curiosity Campaign Boundary (NASA/JPL)',
+    whyItMatters: 'Marks the extent of the destination science zone; candidate paths differ in approach gradient and how closely they enter the margin.',
+    tags: [{ text: 'measured', cls: 'measured' }, { text: 'game', cls: 'game' }],
+    worldX: bzMesh.meshX,
+    worldZ: bzMesh.meshZ,
+    getWorldY: () => sampleWorldY(bz.xMin, bz.yMin, 16)
+  });
+
+  // --- SCIENCE TARGETS (no Sol numbers before lock-in) ---
+  level01.scienceTargets.forEach((t, idx) => {
+    let pinObj = null;
+    if (scienceMarkersGroup) {
+      pinObj = scienceMarkersGroup.children.find(c => c.userData && c.userData.isSciencePin && c.userData.markerKey === t.id);
+    }
+    const { meshX, meshZ } = pinObj ? { meshX: pinObj.position.x, meshZ: pinObj.position.z } : localToMesh(t.x, t.y);
+    const elev = pinObj ? pinObj.userData.pt.elevation : t.elevation;
+
+    anchors.push({
+      id: t.id,
+      category: 'science',
+      categoryLabel: 'Science Target',
+      basePriority: 90 - idx * 2,
+      sourceChip: 'measured',
+      label: `Target ${idx + 1}`,
+      hoverTitle: `Target ${idx + 1}`,
+      whatItIs: t.title,
+      solText: t.label,
+      dataset: 'NASA PDS Curiosity ROVER traverse (location measured); description unverified',
+      whyItMatters: 'Indicates a candidate science observation waypoint along the corridor; visiting nearby waypoints trades path detours or local slope for sampling coverage.',
+      worldX: meshX,
+      worldZ: meshZ,
+      getWorldY: () => (elev - minElev) * currentExag + 26 * currentExag
+    });
+  });
+
+  // --- TERRAIN FEATURES (derived from DEM, no invented place names) ---
+  const demDataset = 'USGS / NASA PDS MSL Gale Crater 1 m DEM Mosaic v3 (resampled ~4.9 m)';
+  const { ridge, hollow, slopeFace, flatPlain, highGround, steepZones } = demFeatures;
+
+  const ridgeMesh = localToMesh(ridge.x, ridge.y);
+  anchors.push({
+    id: 'dem-ridge',
+    category: 'terrain',
+    categoryLabel: 'Terrain Feature',
+    basePriority: 52,
+    sourceChip: 'derived',
+    label: 'Ridge',
+    hoverTitle: 'Ridge',
+    whatItIs: `Prominent local topographic crest (TPI +${ridge.tpi.toFixed(1)} m above neighborhood, Elev ${ridge.elev.toFixed(0)} m).`,
+    dataset: demDataset,
+    whyItMatters: 'Elevated crests add uphill climb and expose traverses to fuller sky-view and grazing sunlight, while crest lines can separate drainage basins.',
+    worldX: ridgeMesh.meshX,
+    worldZ: ridgeMesh.meshZ,
+    getWorldY: () => sampleWorldY(ridge.x, ridge.y, 26)
+  });
+
+  const hollowMesh = localToMesh(hollow.x, hollow.y);
+  anchors.push({
+    id: 'dem-hollow',
+    category: 'terrain',
+    categoryLabel: 'Terrain Feature',
+    basePriority: 50,
+    sourceChip: 'derived',
+    label: 'Hollow',
+    hoverTitle: 'Hollow',
+    whatItIs: `Local topographic depression (TPI ${hollow.tpi.toFixed(1)} m below surrounding rim, Elev ${hollow.elev.toFixed(0)} m).`,
+    dataset: demDataset,
+    whyItMatters: 'Basins and hollows reduce open-sky exposure and lengthen low-angle terrain shadows, and may trap windblown finer dust or sand.',
+    worldX: hollowMesh.meshX,
+    worldZ: hollowMesh.meshZ,
+    getWorldY: () => sampleWorldY(hollow.x, hollow.y, 26)
+  });
+
+  const sfMesh = localToMesh(slopeFace.x, slopeFace.y);
+  anchors.push({
+    id: 'dem-slope-face',
+    category: 'terrain',
+    categoryLabel: 'Terrain Feature',
+    basePriority: 54,
+    sourceChip: 'derived',
+    label: 'Slope face',
+    hoverTitle: 'Slope face',
+    whatItIs: `Sustained steep escarpment face (~220 m span, mean slope ${slopeFace.meanSlope.toFixed(1)}°).`,
+    dataset: demDataset,
+    whyItMatters: 'Sustained inclined faces increase rover pitch/roll tilt, cross-slope slip risk, and climbing energy per meter gained.',
+    worldX: sfMesh.meshX,
+    worldZ: sfMesh.meshZ,
+    getWorldY: () => sampleWorldY(slopeFace.x, slopeFace.y, 26)
+  });
+
+  const fpMesh = localToMesh(flatPlain.x, flatPlain.y);
+  anchors.push({
+    id: 'dem-flat-plain',
+    category: 'terrain',
+    categoryLabel: 'Terrain Feature',
+    basePriority: 68,
+    sourceChip: 'derived',
+    label: 'Flat plain',
+    hoverTitle: 'Flat plain',
+    whatItIs: `Flattest 1×1 km DEM area (mean slope ${flatPlain.meanSlope.toFixed(1)}°, ${flatPlain.pctEasy.toFixed(0)}% <15°).`,
+    dataset: demDataset,
+    whyItMatters: 'Low-gradient plains keep tilt angles small and allow direct headings with minimal slope slowdown or climb energy.',
+    worldX: fpMesh.meshX,
+    worldZ: fpMesh.meshZ,
+    getWorldY: () => sampleWorldY(flatPlain.x, flatPlain.y, 26)
+  });
+
+  const hgMesh = localToMesh(highGround.x, highGround.y);
+  anchors.push({
+    id: 'dem-high-ground',
+    category: 'terrain',
+    categoryLabel: 'Terrain Feature',
+    basePriority: 66,
+    sourceChip: 'derived',
+    label: 'High ground',
+    hoverTitle: 'High ground',
+    whatItIs: `Highest 1×1 km DEM sector (mean ${highGround.meanElev.toFixed(0)} m, peak ${highGround.maxElev.toFixed(0)} m).`,
+    dataset: demDataset,
+    whyItMatters: 'Upper strata create steep approach slopes along Mount Sharp and cast long shadows toward neighboring lower basins.',
+    worldX: hgMesh.meshX,
+    worldZ: hgMesh.meshZ,
+    getWorldY: () => sampleWorldY(highGround.x, highGround.y, 26)
+  });
+
+  // --- HAZARDS (>25° game threshold) ---
+  steepZones.forEach((st, idx) => {
+    const stMesh = localToMesh(st.x, st.y);
+    anchors.push({
+      id: idx === 0 ? 'hazard-steep' : `hazard-steep-${idx + 1}`,
+      category: 'hazards',
+      categoryLabel: 'Slope Hazard',
+      basePriority: idx === 0 ? 74 : 58,
+      sourceChip: 'game',
+      label: 'Steep slope (>25°)',
+      hoverTitle: 'Steep slope (>25°)',
+      whatItIs: `Escarpment cluster (${st.pctHaz.toFixed(0)}% cells >25° in 500×500 m, up to ${st.maxSlope.toFixed(1)}°).`,
+      dataset: 'slope_5m.bin (derived from 1 m DEM) · >25° threshold: game rule',
+      whyItMatters: 'Exceeding the 25° gameplay threshold marks high wheel-slip and tilt zones that generally force detours or slower climbing speeds.',
+      tags: [{ text: 'derived from DEM', cls: 'dem' }, { text: 'game rule (>25°)', cls: 'game' }],
+      worldX: stMesh.meshX,
+      worldZ: stMesh.meshZ,
+      getWorldY: () => sampleWorldY(st.x, st.y, 26)
+    });
+  });
+
+  // --- MATERIALS (Clustered CRISM MRDR t0902 orbital indicators) ---
+  const crismDataset = 'CRISM MRDR t0902, orbital indicator (~180 m pixels)';
+  crismClusters.clayClusters.forEach((cl, idx) => {
+    const cm = localToMesh(cl.x, cl.y);
+    anchors.push({
+      id: `crism-clay-${idx + 1}`,
+      category: 'materials',
+      categoryLabel: 'Mineral Indicator',
+      basePriority: 48 - idx * 3,
+      sourceChip: 'measured',
+      label: 'Clay-bearing indicator',
+      hoverTitle: 'Clay-bearing indicator',
+      whatItIs: `Phyllosilicate (Fe/Mg/Al) CRISM pixel cluster (${cl.pixelCount} connected ~180 m cells).`,
+      dataset: crismDataset,
+      whyItMatters: 'Orbital phyllosilicate signatures mark possible past aqueous alteration zones; coarse ~180 m footprints mean outcrop details vary at rover scale.',
+      tags: [{ text: 'measured', cls: 'measured' }, { text: 'CRISM MRDR t0902', cls: 'dem' }],
+      worldX: cm.meshX,
+      worldZ: cm.meshZ,
+      getWorldY: () => sampleWorldY(cl.x, cl.y, 26)
+    });
+  });
+
+  crismClusters.hydClusters.forEach((hl, idx) => {
+    const hm = localToMesh(hl.x, hl.y);
+    anchors.push({
+      id: `crism-hyd-${idx + 1}`,
+      category: 'materials',
+      categoryLabel: 'Mineral Indicator',
+      basePriority: 46 - idx * 3,
+      sourceChip: 'measured',
+      label: 'Hydrated-mineral indicator',
+      hoverTitle: 'Hydrated-mineral indicator',
+      whatItIs: `Strong hydrated / sulfate CRISM pixel cluster (${hl.pixelCount} connected ~180 m cells, RGB sum ≥ 120).`,
+      dataset: crismDataset,
+      whyItMatters: 'Hydrated mineral detections highlight sulfate or bound-water strata of scientific interest at orbital scale (~180 m resolution).',
+      tags: [{ text: 'measured', cls: 'measured' }, { text: 'CRISM MRDR t0902', cls: 'dem' }],
+      worldX: hm.meshX,
+      worldZ: hm.meshZ,
+      getWorldY: () => sampleWorldY(hl.x, hl.y, 26)
+    });
+  });
+
+  return anchors;
+}
+
+function initTerrainAnalysisWorker() {
+  if (!rawHeights || terrainAnalysisWorker) return;
+  terrainAnalysisWorker = new Worker(new URL('./game/terrainAnalysisWorker.js', import.meta.url), { type: 'module' });
+
+  terrainAnalysisWorker.onmessage = e => {
+    const msg = e.data;
+    if (msg.type === 'sunResult') {
+      const tex = buildDataTextureFromWorkerBuffer(msg.rgbaBuffer, msg.gridSize);
+      sunCache[msg.preset] = { texture: tex, stats: msg.routeStats };
+      plannerCandidates.forEach(c => {
+        if (!routeLensStats[c.id]) routeLensStats[c.id] = { sun: {} };
+        if (!routeLensStats[c.id].sun) routeLensStats[c.id].sun = {};
+        if (msg.routeStats && msg.routeStats[c.id]) {
+          routeLensStats[c.id].sun[msg.preset] = msg.routeStats[c.id];
+        }
+      });
+      if (activeMissionLens === 'sun' && activeSunPreset === msg.preset) {
+        if (lensSunMesh) {
+          lensSunMesh.material.map = tex;
+          lensSunMesh.material.needsUpdate = true;
+        }
+        updateMissionWorkerStatusUi();
+        renderLensRouteStrip();
+      }
+    } else if (msg.type === 'svfResult') {
+      const tex = buildDataTextureFromWorkerBuffer(msg.rgbaBuffer, msg.gridSize);
+      svfCache = { texture: tex, stats: msg.routeStats };
+      plannerCandidates.forEach(c => {
+        if (!routeLensStats[c.id]) routeLensStats[c.id] = { sun: {} };
+        if (msg.routeStats && msg.routeStats[c.id]) {
+          routeLensStats[c.id].radiation = msg.routeStats[c.id];
+        }
+      });
+      if (activeMissionLens === 'radiation') {
+        if (lensSkyMesh) {
+          lensSkyMesh.material.map = tex;
+          lensSkyMesh.material.needsUpdate = true;
+        }
+        updateMissionWorkerStatusUi();
+        renderLensRouteStrip();
+      }
+    }
+  };
+
+  terrainAnalysisWorker.onerror = err => {
+    console.error('TerrainAnalysisWorker error:', err);
+    updateMissionWorkerStatusUi();
+  };
+
+  const heightsCopy = rawHeights.slice();
+  const simpleRoutes = plannerCandidates.map(c => ({ id: c.id, waypoints: c.waypoints }));
+  terrainAnalysisWorker.postMessage(
+    {
+      type: 'init',
+      gridSize: 1025,
+      terrainWidthM: TERRAIN_WIDTH_M,
+      heightsBuffer: heightsCopy.buffer,
+      routes: simpleRoutes
+    },
+    [heightsCopy.buffer]
+  );
+}
+
 // --- View Mode (MISSION | RESEARCH), Layout Bounds & Per-Mode Panel Memory ---
 function updateLayoutBounds() {
   const hudRect = hudHeader ? hudHeader.getBoundingClientRect() : { bottom: 34 };
@@ -2170,16 +3143,51 @@ function updateLayoutBounds() {
   }
   if (plannerPanel && !plannerPanel.classList.contains('hidden')) {
     const plRect = plannerPanel.getBoundingClientRect();
-    if (plRect.height > 0) bottomTop = Math.min(bottomTop, Math.floor(plRect.top) - 8);
+    if (plRect.height > 0) {
+      bottomTop = Math.min(bottomTop, Math.floor(plRect.top) - 8);
+      cachedPlannerTop = plRect.top;
+    } else {
+      cachedPlannerTop = window.innerHeight;
+    }
+  } else {
+    cachedPlannerTop = window.innerHeight;
   }
 
   const sideMaxH = Math.max(120, bottomTop - hudBottom);
   document.documentElement.style.setProperty('--side-max-h', `${sideMaxH}px`);
+
+  // Keep bottom-left map legend clear of timeline, planner card, and open inspector panel
+  if (mapLegend && !mapLegend.classList.contains('hidden')) {
+    let baseBottom = 12;
+    if (timelineBar && !timelineBar.classList.contains('hidden')) {
+      const tlRect = timelineBar.getBoundingClientRect();
+      if (tlRect.height > 0) baseBottom = Math.max(baseBottom, Math.ceil(window.innerHeight - tlRect.top + 8));
+    }
+    if (plannerPanel && !plannerPanel.classList.contains('hidden')) {
+      const plRect = plannerPanel.getBoundingClientRect();
+      if (plRect.height > 0 && plRect.left < 200) {
+        baseBottom = Math.max(baseBottom, Math.ceil(window.innerHeight - plRect.top + 8));
+      }
+    }
+    const inspOpen = inspectorPanel && inspectorPanel.classList.contains('open');
+    mapLegend.style.left = inspOpen ? '292px' : '12px';
+    mapLegend.style.bottom = `${baseBottom}px`;
+  }
+
+  // Keep top-right Labels button clear of open RESEARCH Layers drawer
+  const layersOpen = layersPanel && layersPanel.classList.contains('open');
+  if (mapTopControls) {
+    mapTopControls.style.right = (currentViewMode === 'RESEARCH' && layersOpen) ? '328px' : '12px';
+  }
+  const inspOpen = inspectorPanel && inspectorPanel.classList.contains('open');
+  cachedLabelLeftLimit = inspOpen ? 290 : 10;
+  cachedLabelRightLimit = layersOpen ? Math.max(200, window.innerWidth - 310) : window.innerWidth - 10;
 }
 
 function syncPanelsToViewMode() {
   const screen = levelState.getState().screen;
   const isBriefing = screen === GAME_STATES.BRIEFING;
+  const isPostLock = screen === GAME_STATES.EXPLORE || screen === GAME_STATES.DEBRIEF;
   const prefs = panelPrefs[currentViewMode];
 
   document.body.classList.toggle('mode-mission', currentViewMode === 'MISSION');
@@ -2191,6 +3199,10 @@ function syncPanelsToViewMode() {
     });
   }
 
+  if (layersPanelTitle) {
+    layersPanelTitle.textContent = currentViewMode === 'MISSION' ? 'Decision Lenses' : 'Layers';
+  }
+
   // Point Inspector open/closed per mode (closed on BRIEFING modal)
   if (inspectorPanel) {
     const showInsp = !isBriefing && prefs.inspectorOpen;
@@ -2199,7 +3211,7 @@ function syncPanelsToViewMode() {
     if (toggleBtn) toggleBtn.textContent = showInsp ? '◀' : '▶';
   }
 
-  // Layers panel open/closed per mode + floating Lenses button in MISSION mode
+  // Layers panel open/closed per mode + floating Lenses/Labels buttons
   if (layersPanel) {
     const showLayers = !isBriefing && prefs.layersOpen;
     layersPanel.classList.toggle('open', showLayers);
@@ -2207,11 +3219,33 @@ function syncPanelsToViewMode() {
     if (toggleBtn) toggleBtn.textContent = showLayers ? '▶' : '◀';
   }
 
+  if (mapTopControls) {
+    mapTopControls.classList.toggle('hidden', isBriefing);
+  }
   if (btnLenses) {
     const showLensesBtn = !isBriefing && currentViewMode === 'MISSION';
     btnLenses.classList.toggle('hidden', !showLensesBtn);
     btnLenses.classList.toggle('open', prefs.layersOpen);
   }
+  if (lensExagBadge) {
+    lensExagBadge.classList.toggle('hidden', isBriefing || currentViewMode !== 'MISSION' || activeMissionLens !== 'terrain');
+  }
+
+  // Map legend visibility & Curiosity reference row gating (post lock-in only)
+  if (mapLegend) {
+    mapLegend.classList.toggle('hidden', isBriefing);
+  }
+  if (legendRefRow) {
+    legendRefRow.classList.toggle('hidden', !isPostLock);
+  }
+
+  // Map labels context
+  if (mapLabels) {
+    mapLabels.setViewContext({ isBriefing, isPostLock });
+  }
+
+  // Apply 3D visibility differences between MISSION Lenses and RESEARCH Layers
+  applyLayerVisibilityForMode();
 
   // Planner collapsed state & Elevation Profile compact reveal
   if (plannerPanel) {
@@ -2230,6 +3264,10 @@ function syncPanelsToViewMode() {
         requestAnimationFrame(() => drawElevationChart(selectedCand));
       }
     }
+  }
+
+  if (lensRouteStrip && currentViewMode === 'MISSION') {
+    renderLensRouteStrip();
   }
 
   // Hide cursor tooltip in RESEARCH mode or BRIEFING
@@ -2258,6 +3296,15 @@ function setViewMode(mode) {
   if (mode !== 'MISSION' && mode !== 'RESEARCH') return;
   if (currentViewMode === mode) return;
   currentViewMode = mode;
+  if (mode === 'RESEARCH') {
+    const userExag = exagSlider ? parseFloat(exagSlider.value) || 1.0 : 1.0;
+    lensBlend.active = false;
+    if (Math.abs(currentExag - userExag) > 0.001) {
+      applyVerticalExaggeration(userExag, { skipNormals: false, syncSlider: true });
+    }
+  } else {
+    setActiveMissionLens(activeMissionLens, { immediate: false });
+  }
   syncPanelsToViewMode();
 }
 
@@ -2360,6 +3407,65 @@ function bindGameEvents() {
       panelPrefs[currentViewMode].layersOpen = !panelPrefs[currentViewMode].layersOpen;
       syncPanelsToViewMode();
     });
+  }
+
+  if (btnLabels && labelsDropdown) {
+    btnLabels.addEventListener('click', e => {
+      e.stopPropagation();
+      const willOpen = labelsDropdown.classList.toggle('hidden') === false;
+      btnLabels.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+    window.addEventListener('click', e => {
+      if (!labelsDropdown.classList.contains('hidden') && !e.target.closest('#labels-dropdown-wrap')) {
+        labelsDropdown.classList.add('hidden');
+        btnLabels.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  labelCatChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      const cat = chip.dataset.cat;
+      const next = !chip.classList.contains('active');
+      chip.classList.toggle('active', next);
+      chip.setAttribute('aria-pressed', next ? 'true' : 'false');
+      if (mapLabels) mapLabels.setCategoryEnabled(cat, next);
+      if (btnLabels && mapLabels) {
+        btnLabels.classList.toggle('active', mapLabels.getEnabledCategories().length > 0);
+      }
+    });
+  });
+
+  if (btnLabelsShowAll) {
+    btnLabelsShowAll.addEventListener('click', () => {
+      const next = !btnLabelsShowAll.classList.contains('active');
+      btnLabelsShowAll.classList.toggle('active', next);
+      btnLabelsShowAll.setAttribute('aria-pressed', next ? 'true' : 'false');
+      if (mapLabels) mapLabels.setShowAll(next);
+    });
+  }
+
+  sunPresetBtns.forEach(btn => {
+    btn.addEventListener('click', () => setSunPreset(btn.dataset.sun));
+  });
+
+  if (btnToggleLegend && mapLegend) {
+    btnToggleLegend.addEventListener('click', () => {
+      const open = mapLegend.classList.toggle('open');
+      btnToggleLegend.setAttribute('aria-expanded', open ? 'true' : 'false');
+      requestAnimationFrame(updateLayoutBounds);
+    });
+  }
+
+  lensBtns.forEach(btn => {
+    btn.addEventListener('click', () => setActiveMissionLens(btn.dataset.lens));
+  });
+
+  if (btnMissionResetView && btnReset) {
+    btnMissionResetView.addEventListener('click', () => btnReset.click());
+  }
+  if (btnMissionFocusBoxwork && btnBoxwork) {
+    btnMissionFocusBoxwork.addEventListener('click', () => btnBoxwork.click());
   }
 
   if (typeof ResizeObserver !== 'undefined') {
@@ -2474,10 +3580,28 @@ async function loadAssetsAndInit() {
       loadNearest('/data/themis_crop.png')
     ]);
 
-    // Create offscreen contexts for pixel inspection
+    // Create offscreen contexts for pixel inspection and extract buffers for MISSION lenses
     crismHydCtx = createOffscreenContext(crismHydTex.image);
     crismPhyCtx = createOffscreenContext(crismPhyTex.image);
     themisCtx = createOffscreenContext(themisTex.image);
+
+    const hydBuf = extractImageRGBA(crismHydTex.image, 27, 28);
+    const phyBuf = extractImageRGBA(crismPhyTex.image, 27, 28);
+    const themisBuf = extractImageRGBA(themisTex.image, 50, 50);
+
+    const terrainRampAndPulse = buildTerrainSlopeAndContourTextures(rawHeights, rawSlopes);
+    const emptyTex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1, THREE.RGBAFormat);
+    emptyTex.needsUpdate = true;
+
+    lensTextures = {
+      emptyTex,
+      hazardOutlineTex: buildSlopeHazardOutlineTexture(rawSlopes),
+      terrainRampTex: terrainRampAndPulse.rampTex,
+      mineralsTex: buildMineralsGlowTexture(hydBuf, phyBuf),
+      heatTex: buildFullHeatTexture(themisBuf)
+    };
+    demFeatures = deriveDemTerrainFeatures(rawHeights, rawSlopes);
+    crismClusters = clusterCrismIndicators(hydBuf, phyBuf);
 
     // 6. Build Scene Objects
     loadingStatus.textContent = 'Building 3D terrain and layers…';
@@ -2493,12 +3617,37 @@ async function loadAssetsAndInit() {
 
     // Load fixed Level 1 candidate routes generated from routeWorker.js
     plannerCandidates = buildBlindedPlannerCandidates(level01);
+    routeLensStats = computeOpticalRouteStats(plannerCandidates, hydBuf, phyBuf, themisBuf);
+    runDevCrismSelfCheck(routeLensStats);
+
+    mapLabels = createMapLabelController({
+      layerEl: mapLabelsLayer,
+      leaderSvgEl: mapLeaderSvg,
+      hoverCardEl: markerHoverCard,
+      mhcNameEl: mhcName,
+      mhcSolEl: mhcSol,
+      mhcDescEl: mhcDesc,
+      mhcTagsEl: mhcTags,
+      detailCardEl: labelDetailCard,
+      ldcTitleEl: ldcTitle,
+      ldcCategoryEl: ldcCategory,
+      ldcSolEl: ldcSol,
+      ldcWhatEl: ldcWhat,
+      ldcDatasetEl: ldcDataset,
+      ldcWhyEl: ldcWhy,
+      ldcTagsEl: ldcTags,
+      ldcCloseBtn: ldcClose
+    });
+    mapLabels.setAnchors(buildLevelMapAnchors());
+
     selectedCandidateId = levelState.getState().selectedRouteId || 'route-a';
     renderPlannerTable(plannerCandidates);
     buildCandidateRouteLines(plannerCandidates);
+    setActiveMissionLens('satellite', { immediate: true });
     applyGameScreenState(levelState.getState());
 
     initRouteWorker();
+    initTerrainAnalysisWorker();
 
     // 7. Complete Loading
     progressBar.style.width = '100%';
@@ -2576,14 +3725,24 @@ function animate() {
     }
   }
 
-  // Animated Start and Goal Markers
-  if (startMarker && startMarker.children[3]) {
-    startMarker.children[3].rotation.y += 0.02;
+  // Animated Start and Goal Anchors (beacon rotation + ground halo pulse)
+  if (startMarker && startMarker.children[4]) {
+    startMarker.children[4].rotation.y += 0.02;
+    const pulseS = 1.0 + 0.07 * Math.sin(now * 0.006);
+    if (startMarker.children[1]) startMarker.children[1].scale.set(pulseS, pulseS, pulseS);
   }
-  if (goalMarker && goalMarker.children[3]) {
-    goalMarker.children[3].rotation.y += 0.025;
-    const pulseG = 1.0 + 0.08 * Math.sin(now * 0.007);
-    if (goalMarker.children[0]) goalMarker.children[0].scale.set(pulseG, pulseG, pulseG);
+  if (goalMarker && goalMarker.children[4]) {
+    goalMarker.children[4].rotation.y += 0.025;
+    const pulseG = 1.0 + 0.09 * Math.sin(now * 0.007);
+    if (goalMarker.children[1]) goalMarker.children[1].scale.set(pulseG, pulseG, pulseG);
+  }
+
+  // Smooth 400 ms Lens Crossfade & Terrain Pulse
+  if (currentViewMode === 'MISSION') {
+    stepLensCrossfade(now);
+    if (!lensBlend.active && activeMissionLens === 'terrain' && lensTerrainMesh && lensTerrainMesh.material.userData?.pulseUniform) {
+      lensTerrainMesh.material.userData.pulseUniform.value = 0.5 + 0.5 * Math.sin(now * 0.0045);
+    }
   }
 
   // Dust Particle drift
@@ -2591,6 +3750,18 @@ function animate() {
 
   controls.update();
   renderer.render(scene, camera);
+
+  // Camera-facing 2D projected map labels (overlap culled or Show All with leader lines)
+  if (mapLabels) {
+    mapLabels.update(
+      camera,
+      window.innerWidth,
+      window.innerHeight,
+      cachedPlannerTop,
+      cachedLabelRightLimit,
+      cachedLabelLeftLimit
+    );
+  }
 }
 
 // Start application
