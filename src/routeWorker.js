@@ -143,10 +143,10 @@ function computeRoutes(start, goal) {
   }
 
   const modes = [
-    { id: 'safest', name: 'Safest', bestFor: 'Safest', color: '#2ecc71' },
-    { id: 'shortest', name: 'Shortest', bestFor: 'Fastest', color: '#00d2ff' },
-    { id: 'science', name: 'Science-rich', bestFor: 'Most science', color: '#e056fd' },
-    { id: 'energy', name: 'Energy-saving', bestFor: 'Lowest energy', color: '#f39c12' }
+    { id: 'safest', name: 'Low-slope', bestFor: 'Low slope', color: '#2ecc71' },
+    { id: 'shortest', name: 'Direct', bestFor: 'Direct line', color: '#00d2ff' },
+    { id: 'science', name: 'Mineral survey', bestFor: 'Mineral survey', color: '#e056fd' },
+    { id: 'energy', name: 'Energy-optimized', bestFor: 'Energy-optimized', color: '#f39c12' }
   ];
 
   const candidates = [];

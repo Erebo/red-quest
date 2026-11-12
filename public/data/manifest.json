@@ -94,7 +94,7 @@
       ],
       "pixel_scale_m": 4.8828125,
       "size_bytes": 251930,
-      "description": "Categorized terrain traversability map using game-design slope tiers"
+      "description": "Categorized terrain traversability map using mission slope tiers"
     },
     "route.json": {
       "file": "route.json",
@@ -137,7 +137,7 @@
       ],
       "pixel_scale_m": 4.8828125,
       "size_bytes": 163605,
-      "description": "Categorized traversability map using 5 m baseline slope and game-design thresholds"
+      "description": "Categorized traversability map using 5 m baseline slope and mission thresholds"
     }
   },
   "slope_classes": {
@@ -176,7 +176,7 @@
     }
   },
   "data_source_notes": {
-    "slope_classification_disclaimer": "The slope thresholds (<15 deg easy, 15-25 deg moderate, >25 deg hazardous) are game-design thresholds, not NASA limits.",
+    "slope_classification_disclaimer": "The slope thresholds (<15 deg easy, 15-25 deg moderate, >25 deg hazardous) are mission scenario thresholds, not NASA limits.",
     "elevation_source": "USGS / NASA PDS MSL Gale Crater 1m DEM Mosaic v3",
     "imagery_source": "NASA/JPL/University of Arizona HiRISE LRGB 78-quad controlled orthomosaic (0.25 m/px)",
     "rover_traverse_source": "NASA PDS MSL Rover Localization Data (localized_interp view, Sols 3721 to 4868)",

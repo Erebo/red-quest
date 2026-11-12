@@ -13,7 +13,7 @@ export const TUTORIAL_STEPS = [
     id: 'welcome',
     title: 'Mission Goal',
     text: 'Welcome to Gale Crater! Your goal is to reach the three science targets and the boxwork core safely.',
-    selectors: ['#briefing-targets-list', '#game-briefing-overlay .game-card'],
+    selectors: ['#briefing-targets-cards', '#briefing-targets-list', '#game-briefing-overlay .game-card'],
     actionType: null,
     spotlightPad: 10
   },
@@ -67,7 +67,7 @@ export const TUTORIAL_STEPS = [
   {
     id: 'planner-table',
     title: 'Candidate Traverses',
-    text: 'This table compares Routes A, B, and C alongside Max Slope and map visibility. Distance, Ascent, and Time are measured by the player in this game and revealed later.',
+    text: 'This table compares Routes A, B, and C alongside Max Slope and map visibility. Distance, Ascent, and Time are surveyed by the mission planner and revealed upon route lock-in.',
     selectors: ['#planner-panel'],
     actionType: null,
     spotlightPad: 6

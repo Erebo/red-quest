@@ -42,7 +42,7 @@ export const SURVEY_LOG_ROWS = Object.freeze([
     label: 'Elements identified',
     unit: '',
     decimals: 0,
-    tagText: 'GAME',
+    tagText: 'MISSION RULE',
     tagCls: 'game'
   }),
   Object.freeze({
@@ -51,7 +51,7 @@ export const SURVEY_LOG_ROWS = Object.freeze([
     label: 'Dust %',
     unit: '%',
     decimals: 1,
-    tagText: 'SIM',
+    tagText: 'MODELED',
     tagCls: 'sim'
   })
 ]);
@@ -628,47 +628,87 @@ export function renderSurveyResultOverlayDOM({
   }
 
   if (tablesWrapEl) {
-    tablesWrapEl.innerHTML = '';
-    evaluation.routeEvaluations.forEach(re => {
-      const box = document.createElement('div');
-      box.className = 'dcr-route-box';
-      const title = document.createElement('div');
-      title.className = 'dcr-route-title';
-      title.innerHTML = `<span class="route-swatch" style="background:${re.color}"></span><span>${re.name}</span> <small style="color:#93a4b7;font-weight:500;">(True Hazard Index: ${re.truth.hazardIndex.toFixed(1)} / 100)</small>`;
-      box.appendChild(title);
-
-      const tbl = document.createElement('table');
-      tbl.className = 'dcr-table';
-      tbl.innerHTML = `
-        <thead>
-          <tr>
-            <th>Metric</th>
-            <th>Your number</th>
-            <th>True number</th>
-            <th>Error</th>
-            <th>Points</th>
-          </tr>
-        </thead>
-      `;
-      const tb = document.createElement('tbody');
-      re.cells.forEach(cell => {
-        const unit = cell.rowDef.unit === 'count' ? '' : cell.rowDef.unit;
-        const yourStr = cell.empty ? '—' : `${cell.estimate}${unit ? ` ${unit}` : ''}`;
-        const trueStr = `${cell.rowDef.decimals > 0 ? cell.trueVal.toFixed(cell.rowDef.decimals) : Math.round(cell.trueVal)}${unit ? ` ${unit}` : ''}`;
-        const errStr = cell.empty ? 'Empty' : `${cell.errorPct.toFixed(1)}%`;
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${cell.rowDef.label}</td>
-          <td>${yourStr}</td>
-          <td>${trueStr}</td>
-          <td>${errStr}</td>
-          <td><strong>${cell.points.toFixed(1)}</strong> / ${cell.maxPoints.toFixed(1)}</td>
-        `;
-        tb.appendChild(tr);
-      });
-      tbl.appendChild(tb);
-      box.appendChild(tbl);
-      tablesWrapEl.appendChild(box);
-    });
+    renderSurveyComparisonTablesDOM(tablesWrapEl, evaluation.routeEvaluations);
   }
+}
+
+function renderSurveyComparisonTablesDOM(tablesWrapEl, routeEvaluations) {
+  if (!tablesWrapEl) return;
+  tablesWrapEl.innerHTML = '';
+  routeEvaluations.forEach(re => {
+    const box = document.createElement('div');
+    box.className = 'dcr-route-box';
+    const title = document.createElement('div');
+    title.className = 'dcr-route-title';
+    title.innerHTML = `<span class="route-swatch" style="background:${re.color}"></span><span>${re.name}</span> <small style="color:#93a4b7;font-weight:500;">(True Hazard Index: ${re.truth.hazardIndex.toFixed(1)} / 100)</small>`;
+    box.appendChild(title);
+
+    const tbl = document.createElement('table');
+    tbl.className = 'dcr-table';
+    tbl.innerHTML = `
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Your number</th>
+          <th>True number</th>
+          <th>Error</th>
+          <th>Points</th>
+        </tr>
+      </thead>
+    `;
+    const tb = document.createElement('tbody');
+    re.cells.forEach(cell => {
+      const unit = cell.rowDef.unit === 'count' ? '' : cell.rowDef.unit;
+      const yourStr = cell.empty ? '—' : `${cell.estimate}${unit ? ` ${unit}` : ''}`;
+      const trueStr = `${cell.rowDef.decimals > 0 ? cell.trueVal.toFixed(cell.rowDef.decimals) : Math.round(cell.trueVal)}${unit ? ` ${unit}` : ''}`;
+      const errStr = cell.empty ? 'Empty' : `${cell.errorPct.toFixed(1)}%`;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${cell.rowDef.label}</td>
+        <td>${yourStr}</td>
+        <td>${trueStr}</td>
+        <td>${errStr}</td>
+        <td><strong>${cell.points.toFixed(1)}</strong> / ${cell.maxPoints.toFixed(1)}</td>
+      `;
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb);
+    box.appendChild(tbl);
+    tablesWrapEl.appendChild(box);
+  });
+}
+
+/**
+ * Render Survey Kit accuracy & score summary inside the Debrief reveal section.
+ */
+export function renderDebriefSurveyRevealDOM({
+  accEl,
+  answeredEl,
+  scoreEl,
+  neutralEl,
+  tablesEl,
+  evaluation
+}) {
+  if (!evaluation) return;
+  const allCells = evaluation.routeEvaluations.flatMap(r => r.cells);
+  const answeredCells = allCells.filter(c => !c.empty);
+  const meanErr = answeredCells.length
+    ? answeredCells.reduce((sum, c) => sum + c.errorPct, 0) / answeredCells.length
+    : null;
+
+  if (accEl) {
+    accEl.textContent = meanErr !== null
+      ? `${evaluation.rank} (${meanErr.toFixed(1)}% avg err)`
+      : evaluation.rank;
+  }
+  if (answeredEl) {
+    answeredEl.textContent = `${answeredCells.length} / ${allCells.length} inputs · ${evaluation.identifiedCount} / ${evaluation.totalIdentifiable} ID'd`;
+  }
+  if (scoreEl) {
+    scoreEl.textContent = `${evaluation.totalScore} / 200 pts`;
+  }
+  if (neutralEl) {
+    neutralEl.textContent = `Element Score: ${evaluation.elementScore} / 100 · Hazard Score: ${evaluation.hazardScore} / 100 · Rank: ${evaluation.rank}`;
+  }
+  renderSurveyComparisonTablesDOM(tablesEl, evaluation.routeEvaluations);
 }

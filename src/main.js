@@ -45,7 +45,8 @@ import {
 import { createSurveyKitController } from './game/surveyKit.js';
 import {
   createSurveyLogController,
-  renderSurveyResultOverlayDOM
+  renderSurveyResultOverlayDOM,
+  renderDebriefSurveyRevealDOM
 } from './game/surveyLog.js';
 import { createDustZonesOverlay, createDustStormParticles } from './game/dustZones.js';
 import { playUiSound } from './config.js';
@@ -232,6 +233,7 @@ const iMobilityRow = document.getElementById('i-mobility-row');
 const btnLenses = document.getElementById('btn-lenses');
 const missionObjectiveBanner = document.getElementById('mission-objective-banner');
 const objectiveBannerText = document.getElementById('objective-banner-text');
+const btnBannerAction = document.getElementById('btn-banner-action');
 const missionDock = document.getElementById('mission-dock');
 const btnDockInspector = document.getElementById('btn-dock-inspector');
 const btnDockLegend = document.getElementById('btn-dock-legend');
@@ -244,14 +246,35 @@ const htElev = document.getElementById('ht-elev');
 const htTier = document.getElementById('ht-tier');
 const elevationProfileBox = document.getElementById('elevation-profile-box');
 const gameBriefingOverlay = document.getElementById('game-briefing-overlay');
-const gameExploreOverlay = document.getElementById('game-explore-overlay');
 const gameDebriefOverlay = document.getElementById('game-debrief-overlay');
 const btnStartMission = document.getElementById('btn-start-mission');
 const btnGoChoose = document.getElementById('btn-go-choose');
 const btnBackAnalyze = document.getElementById('btn-back-analyze');
 const btnLockRoute = document.getElementById('btn-lock-route');
-const btnGoDebrief = document.getElementById('btn-go-debrief');
-const exploreLockedRoute = document.getElementById('explore-locked-route');
+const btnDebriefClose = document.getElementById('btn-debrief-close');
+const btnDebriefDismiss = document.getElementById('btn-debrief-dismiss');
+const btnDebriefChoose = document.getElementById('btn-debrief-choose');
+const btnDebriefProceedGame = document.getElementById('btn-debrief-proceed-game');
+const btnDebriefReplay = document.getElementById('btn-debrief-replay');
+const btnDebriefFree = document.getElementById('btn-debrief-free');
+
+// Explore Map Card DOM Elements
+const exploreMapCard = document.getElementById('explore-map-card');
+const exploreCardRoute = document.getElementById('explore-card-route');
+const btnExploreChangeRoute = document.getElementById('btn-explore-change-route');
+const btnExploreFinish = document.getElementById('btn-explore-finish');
+
+// Proceed to Game Modal DOM Elements
+const gameProceedModal = document.getElementById('game-proceed-modal');
+const gpmRouteName = document.getElementById('gpm-route-name');
+const btnGpmClose = document.getElementById('btn-gpm-close');
+const btnGpmBackDebrief = document.getElementById('btn-gpm-back-debrief');
+const btnGpmBackMap = document.getElementById('btn-gpm-back-map');
+const btnGpmReplay = document.getElementById('btn-gpm-replay');
+const dataMethodsModal = document.getElementById('data-methods-modal');
+const btnDataMethods = document.getElementById('btn-data-methods');
+const btnDmClose = document.getElementById('btn-dm-close');
+const btnDmDismiss = document.getElementById('btn-dm-dismiss');
 
 // Labels Dropdown, Detail Card, Map Legend & 6 Decision Lenses DOM Elements
 const mapTopControls = document.getElementById('map-top-controls');
@@ -316,7 +339,10 @@ let surveyKit = null;
 let surveyLog = null;
 let dustZonesOverlay = null;
 let awaitingSurveyResultContinue = false;
+let debriefOverlayDismissed = false;
+let exploreOverlayDismissed = false;
 let frozenSurveyEval = null;
+let frozenRouteCalcSnapshot = null;
 let lastCalcMaskedState = null;
 
 function isRouteCalcMasked() {
@@ -379,6 +405,18 @@ function syncRouteCalcPanelUi() {
 }
 
 function renderDebriefCalculatorReveal() {
+  const surveyEval = frozenSurveyEval || (surveyLog ? surveyLog.evaluateCurrent() : null);
+  if (surveyEval) {
+    renderDebriefSurveyRevealDOM({
+      accEl: debriefCalcAcc,
+      answeredEl: debriefCalcAnswered,
+      scoreEl: debriefCalcScore,
+      neutralEl: debriefCalcNeutral,
+      tablesEl: debriefCalcTables,
+      evaluation: surveyEval
+    });
+    return;
+  }
   if (!routeCalc) return;
   renderDebriefCalcRevealDOM({
     accEl: debriefCalcAcc,
@@ -387,7 +425,7 @@ function renderDebriefCalculatorReveal() {
     neutralEl: debriefCalcNeutral,
     tablesEl: debriefCalcTables,
     candidates: plannerCandidates,
-    frozenSnapshot: routeCalc.getFrozenSnapshot()
+    frozenSnapshot: frozenRouteCalcSnapshot || (routeCalc ? routeCalc.getFrozenSnapshot() : null)
   });
 }
 
@@ -451,7 +489,7 @@ function renderFieldCodex() {
         tags.className = 'codex-tags';
         const gameTag = document.createElement('span');
         gameTag.className = 'mhc-tag game';
-        gameTag.textContent = 'GAME';
+        gameTag.textContent = 'MISSION RULE';
         tags.appendChild(gameTag);
 
         if (entry.source === 'derived from DEM') {
@@ -2448,6 +2486,8 @@ function resetCustomizationToStandard() {
     surveyLog.reset();
   }
   awaitingSurveyResultContinue = false;
+  debriefOverlayDismissed = false;
+  exploreOverlayDismissed = false;
   frozenSurveyEval = null;
   labelCatChips.forEach(chip => {
     chip.classList.add('active');
@@ -3338,6 +3378,10 @@ function bindUIEvents() {
 
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      if (dataMethodsModal && !dataMethodsModal.classList.contains('hidden')) {
+        dataMethodsModal.classList.add('hidden');
+        return;
+      }
       if (isSettingStart || isSettingGoal) {
         isSettingStart = false;
         isSettingGoal = false;
@@ -3348,6 +3392,14 @@ function bindUIEvents() {
       if (surveyKit && surveyKit.getActiveTool()) {
         surveyKit.clearTool();
         syncSurveyKitUi();
+      }
+      const screen = levelState.getState().screen;
+      if (screen === GAME_STATES.DEBRIEF && gameDebriefOverlay && !gameDebriefOverlay.classList.contains('hidden')) {
+        debriefOverlayDismissed = true;
+        applyGameScreenState(levelState.getState());
+      } else if (screen === GAME_STATES.EXPLORE && gameExploreOverlay && !gameExploreOverlay.classList.contains('hidden')) {
+        exploreOverlayDismissed = true;
+        applyGameScreenState(levelState.getState());
       }
     }
   });
@@ -3865,12 +3917,12 @@ function buildLensRouteCardHtml(cand) {
     const radObj = st.radiation;
     if (!radObj) {
       metricText = 'Computing…';
-      subText = `Sky-view shelter (SVF < ${SVF_SHELTER_THRESHOLD}, game rule)`;
+      subText = `Sky-view shelter (SVF < ${SVF_SHELTER_THRESHOLD}, mission rule)`;
       barHtml = `<div class="lrs-bar-wrap"><div class="lrs-bar-fill" style="width:0%;"></div></div>`;
     } else {
       const shW = Math.max(0, Math.min(100, radObj.shelteredPct));
       metricText = `SVF ${radObj.avgSvf.toFixed(3)}`;
-      subText = `Sheltered (SVF < ${SVF_SHELTER_THRESHOLD}, game rule): ${radObj.shelteredPct.toFixed(1)}%`;
+      subText = `Sheltered (SVF < ${SVF_SHELTER_THRESHOLD}, mission rule): ${radObj.shelteredPct.toFixed(1)}%`;
       barHtml = `
         <div class="lrs-bar-wrap">
           <div class="lrs-bar-fill" style="width:${shW.toFixed(1)}%;"></div>
@@ -3903,7 +3955,7 @@ function buildLensRouteCardHtml(cand) {
       </div>
       ${barHtml}
       <div class="lrs-sub">${subText}</div>
-      <div class="lrs-along" title="Gameplay surface elements within 150 m of route (no recommendations)">
+      <div class="lrs-along" title="Mission surface elements within 150 m of route (no recommendations)">
         <span class="lrs-along-lbl">Along this route (within 150 m):</span>
         <span class="lrs-along-vals">
           ${isCurrentPostLock()
@@ -3912,7 +3964,7 @@ function buildLensRouteCardHtml(cand) {
                <span class="lrs-cnt sci">Sci ${cnt.science}</span>`
             : `<span class="lrs-cnt">Haz ? · Res ? · Sci ?</span>`
           }
-          <span class="mhc-tag game">GAME</span>
+          <span class="mhc-tag game">MISSION RULE</span>
         </span>
       </div>
     </div>
@@ -4075,7 +4127,7 @@ function buildLevelMapAnchors() {
     solText: `Sol ${level01.start.sol}`,
     dataset: 'NASA PDS MSL Rover Localization + USGS Gale DEM',
     whyItMatters: 'Fixes the common starting elevation and slope entry baseline used to compare climb, traverse length, and exposure across candidates.',
-    tags: [{ text: 'measured', cls: 'measured' }, { text: 'game anchor', cls: 'game' }],
+    tags: [{ text: 'measured', cls: 'measured' }, { text: 'mission anchor', cls: 'game' }],
     worldX: startMesh.meshX,
     worldZ: startMesh.meshZ,
     getWorldY: () => sampleWorldY(level01.start.x, level01.start.y, 28)
@@ -4094,7 +4146,7 @@ function buildLevelMapAnchors() {
     whatItIs: `Shared traverse destination inside the core boxwork zone (Elev ${level01.goal.elevation.toFixed(1)} m).`,
     dataset: 'Level 1 mission target + USGS Gale DEM',
     whyItMatters: 'Establishes a uniform target coordinate so every route alternative solves the same origin-to-destination crossing.',
-    tags: [{ text: 'measured', cls: 'measured' }, { text: 'goal: game', cls: 'game' }],
+    tags: [{ text: 'measured', cls: 'measured' }, { text: 'goal: mission rule', cls: 'game' }],
     worldX: goalMesh.meshX,
     worldZ: goalMesh.meshZ,
     getWorldY: () => sampleWorldY(level01.goal.x, level01.goal.y, 78)
@@ -4114,7 +4166,7 @@ function buildLevelMapAnchors() {
     solText: `Sols ${bz.sols}`,
     dataset: 'Curiosity Campaign Boundary (NASA/JPL)',
     whyItMatters: 'Marks the extent of the destination science zone; candidate paths differ in approach gradient and how closely they enter the margin.',
-    tags: [{ text: 'measured', cls: 'measured' }, { text: 'game', cls: 'game' }],
+    tags: [{ text: 'measured', cls: 'measured' }, { text: 'mission rule', cls: 'game' }],
     worldX: bzMesh.meshX,
     worldZ: bzMesh.meshZ,
     getWorldY: () => sampleWorldY(bz.xMin, bz.yMin, 16)
@@ -4131,7 +4183,7 @@ function buildLevelMapAnchors() {
     const elem = level01Elements.elements.find(e => e.id === t.id);
     const tags = [
       { text: 'measured (Curiosity traverse); description unverified', cls: 'unverified' },
-      { text: 'GAME', cls: 'game' }
+      { text: 'MISSION RULE', cls: 'game' }
     ];
     if (import.meta.env.DEV && elem?.whatIsIt?.verified === false) {
       tags.push({ text: 'verify before submission', cls: 'sim' });
@@ -4263,9 +4315,9 @@ function buildLevelMapAnchors() {
       label: 'Steep slope (>25°)',
       hoverTitle: 'Steep slope (>25°)',
       whatItIs: `Escarpment cluster (${st.pctHaz.toFixed(0)}% cells >25° in 500×500 m, up to ${st.maxSlope.toFixed(1)}°).`,
-      dataset: 'slope_5m.bin (derived from 1 m DEM) · >25° threshold: game rule',
-      whyItMatters: 'Exceeding the 25° gameplay threshold marks high wheel-slip and tilt zones that generally force detours or slower climbing speeds.',
-      tags: [{ text: 'derived from DEM', cls: 'dem' }, { text: 'game rule (>25°)', cls: 'game' }],
+      dataset: 'slope_5m.bin (derived from 1 m DEM) · >25° threshold: mission rule',
+      whyItMatters: 'Exceeding the 25° mission threshold marks high wheel-slip and tilt zones that generally force detours or slower climbing speeds.',
+      tags: [{ text: 'derived from DEM', cls: 'dem' }, { text: 'mission rule (>25°)', cls: 'game' }],
       worldX: stMesh.meshX,
       worldZ: stMesh.meshZ,
       getWorldY: () => sampleWorldY(st.x, st.y, 26)
@@ -4346,7 +4398,7 @@ function buildLevelMapAnchors() {
         whatItIs: `Candidate traverse ${r.blindLabel} (${r.metrics.distKm.value.toFixed(2)} km measured path). Click to select this route.`,
         dataset: 'Red Quest A* terrain planner (USGS Gale DEM)',
         whyItMatters: `Highlights the initial departure corridor of ${r.blindLabel} from the shared Start point.`,
-        tags: [{ text: 'game', cls: 'game' }, { text: 'measured DEM', cls: 'measured' }],
+        tags: [{ text: 'mission rule', cls: 'game' }, { text: 'measured DEM', cls: 'measured' }],
         worldX: tagMesh.meshX,
         worldZ: tagMesh.meshZ,
         getWorldY: () => sampleWorldY(chosenWp.x, chosenWp.y, 18)
@@ -4372,12 +4424,12 @@ function buildLevelMapAnchors() {
       label: "Curiosity's actual path (measured, reference)",
       hoverTitle: "Curiosity's actual path (measured, reference)",
       whatItIs: `Trimmed distance to boxwork core zone: ${trimmedCuriosityData.distKm.toFixed(2)} km (measured).`,
-      whatDebrief: `Trimmed distance: ${trimmedCuriosityData.distKm.toFixed(2)} km (measured). Slope tiers along trimmed path (measured DEM, 15°/25° game rule): ${trimmedCuriosityData.pctEasy.toFixed(1)}% Easy (<15°), ${trimmedCuriosityData.pctMod.toFixed(1)}% Moderate (15°–25°), ${trimmedCuriosityData.pctHaz.toFixed(1)}% Hazardous (>25°).`,
+      whatDebrief: `Trimmed distance: ${trimmedCuriosityData.distKm.toFixed(2)} km (measured). Slope tiers along trimmed path (measured DEM, 15°/25° mission rule): ${trimmedCuriosityData.pctEasy.toFixed(1)}% Easy (<15°), ${trimmedCuriosityData.pctMod.toFixed(1)}% Moderate (15°–25°), ${trimmedCuriosityData.pctHaz.toFixed(1)}% Hazardous (>25°).`,
       solText: `Sols ${pts[0].sol}–${pts[pts.length - 1].sol} (trimmed)`,
       dataset: 'NASA PDS MSL Curiosity Rover Localization + USGS Gale DEM',
       whyItMatters: 'Actual Curiosity traverse trimmed from Start until its first entry into the boxwork core zone.',
       tags: [{ text: 'measured', cls: 'measured' }],
-      tagsDebrief: [{ text: 'measured', cls: 'measured' }, { text: 'measured DEM', cls: 'dem' }, { text: 'game rule', cls: 'game' }],
+      tagsDebrief: [{ text: 'measured', cls: 'measured' }, { text: 'measured DEM', cls: 'dem' }, { text: 'mission rule', cls: 'game' }],
       worldX: curMesh.meshX,
       worldZ: curMesh.meshZ,
       getWorldY: () => sampleWorldY(anchorPt.x, anchorPt.y, 18)
@@ -4647,19 +4699,41 @@ function syncPanelsToViewMode() {
   if (missionObjectiveBanner && objectiveBannerText) {
     const showBanner = currentViewMode === 'MISSION' && !isBriefing;
     missionObjectiveBanner.classList.toggle('hidden', !showBanner);
+    const lockedId = levelState.getState().lockedRouteId;
     if (screen === GAME_STATES.ANALYZE) {
       objectiveBannerText.textContent = 'Explore the map, then choose a route';
     } else if (screen === GAME_STATES.CHOOSE) {
       objectiveBannerText.textContent = 'Compare Routes A, B, and C, then lock in your plan';
     } else if (screen === GAME_STATES.EXPLORE) {
-      objectiveBannerText.textContent = 'Executing locked traverse toward the boxwork core';
+      const lockedCand = level01.candidateRoutes.find(r => r.id === lockedId);
+      objectiveBannerText.textContent = lockedCand
+        ? `Exploring locked traverse — ${lockedCand.blindLabel}`
+        : 'Executing locked traverse toward the boxwork core';
     } else if (screen === GAME_STATES.DEBRIEF) {
       objectiveBannerText.textContent = 'Debrief — review estimates, true values & Curiosity reference';
     }
+    if (btnBannerAction) {
+      const showExploreDebriefBtn =
+        screen === GAME_STATES.EXPLORE &&
+        !awaitingSurveyResultContinue &&
+        exploreOverlayDismissed;
+      const showReopenDebriefBtn =
+        screen === GAME_STATES.DEBRIEF &&
+        debriefOverlayDismissed;
+      if (showExploreDebriefBtn) {
+        btnBannerAction.textContent = 'View Debrief →';
+        btnBannerAction.classList.remove('hidden');
+      } else if (showReopenDebriefBtn) {
+        btnBannerAction.textContent = 'Open Debrief';
+        btnBannerAction.classList.remove('hidden');
+      } else {
+        btnBannerAction.classList.add('hidden');
+      }
+    }
   }
 
-  // Bottom Mission Dock (only in MISSION ANALYZE & CHOOSE)
-  const showDock = currentViewMode === 'MISSION' && canPlan;
+  // Bottom Mission Dock (Inspector, Legend, Lenses, Codex; Survey Kit & Routes visible in ANALYZE/CHOOSE)
+  const showDock = currentViewMode === 'MISSION' && !isBriefing;
   if (missionDock) {
     missionDock.classList.toggle('hidden', !showDock);
   }
@@ -4670,6 +4744,9 @@ function syncPanelsToViewMode() {
   if (btnDockLegend) {
     btnDockLegend.classList.toggle('active', showLegend);
     btnDockLegend.setAttribute('aria-expanded', showLegend ? 'true' : 'false');
+  }
+  if (btnCalcToggle) {
+    btnCalcToggle.classList.toggle('hidden', isPostLock || !showDock);
   }
   if (btnLenses) {
     btnLenses.classList.toggle('hidden', !showDock);
@@ -4684,6 +4761,7 @@ function syncPanelsToViewMode() {
     btnCodex.setAttribute('aria-expanded', showCodex ? 'true' : 'false');
   }
   if (btnDockRoutes) {
+    btnDockRoutes.classList.toggle('hidden', isPostLock || !showDock);
     const routesExpanded = !prefs.plannerCollapsed;
     btnDockRoutes.classList.toggle('active', routesExpanded);
     btnDockRoutes.setAttribute('aria-expanded', routesExpanded ? 'true' : 'false');
@@ -4697,7 +4775,7 @@ function syncPanelsToViewMode() {
     }
   }
   if (legendRefRow) {
-    const showRefLegend = !isBriefing && (currentViewMode !== 'MISSION' || showCuriosityPath);
+    const showRefLegend = (currentViewMode === 'RESEARCH') || (isPostLock && showCuriosityPath);
     legendRefRow.classList.toggle('hidden', !showRefLegend);
   }
   if (codexPanel) {
@@ -4708,7 +4786,7 @@ function syncPanelsToViewMode() {
   const isDebrief = screen === GAME_STATES.DEBRIEF;
   const isExploring = screen === GAME_STATES.EXPLORE && !awaitingSurveyResultContinue;
   if (curiosityRefGroup && curiosityRefLine) {
-    const showTrimmedRef = currentViewMode === 'MISSION' && !isBriefing && !isExploring && showCuriosityPath;
+    const showTrimmedRef = (currentViewMode === 'RESEARCH') || (currentViewMode === 'MISSION' && isPostLock && !isExploring && showCuriosityPath);
     curiosityRefGroup.visible = showTrimmedRef;
     if (curiosityRefLine.material) {
       curiosityRefLine.material.color.setHex(isDebrief ? 0xf8fafc : 0xcbd5e1);
@@ -4719,7 +4797,7 @@ function syncPanelsToViewMode() {
 
   // Map labels context
   if (mapLabels) {
-    mapLabels.setAnchorHidden('curiosity-ref-path', currentViewMode !== 'MISSION' || isBriefing || !showCuriosityPath);
+    mapLabels.setAnchorHidden('curiosity-ref-path', currentViewMode === 'MISSION' ? (!isPostLock || !showCuriosityPath) : false);
     mapLabels.setViewContext({ isBriefing, isPostLock, isDebrief });
   }
 
@@ -4807,20 +4885,24 @@ function applyGameScreenState(state) {
   updatePhaseStepper(screen);
 
   // Overlays
-  const showResultOverlay = screen === GAME_STATES.EXPLORE && awaitingSurveyResultContinue;
   if (gameBriefingOverlay) gameBriefingOverlay.classList.toggle('hidden', screen !== GAME_STATES.BRIEFING);
-  if (surveyResultOverlay) {
-    surveyResultOverlay.classList.toggle('hidden', !showResultOverlay);
-    if (showResultOverlay && frozenSurveyEval) {
-      renderSurveyResultOverlayDOM({
-        elemScoreEl: sroElemScore,
-        hazScoreEl: sroHazScore,
-        totalScoreEl: sroTotalScore,
-        rankEl: sroRank,
-        identSummaryEl: sroIdentSummary,
-        hazIndexRowEl: sroHazIndexRow,
-        tablesWrapEl: sroTablesWrap,
-        evaluation: frozenSurveyEval
+  if (gameDebriefOverlay) gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF || debriefOverlayDismissed);
+  if (exploreMapCard) exploreMapCard.classList.toggle('hidden', screen !== GAME_STATES.EXPLORE);
+  if (gameProceedModal && screen !== GAME_STATES.DEBRIEF) gameProceedModal.classList.add('hidden');
+
+  // Candidate lines visibility: only locked route visible in EXPLORE/DEBRIEF
+  if (candidateLines) {
+    if (screen === GAME_STATES.EXPLORE || screen === GAME_STATES.DEBRIEF) {
+      Object.keys(candidateLines).forEach(candId => {
+        if (candidateLines[candId]) {
+          candidateLines[candId].visible = (candId === state.lockedRouteId);
+        }
+      });
+    } else {
+      Object.keys(candidateLines).forEach(candId => {
+        if (candidateLines[candId]) {
+          candidateLines[candId].visible = true;
+        }
       });
     }
   }
@@ -4829,7 +4911,18 @@ function applyGameScreenState(state) {
   if (gameExploreOverlay) {
     gameExploreOverlay.classList.toggle('hidden', !isExploring || exploreHintDismissed);
   }
-  if (gameDebriefOverlay) gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF);
+  if (gameDebriefOverlay) gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF || debriefOverlayDismissed);
+
+  // Survey Kit scan gating: no new scans in CHOOSE or post-lock
+  if (surveyKit) {
+    if (screen === GAME_STATES.CHOOSE || screen === GAME_STATES.EXPLORE || screen === GAME_STATES.DEBRIEF) {
+      if (typeof surveyKit.deactivate === 'function') {
+        surveyKit.deactivate();
+      } else if (typeof surveyKit.clearTool === 'function') {
+        surveyKit.clearTool();
+      }
+    }
+  }
 
   // Full reference rover/timeline traverse stays hidden until DEBRIEF in MISSION mode (trimmed dashed Curiosity path shows from ANALYZE+)
   const isPostLock = screen === GAME_STATES.EXPLORE || screen === GAME_STATES.DEBRIEF;
@@ -4865,6 +4958,9 @@ function applyGameScreenState(state) {
 
   // Planner panel & blinded Route A/B/C controls
   const showPlanner = screen === GAME_STATES.ANALYZE || screen === GAME_STATES.CHOOSE;
+  if (showPlanner && panelPrefs.MISSION) {
+    panelPrefs.MISSION.plannerCollapsed = false;
+  }
   if (plannerPanel) {
     plannerPanel.classList.toggle('hidden', !showPlanner);
     plannerPanel.classList.toggle('game-blinded', showPlanner);
@@ -4873,18 +4969,22 @@ function applyGameScreenState(state) {
 
   if (btnGoChoose) btnGoChoose.style.display = screen === GAME_STATES.ANALYZE ? 'inline-block' : 'none';
   if (btnBackAnalyze) btnBackAnalyze.style.display = screen === GAME_STATES.CHOOSE ? 'inline-block' : 'none';
-  if (btnLockRoute) btnLockRoute.style.display = screen === GAME_STATES.CHOOSE ? 'inline-block' : 'none';
+  if (btnLockRoute) {
+    btnLockRoute.style.display = screen === GAME_STATES.CHOOSE ? 'inline-block' : 'none';
+    const sel = plannerCandidates.find(c => c.id === (state.selectedRouteId || selectedCandidateId));
+    btnLockRoute.textContent = `Lock in & Explore ${sel ? sel.name : 'Route'} →`;
+  }
 
   if (plannerStatus) {
     if (screen === GAME_STATES.ANALYZE) {
       plannerStatus.textContent = 'Step 1 (Analyze): inspect terrain layers & Routes A, B, C';
     } else if (screen === GAME_STATES.CHOOSE) {
-      plannerStatus.textContent = 'Step 2 (Choose): pick Route A, B, or C & Lock in route';
+      plannerStatus.textContent = 'Step 2 (Choose): review route estimates & Lock in route';
     }
   }
 
   if (showPlanner) {
-    const selectedCand = plannerCandidates.find(c => c.id === selectedCandidateId);
+    const selectedCand = plannerCandidates.find(c => c.id === (state.selectedRouteId || selectedCandidateId));
     if (selectedCand) {
       if (profileRouteName) {
         profileRouteName.textContent = selectedCand.name.toUpperCase();
@@ -5009,8 +5109,20 @@ function applyGameScreenState(state) {
   }
 
   if (screen === GAME_STATES.DEBRIEF) {
-    populateDebriefUI(level01, state.lockedRouteId, trimmedCuriosityData, activeDriveStats);
+    const surveyEval = frozenSurveyEval || (surveyLog ? surveyLog.evaluateCurrent() : null);
+    const sScore = surveyEval ? surveyEval.totalScore : 0;
+    populateDebriefUI(level01, state.lockedRouteId, trimmedCuriosityData, activeDriveStats, sScore);
     renderDebriefCalculatorReveal();
+
+    const hasLockedRoute = Boolean(state.lockedRouteId);
+    if (btnDebriefProceedGame) {
+      btnDebriefProceedGame.classList.toggle('hidden', !hasLockedRoute);
+    }
+    if (btnDebriefChoose) {
+      btnDebriefChoose.textContent = hasLockedRoute ? '← Choose Another Route' : 'Choose a Route →';
+      btnDebriefChoose.classList.toggle('btn-game-primary', !hasLockedRoute);
+      btnDebriefChoose.classList.toggle('btn-planner-tool', hasLockedRoute);
+    }
   }
 
   syncPanelsToViewMode();
@@ -5216,11 +5328,13 @@ function bindGameEvents() {
 
   if (btnLockRoute) {
     btnLockRoute.addEventListener('click', () => {
+      debriefOverlayDismissed = false;
+      // Freeze all estimates permanently at this moment
       if (surveyLog) {
         frozenSurveyEval = surveyLog.evaluateCurrent();
-        awaitingSurveyResultContinue = true;
-      } else {
-        awaitingSurveyResultContinue = false;
+      }
+      if (routeCalc) {
+        frozenRouteCalcSnapshot = routeCalc.getFrozenSnapshot();
       }
       levelState.lockInRoute();
     });
@@ -5287,6 +5401,155 @@ function bindGameEvents() {
     });
   }
 
+  // Explore Phase Map Survey Controls
+  if (btnExploreFinish) {
+    btnExploreFinish.addEventListener('click', () => {
+      debriefOverlayDismissed = false;
+      levelState.goToDebrief();
+    });
+  }
+
+  if (btnExploreChangeRoute) {
+    btnExploreChangeRoute.addEventListener('click', () => {
+      debriefOverlayDismissed = false;
+      panelPrefs[currentViewMode].plannerCollapsed = false;
+      levelState.goToChoose();
+    });
+  }
+
+  // Debrief Action Buttons
+  const dismissDebriefOverlay = () => {
+    debriefOverlayDismissed = true;
+    if (gameDebriefOverlay) gameDebriefOverlay.classList.add('hidden');
+  };
+
+  if (btnDebriefClose) {
+    btnDebriefClose.addEventListener('click', dismissDebriefOverlay);
+  }
+  if (btnDebriefDismiss) {
+    btnDebriefDismiss.addEventListener('click', dismissDebriefOverlay);
+  }
+
+  if (btnDebriefChoose) {
+    btnDebriefChoose.addEventListener('click', () => {
+      debriefOverlayDismissed = false;
+      panelPrefs[currentViewMode].plannerCollapsed = false;
+      levelState.goToChoose();
+    });
+  }
+
+  // Interactive Stage Tracker Clicks
+  const phaseSteps = document.querySelectorAll('#game-phase-bar .phase-step');
+  phaseSteps.forEach(step => {
+    step.addEventListener('click', () => {
+      const targetPhase = step.dataset.phase;
+      if (!targetPhase) return;
+      playUiSound('click');
+      if (targetPhase === GAME_STATES.BRIEFING) {
+        if (gameBriefingOverlay) gameBriefingOverlay.classList.remove('hidden');
+      } else if (targetPhase === GAME_STATES.ANALYZE) {
+        debriefOverlayDismissed = false;
+        levelState.goToAnalyze();
+      } else if (targetPhase === GAME_STATES.CHOOSE) {
+        debriefOverlayDismissed = false;
+        panelPrefs[currentViewMode].plannerCollapsed = false;
+        levelState.goToChoose();
+      } else if (targetPhase === GAME_STATES.EXPLORE) {
+        debriefOverlayDismissed = false;
+        if (!levelState.getState().lockedRouteId) {
+          levelState.selectRoute(levelState.getState().selectedRouteId || 'route-a');
+          if (surveyLog) frozenSurveyEval = surveyLog.evaluateCurrent();
+          if (routeCalc) frozenRouteCalcSnapshot = routeCalc.getFrozenSnapshot();
+          levelState.lockInRoute();
+        } else {
+          levelState.goToExplore();
+        }
+      } else if (targetPhase === GAME_STATES.DEBRIEF) {
+        debriefOverlayDismissed = false;
+        levelState.goToDebrief();
+      }
+    });
+  });
+
+  if (btnDebriefProceedGame) {
+    btnDebriefProceedGame.addEventListener('click', () => {
+      const lockedCand = plannerCandidates.find(c => c.id === levelState.getState().lockedRouteId);
+      if (gpmRouteName) gpmRouteName.textContent = lockedCand ? lockedCand.name : 'Selected Route';
+      if (gameProceedModal) gameProceedModal.classList.remove('hidden');
+    });
+  }
+
+  const closeProceedModal = () => {
+    if (gameProceedModal) gameProceedModal.classList.add('hidden');
+  };
+  if (btnGpmClose) btnGpmClose.addEventListener('click', closeProceedModal);
+  if (btnGpmBackDebrief) btnGpmBackDebrief.addEventListener('click', closeProceedModal);
+  if (btnGpmBackMap) {
+    btnGpmBackMap.addEventListener('click', () => {
+      closeProceedModal();
+      debriefOverlayDismissed = true;
+      applyGameScreenState(levelState.getState());
+    });
+  }
+  if (btnGpmReplay) {
+    btnGpmReplay.addEventListener('click', () => {
+      closeProceedModal();
+      if (btnDebriefReplay) btnDebriefReplay.click();
+    });
+  }
+
+  if (btnDebriefReplay) {
+    btnDebriefReplay.addEventListener('click', () => {
+      debriefOverlayDismissed = false;
+      frozenSurveyEval = null;
+      frozenRouteCalcSnapshot = null;
+      if (surveyKit) surveyKit.reset();
+      if (surveyLog) surveyLog.reset();
+      if (routeCalc) routeCalc.reset();
+      levelState.resetLevel();
+      syncPanelsToViewMode();
+    });
+  }
+
+  if (btnDebriefFree) {
+    btnDebriefFree.addEventListener('click', () => {
+      debriefOverlayDismissed = false;
+      if (gameDebriefOverlay) gameDebriefOverlay.classList.add('hidden');
+      setViewMode('RESEARCH');
+    });
+  }
+
+  if (btnBannerAction) {
+    btnBannerAction.addEventListener('click', () => {
+      const screen = levelState.getState().screen;
+      if (screen === GAME_STATES.EXPLORE) {
+        debriefOverlayDismissed = false;
+        levelState.goToDebrief();
+      } else if (screen === GAME_STATES.DEBRIEF) {
+        debriefOverlayDismissed = false;
+        applyGameScreenState(levelState.getState());
+      }
+    });
+  }
+
+  const openDataMethodsModal = () => {
+    if (!dataMethodsModal) return;
+    dataMethodsModal.classList.remove('hidden');
+  };
+  const closeDataMethodsModal = () => {
+    if (!dataMethodsModal) return;
+    dataMethodsModal.classList.add('hidden');
+  };
+
+  if (btnDataMethods) btnDataMethods.addEventListener('click', openDataMethodsModal);
+  if (btnDmClose) btnDmClose.addEventListener('click', closeDataMethodsModal);
+  if (btnDmDismiss) btnDmDismiss.addEventListener('click', closeDataMethodsModal);
+  if (dataMethodsModal) {
+    dataMethodsModal.addEventListener('click', e => {
+      if (e.target === dataMethodsModal) closeDataMethodsModal();
+    });
+  }
+
   if (btnCalcToggle) {
     btnCalcToggle.addEventListener('click', () => {
       if (currentViewMode !== 'MISSION') return;
@@ -5334,10 +5597,12 @@ function bindGameEvents() {
     if (routeCalc) routeCalc.setDrawerOpen(false);
     if (surveyKit) surveyKit.reset();
     if (surveyLog) surveyLog.reset();
-    awaitingSurveyResultContinue = false;
+            debriefOverlayDismissed = false;
     frozenSurveyEval = null;
+    frozenRouteCalcSnapshot = null;
     levelState.resetLevel();
     resetCustomizationToStandard();
+    syncPanelsToViewMode();
   });
 }
 
@@ -5701,6 +5966,14 @@ async function loadAssetsAndInit() {
         savedPanelsBeforeTutorial = null;
         panelPrefs.MISSION.plannerCollapsed = snap.plannerCollapsed;
         setMissionSidePanel(snap.activeSidePanel);
+
+        // When tutorial finishes or is skipped, always bring up the Level 1 Mission Briefing card
+        hasPlayedIntro = false;
+        levelState.resetLevel();
+        if (gameBriefingOverlay) {
+          gameBriefingOverlay.classList.remove('hidden');
+        }
+        applyGameScreenState(levelState.getState());
       }
     });
 

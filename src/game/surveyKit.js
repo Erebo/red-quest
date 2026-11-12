@@ -18,7 +18,7 @@ const TERRAIN_HEIGHT_M = 5000.0;
 export const SURVEY_TOOLS = Object.freeze({
   slope: { id: 'slope', icon: '📐', label: 'SLOPE', title: 'SLOPE' },
   hazard: { id: 'hazard', icon: '⚠', label: 'HAZARD', title: 'HAZARD (≤150 m)' },
-  dust: { id: 'dust', icon: '🌫', label: 'DUST', locked: false, title: 'DUST (GAME / SIM)' },
+  dust: { id: 'dust', icon: '🌫', label: 'DUST', locked: false, title: 'DUST (MISSION RULE / MODELED)' },
   elements: { id: 'elements', icon: '★', label: 'ELEMENTS', title: 'ELEMENTS (≤150 m)' }
 });
 
@@ -125,7 +125,7 @@ export function createSurveyKitController({
         reading: `${deg.toFixed(1)}° · ${tier}`,
         chips: [
           { text: 'measured (DEM)', cls: 'measured' },
-          { text: 'game rule', cls: 'game' }
+          { text: 'mission rule', cls: 'game' }
         ]
       };
     }
@@ -142,7 +142,7 @@ export function createSurveyKitController({
       return {
         title: '⚠ Hazards (≤150 m)',
         reading,
-        chips: [{ text: 'game rule', cls: 'game' }]
+        chips: [{ text: 'mission rule', cls: 'game' }]
       };
     }
 
@@ -160,7 +160,7 @@ export function createSurveyKitController({
       if (crismInfo?.phyActive) crismNotes.push('CRISM phyllosilicate indicator');
       if (crismInfo?.hydActive) crismNotes.push('CRISM hydrated mineral indicator');
 
-      const chips = [{ text: 'game rule', cls: 'game' }];
+      const chips = [{ text: 'mission rule', cls: 'game' }];
       if (crismNotes.length) {
         chips.push({ text: 'measured (CRISM)', cls: 'measured' });
       }
@@ -189,8 +189,8 @@ export function createSurveyKitController({
         title: '🌫 Dust Exposure',
         reading,
         chips: [
-          { text: 'GAME', cls: 'game' },
-          { text: 'SIM', cls: 'sim' }
+          { text: 'MISSION RULE', cls: 'game' },
+          { text: 'MODELED', cls: 'sim' }
         ]
       };
     }
@@ -340,7 +340,7 @@ export function createSurveyKitController({
         reading: `Max ${truth.maxSlopeDeg.toFixed(1)}° · Easy ${truth.pctEasy.toFixed(1)}% · Mod ${truth.pctMod.toFixed(1)}% · Steep ${truth.pctSteep.toFixed(1)}%`,
         chips: [
           { text: 'measured (DEM)', cls: 'measured' },
-          { text: 'game rule', cls: 'game' },
+          { text: 'mission rule', cls: 'game' },
           { text: chargedCost > 0 ? '-1 scan' : 'cached (free)', cls: chargedCost > 0 ? 'sim' : 'dem' }
         ]
       };
@@ -350,7 +350,7 @@ export function createSurveyKitController({
         reading: `Hazard count: ${truth.hazardCount} (${truth.hazElements150m} hazard elements ≤150 m + ${truth.steepZonesCrossed} steep zones crossed)`,
         chips: [
           { text: 'derived', cls: 'dem' },
-          { text: 'game rule', cls: 'game' },
+          { text: 'mission rule', cls: 'game' },
           { text: chargedCost > 0 ? '-1 scan' : 'cached (free)', cls: chargedCost > 0 ? 'sim' : 'dem' }
         ]
       };
@@ -359,7 +359,7 @@ export function createSurveyKitController({
         title: `★ ${truth.routeName} · Elements`,
         reading: `${truth.elementsCount} elements within 150 m (${identifiedCount} identified near route)`,
         chips: [
-          { text: 'GAME', cls: 'game' },
+          { text: 'MISSION RULE', cls: 'game' },
           { text: chargedCost > 0 ? '-1 scan' : 'cached (free)', cls: chargedCost > 0 ? 'sim' : 'dem' }
         ]
       };
@@ -368,8 +368,8 @@ export function createSurveyKitController({
         title: `🌫 ${truth.routeName} · Dust Exposure`,
         reading: `${truth.dustPct.toFixed(1)}% of route inside dust zones (${truth.sampleCount} samples @ 10 m)`,
         chips: [
-          { text: 'GAME', cls: 'game' },
-          { text: 'SIM', cls: 'sim' },
+          { text: 'MISSION RULE', cls: 'game' },
+          { text: 'MODELED', cls: 'sim' },
           { text: chargedCost > 0 ? '-1 scan' : 'cached (free)', cls: chargedCost > 0 ? 'sim' : 'dem' }
         ]
       };
@@ -387,7 +387,7 @@ export function createSurveyKitController({
       title: `★ ${el.name} (${famLabel})`,
       reading: `${statusPrefix}${el.whatIsIt?.text || ''}`,
       chips: [
-        { text: el.source || 'GAME', cls: el.source === 'derived from DEM' ? 'dem' : 'game' },
+        { text: el.source === 'game' ? 'MISSION RULE' : (el.source || 'MISSION RULE'), cls: el.source === 'derived from DEM' ? 'dem' : 'game' },
         { text: famLabel.toUpperCase(), cls: 'measured' }
       ]
     };
@@ -450,6 +450,7 @@ export function createSurveyKitController({
     getActiveTool: () => activeTool,
     setActiveTool,
     clearTool,
+    deactivate: clearTool,
     scanPoint,
     showRoutePinReading,
     showElementIdentifiedPin,

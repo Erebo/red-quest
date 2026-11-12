@@ -5,7 +5,7 @@
   "rules": {
     "minSpacingM": 150,
     "minStartGoalDistanceM": 100,
-    "rockfallMinSlopeDeg": 25.0,
+    "rockfallMinSlopeDeg": 25,
     "exceptions": [
       {
         "pair": [
@@ -37,7 +37,7 @@
         "text": "Stratigraphic contact marking the onset of polygonal ridge patterns observed from orbit. Ground imagery along this transition helps constrain how mineral-filled fractures formed in ancient lakebed mudstones.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: major orbital investigation waypoint planned for future Explore driving checks."
+      "effectOnMission": "Mission effect: orbital investigation waypoint revealed in EXPLORE."
     },
     {
       "id": "target-2",
@@ -58,7 +58,7 @@
         "text": "Elevated ridge crest overlooking intersecting mineral veins that stand proud above wind-eroded troughs. Sampling views from this margin document structural geometry and elevation trends.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: ridge overlook observation stop in future Explore progression."
+      "effectOnMission": "Mission effect: ridge overlook observation stop revealed in EXPLORE."
     },
     {
       "id": "target-3",
@@ -79,7 +79,7 @@
         "text": "Rotary percussive bedrock sampling location targeting cemented sedimentary ridges for powder analysis. Drilled core mineralogy helps identify how groundwater chemistry evolved over Martian geologic history.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: multi-sol core sampling stop consuming energy and time in future Explore mode."
+      "effectOnMission": "Mission effect: multi-sol core sampling stop revealed in EXPLORE."
     },
     {
       "id": "sci-boxwork-1",
@@ -97,7 +97,7 @@
         "text": "Raised lattice of mineral-hardened fracture fills left standing after softer host mudstone weathered away under desert winds. Analog structures on Earth indicate prolonged subsurface fluid flow through fractured sediments.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: primary science-campaign survey feature inside the final destination zone."
+      "effectOnMission": "Mission effect: primary science-campaign survey feature inside destination zone."
     },
     {
       "id": "haz-sand-1",
@@ -115,7 +115,7 @@
         "text": "Windblown basaltic silt and loose ripple sand trapped inside gentle topographic hollows. Dark unconsolidated sand can sink rover wheels and stall traction without careful slip monitoring.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: increases slip risk and drive duration in future simulation."
+      "effectOnMission": "Mission effect: active terrain slip hazard affecting wheel mobility."
     },
     {
       "id": "haz-rockfall-1",
@@ -133,7 +133,7 @@
         "text": "Steep fractured bedrock cliffs shedding angular boulders onto apron talus slopes below. Unstable blocky scree creates high roll hazards and hazardous wheel punctures along steep scarps.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: adds severe structural hazard near steep cliff overhangs."
+      "effectOnMission": "Mission effect: steep terrain cliff hazard requiring avoidance."
     },
     {
       "id": "haz-dust-1",
@@ -151,7 +151,7 @@
         "text": "Convective daytime vortex lifting bright fine dust across warm open crater plains. Passing vortices loft charged dust grains that can coat camera lenses and optics briefly.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: temporary visibility and dust-accumulation hazard along flat corridors."
+      "effectOnMission": "Mission effect: visibility and dust-accumulation corridor hazard."
     },
     {
       "id": "haz-radio-1",
@@ -162,14 +162,14 @@
       "x": 3007.81,
       "y": 3164.06,
       "source": "derived from DEM",
-      "placementRule": "Terrain cell line-of-sight occluded behind DEM ridge from simulated SE orbiter direction",
+      "placementRule": "Terrain cell line-of-sight occluded behind DEM ridge from modeled SE orbiter direction",
       "icon": "hazard_radio",
       "visibility": "visible",
       "whatIsIt": {
         "text": "Topographic trough where flanking bedrock ridges block grazing direct line-of-sight to passing orbiter relays. Steep crater walls interrupt UHF communications windows until the rover drives clear.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: interrupts orbiter uplink telemetry checks in future Explore simulation."
+      "effectOnMission": "Mission effect: orbiter communications line-of-sight obstruction."
     },
     {
       "id": "res-shelter-1",
@@ -187,7 +187,7 @@
         "text": "Recessed bedrock alcove beneath steep surrounding walls that narrows open sky hemisphere above the rover. Natural cliff shielding lowers cosmic ray exposure relative to flat exposed plains.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: reduces simulated cumulative cosmic radiation dose while resting here."
+      "effectOnMission": "Mission effect: natural radiation sheltering provided by terrain geometry."
     },
     {
       "id": "res-oxygen-1",
@@ -205,7 +205,7 @@
         "text": "Pressurized reserve canister depot planted along planning waypoints to support hypothetical crewed or long-endurance operations. Supply caches offer safety margins far from base.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: replenishes reserve life-support / consumables buffer in future game modes."
+      "effectOnMission": "Mission effect: mission life-support replenishment resource."
     },
     {
       "id": "res-solar-1",
@@ -223,7 +223,7 @@
         "text": "Sunlit topographic crest rising above local shadows to catch broad overhead illumination across the sol. Ridge crests maximize solar charging potential for solar-powered surface assets.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: boosts simulated solar battery recovery in future Explore simulation."
+      "effectOnMission": "Mission effect: high-insolation solar power generation sector."
     },
     {
       "id": "res-relay-1",
@@ -231,7 +231,7 @@
       "type": "comm_relay_beacon",
       "name": "Comm relay beacon",
       "shortLabel": "Relay beacon",
-      "x": 3750.0,
+      "x": 3750,
       "y": 4140.62,
       "source": "game",
       "placementRule": "Exposed clear-sky DEM crest (SVF > 0.91, TPI > 5 m) along eastern spur",
@@ -241,7 +241,7 @@
         "text": "Deployed autonomous transceiver sited on open high ground with nearly unobstructed sky visibility. Elevated beacons extend surface telemetry coverage across adjacent terrain shadows.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: strengthens simulated orbiter comm margin along nearby sectors."
+      "effectOnMission": "Mission effect: optimal orbiter comm link elevation."
     },
     {
       "id": "sci-outcrop-1",
@@ -259,7 +259,7 @@
         "text": "Laminated sedimentary beds exposed where wind abrasion has stripped away loose regolith cover. Fine horizontal rock strata preserve seasonal or deltaic depositional cycles inside Gale Crater.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: yields passive geologic stratigraphy science bonus on pass."
+      "effectOnMission": "Mission effect: primary geologic stratigraphy investigation target."
     },
     {
       "id": "sci-clay-1",
@@ -277,7 +277,7 @@
         "text": "Fine-grained lacustrine mudstone holding clay mineral absorption bands visible from orbital spectrometers. Clay minerals record neutral-water alteration environments capable of preserving organics.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: high-value orbital mineral ground-truthing stop."
+      "effectOnMission": "Mission effect: orbital hydrated mineral ground-truth target."
     },
     {
       "id": "sci-vein-1",
@@ -295,7 +295,7 @@
         "text": "Light-toned mineral fracture fills formed when calcium-sulfate brines precipitated inside buried rock cracks. Orbitally mapped hydrated bands guide rovers toward water-bearing mineralization.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: awards spectral follow-up science points when inspected."
+      "effectOnMission": "Mission effect: fracture fill mineralogy observation site."
     },
     {
       "id": "sci-concretion-1",
@@ -313,7 +313,7 @@
         "text": "Weathering-resistant diagenetic nodules cemented by groundwater fluids after sediment burial. Eroded pea-sized nodules accumulate as lag gravels across wind-scoured benches.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: yields sedimentary diagenesis observation points."
+      "effectOnMission": "Mission effect: sedimentary diagenesis observation feature."
     },
     {
       "id": "mys-scan-1",
@@ -331,7 +331,7 @@
         "text": "High-reflectance pitted metallic boulder contrasting strongly against powdery iron-oxide crater soil. Heavy iron-nickel fragments survive thin atmospheric entry and linger unburied on rocky surfaces.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: unlocks rare planetary anomaly scan bonus once inspected in Explore."
+      "effectOnMission": "Mission effect: anomalous surface reading revealed in EXPLORE."
     },
     {
       "id": "mys-scan-2",
@@ -349,7 +349,7 @@
         "text": "Strong localized backscatter signature beneath wind-sorted mantle suggestive of dense blocky talus or buried fracture breccia. Only close surface reconnaissance resolves whether texture or bedrock composition drives the echo.",
         "verified": false
       },
-      "effectOnMission": "Placeholder: hidden secondary scan anomaly revealed in Explore mode."
+      "effectOnMission": "Mission effect: secondary terrain anomaly revealed in EXPLORE."
     }
   ]
 }

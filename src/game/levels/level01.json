@@ -115,9 +115,9 @@
       "id": "route-a",
       "blindLabel": "Route A",
       "blindColor": "#38bdf8",
-      "trueName": "Safest",
+      "trueName": "Low-slope corridor",
       "strategyMode": "safest",
-      "bestFor": "Safest",
+      "bestFor": "Low slope",
       "source": "game",
       "workerWaypoints": [
         {
@@ -184,22 +184,22 @@
         "timeHours": {
           "value": 46.9,
           "source": "game",
-          "tag": "SIM"
+          "tag": "MODELED"
         },
         "energyKwh": {
           "value": 12.13,
           "source": "game",
-          "tag": "SIM"
+          "tag": "MODELED"
         },
         "radDoseUsv": {
           "value": 956,
           "source": "game",
-          "tag": "SIM"
+          "tag": "MODELED"
         },
         "riskScore": {
           "value": 16.9,
           "source": "game",
-          "tag": "SIM"
+          "tag": "MODELED"
         },
         "sciScore": {
           "value": 23,
@@ -2359,9 +2359,9 @@
       "id": "route-b",
       "blindLabel": "Route B",
       "blindColor": "#c084fc",
-      "trueName": "Shortest",
+      "trueName": "Direct traverse",
       "strategyMode": "shortest",
-      "bestFor": "Fastest",
+      "bestFor": "Direct line",
       "source": "game",
       "workerWaypoints": [
         {
@@ -2428,22 +2428,22 @@
         "timeHours": {
           "value": 43.6,
           "source": "game",
-          "tag": "SIM"
+          "tag": "MODELED"
         },
         "energyKwh": {
           "value": 11.31,
           "source": "game",
-          "tag": "SIM"
+          "tag": "MODELED"
         },
         "radDoseUsv": {
           "value": 890,
           "source": "game",
-          "tag": "SIM"
+          "tag": "MODELED"
         },
         "riskScore": {
           "value": 20.5,
           "source": "game",
-          "tag": "SIM"
+          "tag": "MODELED"
         },
         "sciScore": {
           "value": 19,
@@ -4539,9 +4539,9 @@
       "id": "route-c",
       "blindLabel": "Route C",
       "blindColor": "#fb923c",
-      "trueName": "Science-rich",
+      "trueName": "Mineral survey loop",
       "strategyMode": "science",
-      "bestFor": "Most science",
+      "bestFor": "Mineral survey",
       "source": "game",
       "workerWaypoints": [
         {
@@ -4624,22 +4624,22 @@
         "timeHours": {
           "value": 63.1,
           "source": "game",
-          "tag": "SIM"
+          "tag": "MODELED"
         },
         "energyKwh": {
           "value": 16.36,
           "source": "game",
-          "tag": "SIM"
+          "tag": "MODELED"
         },
         "radDoseUsv": {
           "value": 1284,
           "source": "game",
-          "tag": "SIM"
+          "tag": "MODELED"
         },
         "riskScore": {
           "value": 25.9,
           "source": "game",
-          "tag": "SIM"
+          "tag": "MODELED"
         },
         "sciScore": {
           "value": 29,

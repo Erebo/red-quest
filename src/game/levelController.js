@@ -37,18 +37,69 @@ export function populateBriefingUI(levelData) {
   const startEl = document.getElementById('briefing-start');
   const goalEl = document.getElementById('briefing-goal');
   const targetsList = document.getElementById('briefing-targets-list');
+  const targetsCards = document.getElementById('briefing-targets-cards');
 
   if (titleEl) titleEl.textContent = levelData.title.value;
   if (storyEl) storyEl.textContent = levelData.story.value;
 
   if (startEl) {
     const s = levelData.start;
-    startEl.textContent = `North entry · X ${s.x.toFixed(1)} m, Y ${s.y.toFixed(1)} m · Elev ${s.elevation.toFixed(1)} m · Slope ${s.slopeDeg.toFixed(1)}°`;
+    if (startEl.classList.contains('bcorr-specs')) {
+      startEl.innerHTML = `
+        <div class="bcorr-spec"><span class="bc-k">Grid</span><span class="bc-v">X ${s.x.toFixed(1)} m, Y ${s.y.toFixed(1)} m</span></div>
+        <div class="bcorr-spec"><span class="bc-k">Geo</span><span class="bc-v">${s.lon ? s.lon.toFixed(4) + '° E' : '137.3979° E'}, ${s.lat ? s.lat.toFixed(4) + '° S' : '-4.7638° S'}</span></div>
+        <div class="bcorr-spec"><span class="bc-k">Elevation</span><span class="bc-v">${s.elevation.toFixed(1)} m</span></div>
+        <div class="bcorr-spec"><span class="bc-k">Local Slope</span><span class="bc-v">${s.slopeDeg.toFixed(1)}° (${s.slopeDeg < 15 ? 'Safe <15°' : 'Moderate'})</span></div>
+      `;
+    } else {
+      startEl.textContent = `North entry · X ${s.x.toFixed(1)} m, Y ${s.y.toFixed(1)} m · Elev ${s.elevation.toFixed(1)} m · Slope ${s.slopeDeg.toFixed(1)}°`;
+    }
   }
 
   if (goalEl) {
     const g = levelData.goal;
-    goalEl.textContent = `Boxwork Core · X ${g.x.toFixed(1)} m, Y ${g.y.toFixed(1)} m · Elev ${g.elevation.toFixed(1)} m · Slope ${g.slopeDeg.toFixed(1)}°`;
+    if (goalEl.classList.contains('bcorr-specs')) {
+      goalEl.innerHTML = `
+        <div class="bcorr-spec"><span class="bc-k">Grid</span><span class="bc-v">X ${g.x.toFixed(1)} m, Y ${g.y.toFixed(1)} m</span></div>
+        <div class="bcorr-spec"><span class="bc-k">Geo</span><span class="bc-v">${g.lon ? g.lon.toFixed(4) + '° E' : '137.3804° E'}, ${g.lat ? g.lat.toFixed(4) + '° S' : '-4.8064° S'}</span></div>
+        <div class="bcorr-spec"><span class="bc-k">Elevation</span><span class="bc-v">${g.elevation.toFixed(1)} m</span></div>
+        <div class="bcorr-spec"><span class="bc-k">Local Slope</span><span class="bc-v">${g.slopeDeg.toFixed(1)}° (${g.slopeDeg < 15 ? 'Safe <15°' : 'Moderate'})</span></div>
+      `;
+    } else {
+      goalEl.textContent = `Boxwork Core · X ${g.x.toFixed(1)} m, Y ${g.y.toFixed(1)} m · Elev ${g.elevation.toFixed(1)} m · Slope ${g.slopeDeg.toFixed(1)}°`;
+    }
+  }
+
+  const targetNotes = [
+    "First entry into polygonally fractured bedrock network with mineralized ridge veins.",
+    "Crest of prominent boxwork ridge; transition into primary polygonal fracture structures.",
+    "Nevado Sajama drill exploration; probing sulfate-clay transition minerals."
+  ];
+
+  if (targetsCards) {
+    targetsCards.innerHTML = '';
+    levelData.scienceTargets.forEach((t, idx) => {
+      const card = document.createElement('div');
+      card.className = 'target-dossier-card';
+      const note = targetNotes[idx] || "Orbital and surface science waypoint.";
+      card.innerHTML = `
+        <div class="tdc-top">
+          <div class="tdc-badge-wrap">
+            <span class="tdc-num">TARGET 0${idx + 1}</span>
+            <span class="tdc-sol">${t.label || ('SOL ' + t.sol)}</span>
+          </div>
+          <span class="tag-pill measured">MEASURED</span>
+        </div>
+        <div class="tdc-title">${t.title}</div>
+        <div class="tdc-metrics">
+          <span>Elev: <strong>${t.elevation.toFixed(1)} m</strong></span>
+          <span>Slope: <strong>${t.slopeDeg.toFixed(1)}°</strong></span>
+          <span>Grid: <strong>(${t.x.toFixed(0)}, ${t.y.toFixed(0)})</strong></span>
+        </div>
+        <div class="tdc-desc">${note}</div>
+      `;
+      targetsCards.appendChild(card);
+    });
   }
 
   if (targetsList) {
@@ -61,12 +112,27 @@ export function populateBriefingUI(levelData) {
   }
 }
 
-export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = null, driveStats = null) {
+export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = null, driveStatsOrScore = null, optionalSurveyScore = 0) {
+  let driveStats = null;
+  let surveyScore = 0;
+  if (driveStatsOrScore && typeof driveStatsOrScore === 'object') {
+    driveStats = driveStatsOrScore;
+    surveyScore = typeof optionalSurveyScore === 'number' ? optionalSurveyScore : 0;
+  } else if (typeof driveStatsOrScore === 'number') {
+    surveyScore = driveStatsOrScore;
+  }
   const refStatsEl = document.getElementById('debrief-ref-stats');
   const lockedEl = document.getElementById('debrief-locked-route');
   const tbodyEl = document.getElementById('debrief-true-tbody');
   const compTbodyEl = document.getElementById('debrief-comp-tbody');
   const summaryBox = document.getElementById('debrief-mission-summary');
+
+  // Outcome banner & summary elements
+  const bannerEl = document.getElementById('debrief-outcome-banner');
+  const summaryRouteEl = document.getElementById('debrief-summary-route');
+  const summaryDistEl = document.getElementById('debrief-summary-dist');
+  const summaryClimbEl = document.getElementById('debrief-summary-climb');
+  const summarySlopeEl = document.getElementById('debrief-summary-slope');
 
   const refM = levelData.referenceRoute.metrics;
   if (refStatsEl) {
@@ -74,8 +140,35 @@ export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = n
   }
 
   const chosen = levelData.candidateRoutes.find(r => r.id === lockedRouteId);
+  const chosenName = chosen ? `${chosen.blindLabel} (${chosen.trueName})` : 'No route chosen yet';
   if (lockedEl) {
-    lockedEl.textContent = chosen ? `${chosen.blindLabel} (${chosen.trueName})` : '—';
+    lockedEl.textContent = chosenName;
+  }
+  if (summaryRouteEl) {
+    summaryRouteEl.textContent = chosen ? chosen.blindLabel : '—';
+  }
+  if (summaryDistEl && chosen) {
+    summaryDistEl.textContent = `${chosen.metrics.distKm.value.toFixed(2)} km`;
+  }
+  if (summaryClimbEl && chosen) {
+    summaryClimbEl.textContent = `+${chosen.metrics.ascentM.value.toFixed(1)} m`;
+  }
+  if (summarySlopeEl && chosen) {
+    summarySlopeEl.textContent = `${chosen.metrics.pctHaz.value.toFixed(1)}% >25° (${chosen.metrics.maxSlopeDeg.value.toFixed(1)}° max)`;
+  }
+
+  if (bannerEl) {
+    bannerEl.className = 'debrief-outcome-banner complete';
+    const statusEl = bannerEl.querySelector('.dob-status');
+    const subEl = bannerEl.querySelector('.dob-sub');
+    if (statusEl) {
+      statusEl.textContent = chosen ? `MAP SURVEY & SELECTION: ${chosen.blindLabel.toUpperCase()}` : 'MAP SURVEY & EVALUATION';
+    }
+    if (subEl) {
+      subEl.textContent = chosen
+        ? `Traverse corridor for ${chosen.blindLabel} (${chosen.trueName}) surveyed and verified across Gale Crater DEM.`
+        : 'Review candidate route metrics, survey accuracy, and Curiosity traverse baseline.';
+    }
   }
 
   // Populate Drive Performance Summary Card if available
