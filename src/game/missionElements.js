@@ -366,6 +366,7 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
   let isPostLock = false;
   let isBriefing = true;
   let isMissionMode = true;
+  let isExploration = false;
   let showAllElements = false;
   const enabledCategories = new Set(['mission', 'terrain', 'materials', 'hazards', 'resources', 'science', 'mystery']);
 
@@ -468,14 +469,15 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
     return true;
   }
 
-  function setState({ missionMode, briefing, postLock, lens, showAll }) {
+  function setState({ missionMode, briefing, postLock, lens, showAll, exploring }) {
     if (typeof missionMode === 'boolean') isMissionMode = missionMode;
     if (typeof briefing === 'boolean') isBriefing = briefing;
     if (typeof postLock === 'boolean') isPostLock = postLock;
     if (typeof lens === 'string') activeLens = lens;
     if (typeof showAll === 'boolean') showAllElements = showAll;
+    if (typeof exploring === 'boolean') isExploration = exploring;
 
-    group.visible = isMissionMode && !isBriefing;
+    group.visible = isMissionMode && !isBriefing && !isExploration;
     markerGroups.forEach((_, elId) => syncMarkerIdentificationVisual(elId));
   }
 

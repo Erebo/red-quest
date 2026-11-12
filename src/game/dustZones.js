@@ -14,8 +14,8 @@ export const LEVEL1_DUST_ZONES = Object.freeze([
     name: 'Eastern Pediment Dust Plume',
     cx: 3632.81,
     cy: 4257.81,
-    rx: 295.0,
-    ry: 240.0,
+    rx: 147.5,
+    ry: 120.0,
     rotRad: 0.25,
     intensityLabel: 'Elevated dust lofting',
     source: 'MISSION RULE / MODELED',
@@ -26,8 +26,8 @@ export const LEVEL1_DUST_ZONES = Object.freeze([
     name: 'Western Ripple Sand Hollow',
     cx: 2620.0,
     cy: 3890.0,
-    rx: 310.0,
-    ry: 260.0,
+    rx: 155.0,
+    ry: 130.0,
     rotRad: -0.35,
     intensityLabel: 'Trapped basaltic silt',
     source: 'MISSION RULE / MODELED',
@@ -38,8 +38,8 @@ export const LEVEL1_DUST_ZONES = Object.freeze([
     name: 'Central Trough Dust Pan',
     cx: 3250.0,
     cy: 3710.0,
-    rx: 235.0,
-    ry: 205.0,
+    rx: 117.5,
+    ry: 102.5,
     rotRad: 0.15,
     intensityLabel: 'Moderate dust mantle',
     source: 'MISSION RULE / MODELED',
@@ -50,8 +50,8 @@ export const LEVEL1_DUST_ZONES = Object.freeze([
     name: 'Mid-Corridor Aeolian Sheet',
     cx: 2810.0,
     cy: 3035.0,
-    rx: 205.0,
-    ry: 175.0,
+    rx: 102.5,
+    ry: 87.5,
     rotRad: -0.18,
     intensityLabel: 'Fine aeolian drape',
     source: 'MISSION RULE / MODELED',
@@ -62,8 +62,8 @@ export const LEVEL1_DUST_ZONES = Object.freeze([
     name: 'Northern Apron Silt Basin',
     cx: 3440.0,
     cy: 4470.0,
-    rx: 175.0,
-    ry: 165.0,
+    rx: 87.5,
+    ry: 82.5,
     rotRad: 0.0,
     intensityLabel: 'Loose surface dust',
     source: 'MISSION RULE / MODELED',
@@ -172,4 +172,109 @@ export function createDustZonesOverlay(sampleElevFn, localToMesh, minElev) {
   }
 
   return { group, updateExaggeration };
+}
+
+/**
+ * Creates swirling dust storm particle clouds inside each Level 1 dust storm zone
+ * and hazard dust devil radius, active during Mars Rover Explore mode.
+ */
+export function createDustStormParticles({ sampleElevFn, localToMesh, minElev }) {
+  const group = new THREE.Group();
+  group.name = 'DustStormParticlesGroup';
+  group.visible = false;
+
+  const PARTICLES_PER_ZONE = 320;
+  const zones = LEVEL1_DUST_ZONES;
+  const totalParticles = zones.length * PARTICLES_PER_ZONE;
+  const positions = new Float32Array(totalParticles * 3);
+  const particleMeta = [];
+
+  let pIdx = 0;
+  for (let zIdx = 0; zIdx < zones.length; zIdx++) {
+    const z = zones[zIdx];
+    for (let i = 0; i < PARTICLES_PER_ZONE; i++) {
+      // Uniform random distribution inside ellipse
+      const angle = Math.random() * Math.PI * 2;
+      const rad = Math.sqrt(Math.random()); // sqrt ensures uniform area distribution
+      const ex = z.rx * rad * Math.cos(angle);
+      const ey = z.ry * rad * Math.sin(angle);
+      const lx = z.cx + ex * Math.cos(z.rotRad) - ey * Math.sin(z.rotRad);
+      const ly = z.cy + ex * Math.sin(z.rotRad) + ey * Math.cos(z.rotRad);
+      const elev = sampleElevFn ? sampleElevFn(lx, ly) : minElev;
+      const { meshX, meshZ } = localToMesh(lx, ly);
+
+      const heightOffset = 1.0 + Math.random() * 26.0;
+      const meshY = (elev - minElev) + heightOffset;
+
+      positions[pIdx * 3] = meshX;
+      positions[pIdx * 3 + 1] = meshY;
+      positions[pIdx * 3 + 2] = meshZ;
+
+      particleMeta.push({
+        zone: z,
+        relAngle: angle,
+        relRad: rad,
+        heightOffset,
+        rotSpeed: 0.25 + Math.random() * 0.45,
+        bobSpeed: 0.8 + Math.random() * 1.5,
+        elev
+      });
+      pIdx++;
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  const material = new THREE.PointsMaterial({
+    color: 0xdf8858,
+    size: 4.8,
+    transparent: true,
+    opacity: 0.65,
+    depthWrite: false,
+    blending: THREE.NormalBlending
+  });
+
+  const pointsMesh = new THREE.Points(geometry, material);
+  pointsMesh.renderOrder = 8;
+  group.add(pointsMesh);
+
+  let currentExaggeration = 1.0;
+
+  function update(dt, nowSec) {
+    if (!group.visible) return;
+    const pos = geometry.attributes.position;
+    for (let i = 0; i < totalParticles; i++) {
+      const meta = particleMeta[i];
+      meta.relAngle += meta.rotSpeed * dt;
+
+      const z = meta.zone;
+      const ex = z.rx * meta.relRad * Math.cos(meta.relAngle);
+      const ey = z.ry * meta.relRad * Math.sin(meta.relAngle);
+      const lx = z.cx + ex * Math.cos(z.rotRad) - ey * Math.sin(z.rotRad);
+      const ly = z.cy + ex * Math.sin(z.rotRad) + ey * Math.cos(z.rotRad);
+
+      const { meshX, meshZ } = localToMesh(lx, ly);
+      const bob = Math.sin(nowSec * meta.bobSpeed + i) * 1.5;
+      const meshY = (meta.elev - minElev) * currentExaggeration + (meta.heightOffset + bob) * currentExaggeration;
+
+      pos.setXYZ(i, meshX, meshY, meshZ);
+    }
+    pos.needsUpdate = true;
+  }
+
+  function setExaggeration(exag) {
+    currentExaggeration = exag;
+  }
+
+  function setVisible(visible) {
+    group.visible = visible;
+  }
+
+  return {
+    group,
+    update,
+    setExaggeration,
+    setVisible
+  };
 }

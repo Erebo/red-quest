@@ -48,7 +48,7 @@ import {
   renderSurveyResultOverlayDOM,
   renderDebriefSurveyRevealDOM
 } from './game/surveyLog.js';
-import { createDustZonesOverlay } from './game/dustZones.js';
+import { createDustZonesOverlay, createDustStormParticles } from './game/dustZones.js';
 import { playUiSound } from './config.js';
 import { createIntroController } from './ui/intro.js';
 import { createMissionSelectController } from './ui/missionSelect.js';
@@ -58,6 +58,16 @@ import {
   cancelAutoDismiss,
   ensurePopupInDom
 } from './ui/autoDismiss.js';
+import { createRoverModel } from './game/rover/roverModel.js';
+import { RoverPhysics } from './game/rover/roverPhysics.js';
+import { RoverChaseCamera } from './game/rover/roverCamera.js';
+import { RoverRouteRibbon } from './game/rover/roverRibbon.js';
+import { RoverHUD } from './game/rover/roverHUD.js';
+import { RoverAudio } from './game/rover/roverAudio.js';
+import { RoverInteractions } from './game/rover/roverInteractions.js';
+import { RoverDetailTerrain, surfaceReliefAt, marsPaletteRGB } from './game/rover/roverTerrain.js';
+import { RoverWorldProps } from './game/rover/roverWorldProps.js';
+import { RoverMovementDust } from './game/rover/roverMovementDust.js';
 
 // --- Performance & Timing Metrics ---
 const appStartTime = performance.now();
@@ -237,10 +247,13 @@ const htTier = document.getElementById('ht-tier');
 const elevationProfileBox = document.getElementById('elevation-profile-box');
 const gameBriefingOverlay = document.getElementById('game-briefing-overlay');
 const gameDebriefOverlay = document.getElementById('game-debrief-overlay');
+const gameExploreOverlay = document.getElementById('game-explore-overlay');
 const btnStartMission = document.getElementById('btn-start-mission');
 const btnGoChoose = document.getElementById('btn-go-choose');
 const btnBackAnalyze = document.getElementById('btn-back-analyze');
 const btnLockRoute = document.getElementById('btn-lock-route');
+const btnGoDebrief = document.getElementById('btn-go-debrief');
+const exploreLockedRoute = document.getElementById('explore-locked-route');
 const btnDebriefClose = document.getElementById('btn-debrief-close');
 const btnDebriefDismiss = document.getElementById('btn-debrief-dismiss');
 const btnDebriefChoose = document.getElementById('btn-debrief-choose');
@@ -582,6 +595,53 @@ const lrsCols = document.getElementById('lrs-cols');
 const levelState = createGameState('route-a');
 const LEVEL1_TARGET_SOLS = new Set(level01.scienceTargets.map(t => t.sol));
 let hasPlayedIntro = false;
+let exploreHintDismissed = false;
+
+// Mars Rover Exploration Mode (EXPLORE Phase)
+let roverExploreModel = null;
+let roverShadow = null;
+let roverPhysics = null;
+let roverChaseCamera = null;
+let roverRouteRibbon = null;
+let roverHUD = null;
+let roverAudio = null;
+let roverInteractions = null;
+let roverTerrain = null;
+let roverWorldProps = null;
+let roverDustStormParticles = null;
+let roverMovementDust = null;
+let exploreAtmosphereBackup = null;
+let basePaletteBuilt = false;
+let activeDriveStats = null;
+let lastFrameTime = performance.now();
+const roverInputState = {
+  forward: 0,
+  steer: 0,
+  boost: false,
+  action: false,
+  reset: false
+};
+
+// Physical key state is tracked independently of game phase so a key held
+// through a phase transition (or auto-repeat) still drives the rover.
+const roverHeldKeys = new Set();
+
+function syncRoverInputFromKeys() {
+  const up = roverHeldKeys.has('w') || roverHeldKeys.has('arrowup');
+  const down = roverHeldKeys.has('s') || roverHeldKeys.has('arrowdown');
+  const left = roverHeldKeys.has('a') || roverHeldKeys.has('arrowleft');
+  const right = roverHeldKeys.has('d') || roverHeldKeys.has('arrowright');
+  roverInputState.forward = (up ? 1 : 0) + (down ? -1 : 0);
+  roverInputState.steer = (right ? 1 : 0) + (left ? -1 : 0);
+  roverInputState.boost = roverHeldKeys.has('shift');
+}
+
+function clearRoverKeys() {
+  roverHeldKeys.clear();
+  roverInputState.forward = 0;
+  roverInputState.steer = 0;
+  roverInputState.boost = false;
+}
 
 // Decision Lenses, Crossfade Transition, Worker Cache & Labels State
 const LENS_KEYS = ['satellite', 'terrain', 'minerals', 'heat', 'sun', 'radiation'];
@@ -781,6 +841,18 @@ function localToGrid(lx, ly) {
     col: (lx / TERRAIN_WIDTH_M) * 1024.0,
     row: (1.0 - (ly / TERRAIN_HEIGHT_M)) * 1024.0
   };
+}
+
+function sampleElevationAtMeters(lx, ly) {
+  if (!rawHeights) return -3800.0;
+  const { col, row } = localToGrid(lx, ly);
+  return sampleGridBilinear(rawHeights, col, row);
+}
+
+// Explore-mode driving surface = MOLA DEM + GAME micro-relief. The detail
+// terrain mesh uses the same relief so the rover always sits on visible facets.
+function sampleDriveSurface(lx, ly) {
+  return sampleElevationAtMeters(lx, ly) + surfaceReliefAt(lx, ly);
 }
 
 function localToMesh(lx, ly) {
@@ -1002,6 +1074,108 @@ function applyLayerVisibilityForMode() {
   syncMissionElementsState();
 }
 
+// --- Explore-mode visual dressing: faceted solid-colour terrain & haze ---
+const _exploreRGB = [0, 0, 0];
+
+function buildBaseTerrainPalette() {
+  if (!terrainGeometry) return;
+  const pos = terrainGeometry.attributes.position;
+  let colorAttr = terrainGeometry.attributes.color;
+  if (!colorAttr || colorAttr.count !== pos.count) {
+    colorAttr = new THREE.BufferAttribute(new Float32Array(pos.count * 3), 3);
+    terrainGeometry.setAttribute('color', colorAttr);
+  }
+  const slopeScale = 180.0 / Math.PI;
+  for (let i = 0; i < pos.count; i++) {
+    const { lx, ly } = meshToLocal(pos.getX(i), pos.getZ(i));
+    const elev = sampleElevationAtMeters(lx, ly);
+    const d = 7.0;
+    const dhdx = (sampleElevationAtMeters(lx + d, ly) - sampleElevationAtMeters(lx - d, ly)) / (2.0 * d);
+    const dhdy = (sampleElevationAtMeters(lx, ly + d) - sampleElevationAtMeters(lx, ly - d)) / (2.0 * d);
+    const slopeDeg = Math.atan(Math.hypot(dhdx, dhdy)) * slopeScale;
+    marsPaletteRGB(_exploreRGB, elev, slopeDeg, lx, ly, minElev, maxElev);
+    colorAttr.setXYZ(i, _exploreRGB[0], _exploreRGB[1], _exploreRGB[2]);
+  }
+  colorAttr.needsUpdate = true;
+  basePaletteBuilt = true;
+}
+
+function enterExploreLook() {
+  if (!terrainMesh || !terrainMesh.material) return;
+  if (!basePaletteBuilt) buildBaseTerrainPalette();
+
+  const mat = terrainMesh.material;
+  mat.map = null;
+  mat.vertexColors = true;
+  mat.flatShading = false;
+  mat.color.setHex(0xffffff);
+  mat.needsUpdate = true;
+
+  if (!exploreAtmosphereBackup) {
+    exploreAtmosphereBackup = {
+      fogDensity: scene.fog ? scene.fog.density : 0.000075,
+      fogColor: scene.fog ? scene.fog.color.clone() : new THREE.Color(0x2a160e),
+      background: scene.background && scene.background.clone ? scene.background.clone() : null,
+      hemiSky: hemiLight ? hemiLight.color.clone() : null,
+      hemiGround: hemiLight ? hemiLight.groundColor.clone() : null,
+      hemiIntensity: hemiLight ? hemiLight.intensity : 1.0,
+      ambientColor: ambientLight ? ambientLight.color.clone() : null,
+      ambientIntensity: ambientLight ? ambientLight.intensity : 1.0,
+      sunIntensity: sunLight ? sunLight.intensity : 2.0,
+      exposure: renderer.toneMappingExposure
+    };
+  }
+
+  const haze = new THREE.Color(0xc59b7c);
+  if (scene.fog) {
+    scene.fog.density = 0.00042;
+    scene.fog.color.copy(haze);
+  }
+  if (scene.background && scene.background.copy) scene.background.copy(haze);
+  if (hemiLight) {
+    hemiLight.color.setHex(0xf0d4bb);
+    hemiLight.groundColor.setHex(0x6b3a26);
+    hemiLight.intensity = 1.15;
+  }
+  if (ambientLight) {
+    ambientLight.color.setHex(0x6f4c3a);
+    ambientLight.intensity = 0.85;
+  }
+  if (sunLight) sunLight.intensity = 2.05;
+  renderer.toneMappingExposure = 1.05;
+}
+
+function exitExploreLook() {
+  if (terrainMesh && terrainMesh.material) {
+    const mat = terrainMesh.material;
+    mat.map = satTexture;
+    mat.vertexColors = false;
+    mat.flatShading = false;
+    mat.needsUpdate = true;
+  }
+
+  const b = exploreAtmosphereBackup;
+  if (b) {
+    if (scene.fog) {
+      scene.fog.density = b.fogDensity;
+      if (b.fogColor) scene.fog.color.copy(b.fogColor);
+    }
+    if (b.background && scene.background && scene.background.copy) scene.background.copy(b.background);
+    if (hemiLight) {
+      if (b.hemiSky) hemiLight.color.copy(b.hemiSky);
+      if (b.hemiGround) hemiLight.groundColor.copy(b.hemiGround);
+      hemiLight.intensity = b.hemiIntensity;
+    }
+    if (ambientLight) {
+      if (b.ambientColor) ambientLight.color.copy(b.ambientColor);
+      ambientLight.intensity = b.ambientIntensity;
+    }
+    if (sunLight) sunLight.intensity = b.sunIntensity;
+    renderer.toneMappingExposure = b.exposure;
+  }
+  exploreAtmosphereBackup = null;
+}
+
 function updateGeometryHeights(geo, skipNormals = false) {
   const pos = geo.attributes.position;
   const count = pos.count;
@@ -1015,6 +1189,41 @@ function updateGeometryHeights(geo, skipNormals = false) {
   }
   pos.needsUpdate = true;
   if (!skipNormals) geo.computeVertexNormals();
+}
+
+// --- Route, Trail, and Rover Construction ---
+function createRoverShadow() {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createRadialGradient(size / 2, size / 2, size * 0.08, size / 2, size / 2, size * 0.5);
+  grad.addColorStop(0, 'rgba(22, 11, 6, 0.72)');
+  grad.addColorStop(0.55, 'rgba(28, 14, 8, 0.46)');
+  grad.addColorStop(1, 'rgba(40, 20, 10, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const geo = new THREE.PlaneGeometry(5.4, 6.6);
+  geo.rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    opacity: 0.62,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = 'RoverContactShadow';
+  mesh.renderOrder = 3;
+  mesh.visible = false;
+  scene.add(mesh);
+  return mesh;
 }
 
 function intersectSegmentBoxFirst(p0, p1, b) {
@@ -1535,6 +1744,9 @@ function applyVerticalExaggeration(exag, { skipNormals = false, syncSlider = tru
   if (dustZonesOverlay) {
     dustZonesOverlay.updateExaggeration(currentExag);
   }
+  if (roverDustStormParticles) {
+    roverDustStormParticles.setExaggeration(currentExag);
+  }
 
   if (boxworkGroup && boxworkGroup.children[0]) {
     const bLine = boxworkGroup.children[0];
@@ -1990,6 +2202,12 @@ function findHitCuriosityRoute() {
 }
 
 function handlePointerInspection(clientX, clientY) {
+  if (levelState && levelState.getState().screen === GAME_STATES.EXPLORE && !awaitingSurveyResultContinue) {
+    if (cursorReticle) cursorReticle.visible = false;
+    hideHoverTooltip();
+    return;
+  }
+
   const now = performance.now();
   if (now - lastRaycastTime < 33) return; // Throttle to 30 FPS
   lastRaycastTime = now;
@@ -3463,6 +3681,55 @@ function bindUIEvents() {
     }
     updateLayoutBounds();
   });
+
+  // --- Rover EXPLORE Mode Input: WASD movement, Shift boost, E action, R reset ---
+  // Key state is tracked globally so holding W through a phase change keeps
+  // driving, and OS auto-repeat can never leave the throttle stuck at zero.
+  window.addEventListener('keydown', e => {
+    const key = e.key.toLowerCase();
+    const isDriveKey = key === 'w' || key === 'a' || key === 's' || key === 'd'
+      || key === 'arrowup' || key === 'arrowdown' || key === 'arrowleft' || key === 'arrowright'
+      || key === 'shift';
+    const inExplore = levelState.getState().screen === GAME_STATES.EXPLORE && !awaitingSurveyResultContinue;
+
+    if (isDriveKey) {
+      roverHeldKeys.add(key);
+      if (inExplore) {
+        syncRoverInputFromKeys();
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (!inExplore) return;
+    if (key === 'e' || key === ' ') {
+      if (!e.repeat) roverInputState.action = true;
+      e.preventDefault();
+    } else if (key === 'r') {
+      if (!e.repeat) roverInputState.reset = true;
+    }
+  });
+
+  window.addEventListener('keyup', e => {
+    const key = e.key.toLowerCase();
+    const isDriveKey = key === 'w' || key === 'a' || key === 's' || key === 'd'
+      || key === 'arrowup' || key === 'arrowdown' || key === 'arrowleft' || key === 'arrowright'
+      || key === 'shift';
+    if (isDriveKey) {
+      roverHeldKeys.delete(key);
+      syncRoverInputFromKeys();
+      return;
+    }
+    if (levelState.getState().screen !== GAME_STATES.EXPLORE || awaitingSurveyResultContinue) return;
+    if (key === 'e' || key === ' ') roverInputState.action = false;
+    else if (key === 'r') roverInputState.reset = false;
+  });
+
+  // Losing focus must not leave a phantom throttle held down.
+  window.addEventListener('blur', clearRoverKeys);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) clearRoverKeys();
+  });
 }
 
 // Helper to draw image into an offscreen canvas for instantaneous pixel sampling
@@ -4520,8 +4787,9 @@ function syncPanelsToViewMode() {
   }
 
   const isDebrief = screen === GAME_STATES.DEBRIEF;
+  const isExploring = screen === GAME_STATES.EXPLORE && !awaitingSurveyResultContinue;
   if (curiosityRefGroup && curiosityRefLine) {
-    const showTrimmedRef = (currentViewMode === 'RESEARCH') || (currentViewMode === 'MISSION' && isPostLock && showCuriosityPath);
+    const showTrimmedRef = (currentViewMode === 'RESEARCH') || (currentViewMode === 'MISSION' && isPostLock && !isExploring && showCuriosityPath);
     curiosityRefGroup.visible = showTrimmedRef;
     if (curiosityRefLine.material) {
       curiosityRefLine.material.color.setHex(isDebrief ? 0xf8fafc : 0xcbd5e1);
@@ -4622,7 +4890,7 @@ function applyGameScreenState(state) {
   // Overlays
   if (gameBriefingOverlay) gameBriefingOverlay.classList.toggle('hidden', screen !== GAME_STATES.BRIEFING);
   if (gameDebriefOverlay) gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF || debriefOverlayDismissed);
-  if (exploreMapCard) exploreMapCard.classList.toggle('hidden', screen !== GAME_STATES.EXPLORE);
+  if (exploreMapCard) exploreMapCard.classList.add('hidden');
   if (gameProceedModal && screen !== GAME_STATES.DEBRIEF) gameProceedModal.classList.add('hidden');
 
   // Candidate lines visibility: only locked route visible in EXPLORE/DEBRIEF
@@ -4641,6 +4909,12 @@ function applyGameScreenState(state) {
       });
     }
   }
+  const isExploring = screen === GAME_STATES.EXPLORE && !awaitingSurveyResultContinue;
+  if (screen === GAME_STATES.EXPLORE) exploreHintDismissed = false;
+  if (gameExploreOverlay) {
+    gameExploreOverlay.classList.toggle('hidden', !isExploring || exploreHintDismissed);
+  }
+  if (gameDebriefOverlay) gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF || debriefOverlayDismissed);
 
   // Survey Kit scan gating: no new scans in CHOOSE or post-lock
   if (surveyKit) {
@@ -4723,21 +4997,124 @@ function applyGameScreenState(state) {
     }
   }
 
-  if (screen === GAME_STATES.EXPLORE) {
-    if (exploreMapCard) {
-      exploreMapCard.classList.remove('hidden');
-      const sel = plannerCandidates.find(c => c.id === (state.lockedRouteId || state.selectedRouteId));
-      if (exploreCardRoute && sel) {
-        exploreCardRoute.textContent = sel.name.toUpperCase();
-        exploreCardRoute.style.color = sel.color;
+  // Explore mode body class toggles seamless drive HUD & suppresses map controls
+  document.body.classList.toggle('screen-explore', isExploring);
+
+  if (isExploring) {
+    const locked = level01.candidateRoutes.find(r => r.id === state.lockedRouteId);
+    if (exploreLockedRoute) exploreLockedRoute.textContent = locked ? locked.blindLabel : 'Route A';
+
+    // Start Rover Driving Exploration Mode
+    controls.enabled = false;
+    if (roverExploreModel) roverExploreModel.visible = true;
+    if (roverShadow) roverShadow.visible = true;
+    if (roverRouteRibbon) {
+      roverRouteRibbon.setVisible(true);
+      if (locked) {
+        roverRouteRibbon.setRoute(locked, sampleElevationAtMeters, currentExag, minElev);
       }
     }
+    if (roverHUD) {
+      if (locked) roverHUD.setRoute(locked);
+      roverHUD.show();
+    }
+    if (roverAudio) roverAudio.setActive(true);
+
+    // Hide research-mode route line, planner candidates, reference line, and markers during exploration
+    if (routeGroup) routeGroup.visible = false;
+    if (curiosityRefGroup) curiosityRefGroup.visible = false;
+    if (startFlagGroup) startFlagGroup.visible = false;
+    if (boxworkGroup) boxworkGroup.visible = false;
+    if (plannerGroup) plannerGroup.visible = false;
+    Object.values(candidateLines).forEach(cl => { if (cl) cl.visible = false; });
+    if (startMarker) startMarker.visible = false;
+    if (goalMarker) goalMarker.visible = false;
+    if (cursorReticle) cursorReticle.visible = false;
+    if (pinnedReticle) pinnedReticle.visible = false;
+
+    // Reset rover input state
+    roverInputState.forward = 0;
+    roverInputState.steer = 0;
+    roverInputState.boost = false;
+    roverInputState.action = false;
+    roverInputState.reset = false;
+    // Re-apply any movement keys still physically held during the transition.
+    syncRoverInputFromKeys();
+
+    // Place rover at candidate route start waypoint if available, otherwise level start
+    if (roverPhysics) {
+      const sX = locked && locked.waypoints && locked.waypoints[0] ? locked.waypoints[0].x : level01.start.x;
+      const sY = locked && locked.waypoints && locked.waypoints[0] ? locked.waypoints[0].y : level01.start.y;
+      
+      let initHeading = 0.0;
+      if (locked && locked.waypoints && locked.waypoints.length > 1) {
+        const wp1 = locked.waypoints[1];
+        const dx = wp1.x - sX;
+        const dy = wp1.y - sY;
+        initHeading = Math.atan2(dx, dy);
+      }
+      roverPhysics.reset(sX, sY, initHeading);
+      if (roverInteractions) roverInteractions.reset();
+      if (roverChaseCamera) roverChaseCamera.resetOrbit();
+    }
+
+    // Faceted solid-colour terrain + dusty haze for the driving view
+    if (roverTerrain && roverPhysics) {
+      enterExploreLook();
+      const sm = localToMesh(roverPhysics.x, roverPhysics.y);
+      roverTerrain.setActive(true, { x: sm.meshX, z: sm.meshZ });
+    }
+    camera.near = 1.0;
+    camera.updateProjectionMatrix();
+    if (roverWorldProps) roverWorldProps.setActive(true);
+    if (roverDustStormParticles) {
+      roverDustStormParticles.setExaggeration(currentExag);
+      roverDustStormParticles.setVisible(true);
+    }
+    if (roverMovementDust) {
+      roverMovementDust.setVisible(true);
+    }
+  } else {
+    // When leaving EXPLORE mode or while awaiting survey result
+    controls.enabled = true;
+    camera.near = 10.0;
+    camera.updateProjectionMatrix();
+    if (roverTerrain) roverTerrain.setActive(false);
+    if (roverWorldProps) roverWorldProps.setActive(false);
+    if (roverDustStormParticles) roverDustStormParticles.setVisible(false);
+    if (roverMovementDust) roverMovementDust.setVisible(false);
+    exitExploreLook();
+    if (roverExploreModel) roverExploreModel.visible = false;
+    if (roverShadow) roverShadow.visible = false;
+    if (roverRouteRibbon) roverRouteRibbon.setVisible(false);
+    if (roverHUD) roverHUD.hide();
+    if (roverAudio) roverAudio.setActive(false);
+
+    // Restore research-mode scene objects
+    if (routeGroup) {
+      routeGroup.visible = currentViewMode === 'RESEARCH'
+        ? (lyrRoute ? lyrRoute.checked : true)
+        : (isRefRevealed && (lyrRoute ? lyrRoute.checked : true));
+    }
+    if (startFlagGroup) startFlagGroup.visible = true;
+    if (boxworkGroup) boxworkGroup.visible = true;
+    if (plannerGroup) plannerGroup.visible = true;
+    Object.values(candidateLines).forEach(cl => { if (cl) cl.visible = true; });
+    if (startMarker) startMarker.visible = true;
+    if (goalMarker) goalMarker.visible = true;
+
+    // Clear rover input state
+    roverInputState.forward = 0;
+    roverInputState.steer = 0;
+    roverInputState.boost = false;
+    roverInputState.action = false;
+    roverInputState.reset = false;
   }
 
   if (screen === GAME_STATES.DEBRIEF) {
     const surveyEval = frozenSurveyEval || (surveyLog ? surveyLog.evaluateCurrent() : null);
     const sScore = surveyEval ? surveyEval.totalScore : 0;
-    populateDebriefUI(level01, state.lockedRouteId, trimmedCuriosityData, sScore);
+    populateDebriefUI(level01, state.lockedRouteId, trimmedCuriosityData, activeDriveStats, sScore);
     renderDebriefCalculatorReveal();
 
     const hasLockedRoute = Boolean(state.lockedRouteId);
@@ -4752,6 +5129,11 @@ function applyGameScreenState(state) {
   }
 
   syncPanelsToViewMode();
+  if (missionElements) {
+    missionElements.setState({
+      exploring: isExploring
+    });
+  }
 }
 
 function bindGameEvents() {
@@ -4961,6 +5343,67 @@ function bindGameEvents() {
     });
   }
 
+  const finishDriveToDebrief = () => {
+    // Capture drive stats if the player ends the drive before reaching the goal
+    if (!activeDriveStats && roverPhysics) {
+      activeDriveStats = {
+        scienceScore: roverInteractions ? roverInteractions.scienceScore : 0,
+        discoveredCount: roverInteractions ? roverInteractions.discoveredCount : 0,
+        totalDistanceM: roverPhysics.totalDistanceM,
+        batteryRemainingPct: roverPhysics.batteryPct,
+        driveTimeSec: roverPhysics.driveTimeSec
+      };
+    }
+    levelState.goToDebrief();
+  };
+
+  if (btnSurveyResultContinue) {
+    btnSurveyResultContinue.addEventListener('click', () => {
+      awaitingSurveyResultContinue = false;
+      if (surveyResultOverlay) surveyResultOverlay.classList.add('hidden');
+      applyGameScreenState(levelState.getState());
+    });
+  }
+
+  const btnExploreHintClose = document.getElementById('btn-explore-hint-close');
+  if (btnExploreHintClose) {
+    btnExploreHintClose.addEventListener('click', () => {
+      exploreHintDismissed = true;
+      if (gameExploreOverlay) gameExploreOverlay.classList.add('hidden');
+    });
+  }
+
+  if (btnGoDebrief) {
+    btnGoDebrief.addEventListener('click', finishDriveToDebrief);
+  }
+
+  const btnFinishDrive = document.getElementById('btn-finish-drive');
+  if (btnFinishDrive) {
+    btnFinishDrive.addEventListener('click', finishDriveToDebrief);
+  }
+
+  const btnDebriefClose = document.getElementById('btn-debrief-close');
+  if (btnDebriefClose) {
+    btnDebriefClose.addEventListener('click', () => {
+      if (gameDebriefOverlay) gameDebriefOverlay.classList.add('hidden');
+    });
+  }
+
+  const btnDebriefDismiss = document.getElementById('btn-debrief-dismiss');
+  if (btnDebriefDismiss) {
+    btnDebriefDismiss.addEventListener('click', () => {
+      if (gameDebriefOverlay) gameDebriefOverlay.classList.add('hidden');
+    });
+  }
+
+  const btnDebriefHome = document.getElementById('btn-debrief-home');
+  if (btnDebriefHome) {
+    btnDebriefHome.addEventListener('click', () => {
+      if (gameDebriefOverlay) gameDebriefOverlay.classList.add('hidden');
+      returnHomeToMissionSelect();
+    });
+  }
+
   // Explore Phase Map Survey Controls
   if (btnExploreFinish) {
     btnExploreFinish.addEventListener('click', () => {
@@ -5061,9 +5504,9 @@ function bindGameEvents() {
   if (btnDebriefReplay) {
     btnDebriefReplay.addEventListener('click', () => {
       debriefOverlayDismissed = false;
-            frozenSurveyEval = null;
+      frozenSurveyEval = null;
       frozenRouteCalcSnapshot = null;
-            if (surveyKit) surveyKit.reset();
+      if (surveyKit) surveyKit.reset();
       if (surveyLog) surveyLog.reset();
       if (routeCalc) routeCalc.reset();
       levelState.resetLevel();
@@ -5303,6 +5746,68 @@ async function loadAssetsAndInit() {
     createReticles();
     createStartAndGoalMarkers();
 
+    // --- Instantiate Mars Rover EXPLORE Mode Objects ---
+    roverExploreModel = createRoverModel();
+    roverExploreModel.visible = false;
+    scene.add(roverExploreModel);
+    roverShadow = createRoverShadow();
+
+    roverPhysics = new RoverPhysics({
+      startX: level01.start.x,
+      startY: level01.start.y,
+      startHeading: 0.0
+    });
+
+    roverTerrain = new RoverDetailTerrain({
+      scene,
+      sampleElevation: sampleElevationAtMeters,
+      getExaggeration: () => currentExag,
+      getMinElev: () => minElev,
+      getMaxElev: () => maxElev
+    });
+
+    roverWorldProps = new RoverWorldProps({
+      scene,
+      elements: level01Elements.elements,
+      sampleElevation: sampleDriveSurface,
+      getExaggeration: () => currentExag,
+      getMinElev: () => minElev,
+      startPoint: level01.start,
+      goalPoint: level01.goal
+    });
+
+    roverChaseCamera = new RoverChaseCamera(camera, renderer.domElement);
+    roverRouteRibbon = new RoverRouteRibbon(scene);
+    roverMovementDust = new RoverMovementDust(scene);
+    roverAudio = new RoverAudio();
+    roverHUD = new RoverHUD({
+      onWarningAlert: () => {
+        if (roverAudio) roverAudio.playWarningBuzz();
+      }
+    });
+    roverInteractions = new RoverInteractions(
+      level01,
+      level01Elements,
+      (poi) => { handleAnchorOrElementSelect(poi); },
+      (stats) => {
+        activeDriveStats = stats;
+        // Victory cinematic → then debrief
+        if (roverChaseCamera) roverChaseCamera.startCinematicVictory();
+        if (roverHUD) roverHUD.showToast('🎯 OBJECTIVE REACHED — Mission Complete!', 4000);
+        setTimeout(() => {
+          if (roverChaseCamera) roverChaseCamera.stopCinematic();
+          levelState.goToDebrief();
+        }, 5000);
+      },
+      (actionType, poi, alertData) => {
+        // Reward sting after the scan/drill completion bar finishes.
+        if (roverAudio) roverAudio.playLevelUp();
+        if (roverHUD && alertData) {
+          roverHUD.showCenterAlert(alertData.title, alertData.subtitle, 4200, false);
+        }
+      }
+    );
+
     // Load fixed Level 1 candidate routes generated from routeWorker.js
     plannerCandidates = buildBlindedPlannerCandidates(level01);
     routeLensStats = computeOpticalRouteStats(plannerCandidates, hydBuf, phyBuf, themisBuf);
@@ -5353,6 +5858,13 @@ async function loadAssetsAndInit() {
 
     dustZonesOverlay = createDustZonesOverlay(sampleTerrainElevation, localToMesh, minElev);
     scene.add(dustZonesOverlay.group);
+
+    roverDustStormParticles = createDustStormParticles({
+      sampleElevFn: sampleTerrainElevation,
+      localToMesh,
+      minElev
+    });
+    scene.add(roverDustStormParticles.group);
 
     surveyLog = createSurveyLogController({
       candidates: plannerCandidates,
@@ -5635,7 +6147,92 @@ function animate() {
   // Dust Particle drift
   updateDustParticles();
 
-  controls.update();
+  // --- Mars Rover EXPLORE Mode Frame Update ---
+  const isExploringActive = levelState.getState().screen === GAME_STATES.EXPLORE && !awaitingSurveyResultContinue;
+  if (isExploringActive && roverPhysics && roverExploreModel) {
+    const dt = Math.min((now - lastFrameTime) / 1000.0, 0.1);
+
+    // 1. Physics simulation: terrain conformance, speed, battery
+    //    Slope stays DEM-measured; only the parked height adds GAME micro-relief.
+    roverPhysics.update(dt, roverInputState, sampleElevationAtMeters, currentExag, minElev);
+
+    // 2. Position rover 3D model on mesh
+    const meshPos = roverPhysics.getMeshCoordinates(currentExag, minElev);
+    meshPos.y = (sampleDriveSurface(roverPhysics.x, roverPhysics.y) - minElev) * currentExag + 0.12;
+    roverExploreModel.position.set(meshPos.x, meshPos.y, meshPos.z);
+    roverExploreModel.quaternion.copy(roverPhysics.quaternion);
+    if (roverShadow) {
+      roverShadow.position.set(meshPos.x, meshPos.y + 0.015, meshPos.z);
+      roverShadow.quaternion.copy(roverPhysics.quaternion);
+    }
+
+    // 2b. Keep the faceted detail patch centred on the rover
+    if (roverTerrain) roverTerrain.update(meshPos);
+
+    // Auto-dismiss the drive hint once the player actually starts moving.
+    if (!exploreHintDismissed && Math.abs(roverPhysics.speed) > 1.5) {
+      exploreHintDismissed = true;
+      if (gameExploreOverlay) gameExploreOverlay.classList.add('hidden');
+    }
+
+    // 3. Rover animation helpers
+    if (roverExploreModel.userData.updateWheelRotation) {
+      roverExploreModel.userData.updateWheelRotation(roverPhysics.lastDeltaM);
+    }
+    if (roverExploreModel.userData.pulseBeacon) {
+      roverExploreModel.userData.pulseBeacon(now / 1000.0);
+    }
+
+    // 4. Chase camera follow
+    if (roverChaseCamera) {
+      const roverPos = new THREE.Vector3(meshPos.x, meshPos.y, meshPos.z);
+      roverChaseCamera.update(dt, roverPos, roverPhysics.heading, sampleDriveSurface, currentExag, minElev);
+    }
+
+    // 5. Route ribbon beacon animation
+    if (roverRouteRibbon) {
+      roverRouteRibbon.update(now / 1000.0);
+    }
+
+    // 6. Proximity interactions: science scanning, drilling, hazards, goal detection
+    if (roverInteractions) {
+      roverInteractions.update(dt, roverPhysics, roverInputState, roverExploreModel);
+    }
+
+    // 6b. World props: beacon pulse and nearest-site tracking
+    if (roverWorldProps) {
+      roverWorldProps.update(now, roverPhysics);
+    }
+
+    // 7. HUD telemetry display
+    if (roverHUD) {
+      roverHUD.update(roverPhysics, roverInteractions, roverInputState, roverWorldProps);
+    }
+
+    // 7b. Speed-driven gravel loop + persistent interior ambience
+    if (roverAudio) {
+      roverAudio.update(dt, roverPhysics);
+    }
+
+    // 7c. Swirling dust storm particles inside slow zones
+    if (roverDustStormParticles) {
+      roverDustStormParticles.update(dt, now / 1000.0);
+    }
+
+    // 7d. Rover movement dust puffs behind wheels
+    if (roverMovementDust) {
+      roverMovementDust.update(dt, roverPhysics, currentExag, minElev, now / 1000.0);
+    }
+
+    // Clear one-shot input flags after processing
+    roverInputState.action = false;
+    roverInputState.reset = false;
+  }
+  lastFrameTime = now;
+
+  if (!isExploringActive) {
+    controls.update();
+  }
 
   // Mission gameplay elements anti-clutter culling & off-screen animation pause
   if (missionElements) {
@@ -5653,7 +6250,7 @@ function animate() {
   renderer.render(scene, camera);
 
   // Camera-facing 2D projected map labels (overlap culled or Show All with leader lines)
-  if (mapLabels) {
+  if (mapLabels && !isExploringActive) {
     mapLabels.update(
       camera,
       window.innerWidth,
@@ -5667,7 +6264,7 @@ function animate() {
   }
 
   // Survey Kit floating pin cards projection
-  if (surveyKit) {
+  if (surveyKit && !isExploringActive) {
     surveyKit.update(camera, window.innerWidth, window.innerHeight);
   }
 }

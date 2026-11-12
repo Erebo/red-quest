@@ -112,11 +112,20 @@ export function populateBriefingUI(levelData) {
   }
 }
 
-export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = null, surveyScore = 0) {
+export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = null, driveStatsOrScore = null, optionalSurveyScore = 0) {
+  let driveStats = null;
+  let surveyScore = 0;
+  if (driveStatsOrScore && typeof driveStatsOrScore === 'object') {
+    driveStats = driveStatsOrScore;
+    surveyScore = typeof optionalSurveyScore === 'number' ? optionalSurveyScore : 0;
+  } else if (typeof driveStatsOrScore === 'number') {
+    surveyScore = driveStatsOrScore;
+  }
   const refStatsEl = document.getElementById('debrief-ref-stats');
   const lockedEl = document.getElementById('debrief-locked-route');
   const tbodyEl = document.getElementById('debrief-true-tbody');
   const compTbodyEl = document.getElementById('debrief-comp-tbody');
+  const summaryBox = document.getElementById('debrief-mission-summary');
 
   // Outcome banner & summary elements
   const bannerEl = document.getElementById('debrief-outcome-banner');
@@ -159,6 +168,67 @@ export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = n
       subEl.textContent = chosen
         ? `Traverse corridor for ${chosen.blindLabel} (${chosen.trueName}) surveyed and verified across Gale Crater DEM.`
         : 'Review candidate route metrics, survey accuracy, and Curiosity traverse baseline.';
+    }
+  }
+
+  // Populate Drive Performance Summary Card if available
+  if (summaryBox) {
+    if (driveStats) {
+      summaryBox.classList.remove('hidden');
+      const distKm = (driveStats.totalDistanceM / 1000.0).toFixed(2);
+      const batRem = Math.round(driveStats.batteryRemainingPct || 100);
+      const sciPts = driveStats.scienceScore || 0;
+      const poiCount = driveStats.discoveredCount || 0;
+      
+      // Composite Mission Grade Evaluation:
+      // Balances primary survey count (14 total elements across the map)
+      // with secondary weights for science points and battery / fuel conservation.
+      // Visiting ~5/14 elements with normal battery usage earns around B+.
+      const poiScore = Math.min(50.0, Math.pow(Math.min(14, poiCount) / 5.0, 0.70) * 38.0);
+      const sciScore = Math.min(30.0, (Math.min(750, sciPts) / 750.0) * 30.0);
+      const batScore = Math.min(20.0, (Math.max(0, Math.min(100, batRem)) / 100.0) * 20.0);
+      const compositeScore = poiScore + sciScore + batScore;
+
+      let grade = 'D';
+      if (compositeScore >= 88.0) {
+        grade = 'A+';
+      } else if (compositeScore >= 78.0) {
+        grade = 'A';
+      } else if (compositeScore >= 68.0) {
+        grade = 'B+';
+      } else if (compositeScore >= 56.0) {
+        grade = 'B';
+      } else if (compositeScore >= 42.0) {
+        grade = 'C';
+      } else {
+        grade = 'D';
+      }
+
+      summaryBox.innerHTML = `
+        <div class="dms-grade-badge">
+          <span class="dms-grade-title">MISSION GRADE</span>
+          <strong class="dms-grade-val">${grade}</strong>
+        </div>
+        <div class="dms-stats-grid">
+          <div class="dms-stat-card">
+            <span class="dms-lbl">Science Gathered <span class="tag-pill game">GAME</span></span>
+            <strong class="dms-val text-cyan">+${sciPts} pts</strong>
+            <small>${poiCount} / 14 elements surveyed</small>
+          </div>
+          <div class="dms-stat-card">
+            <span class="dms-lbl">Distance Traversed <span class="tag-pill measured">MEASURED</span></span>
+            <strong class="dms-val">${distKm} km</strong>
+            <small>Actual ground path driven</small>
+          </div>
+          <div class="dms-stat-card">
+            <span class="dms-lbl">Battery Conserved <span class="sim-badge">SIM</span></span>
+            <strong class="dms-val text-green">${batRem}%</strong>
+            <small>Power reserves remaining</small>
+          </div>
+        </div>
+      `;
+    } else {
+      summaryBox.classList.add('hidden');
     }
   }
 

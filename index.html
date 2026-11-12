@@ -916,6 +916,117 @@
     </div>
   </section>
 
+  <!-- ===== ROVER DRIVING HUD (EXPLORE MODE — OPEN-WORLD / SANDBOX GPS HUD) ===== -->
+  <div id="rover-hud" class="rover-hud hidden" aria-label="Rover Driving HUD">
+    <!-- Top Destination / Mission Nav Bar -->
+    <div class="hud-nav-bar" title="MEASURED — distance and bearing derived from DEM coordinates">
+      <div class="hud-nav-target">
+        <span class="hud-nav-badge">NAV TARGET</span>
+        <strong id="hud-nav-dest-title" class="hud-nav-title">CRATER RIM BOXWORK</strong>
+      </div>
+      <div class="hud-nav-metric">
+        <div class="hud-dest-arrow" id="hud-goal-arrow" aria-hidden="true">▲</div>
+        <strong id="hud-goal-dist" class="hud-dest-dist">—</strong>
+      </div>
+      <button id="btn-finish-drive" class="btn-hud-finish" type="button" title="End the drive and review your debrief">END DRIVE</button>
+    </div>
+
+    <!-- Top Right: Mission Science Progress Card -->
+    <div class="hud-mission-card" aria-label="Mission science status" title="GAME — mission exploration score">
+      <div class="hud-mission-header">
+        <span class="hud-mission-tag">EXPLORATION</span>
+        <span id="hud-targets-count" class="hud-mission-count">0 / 15 SITES</span>
+      </div>
+      <div class="hud-mission-score-row">
+        <span class="hud-mission-label">SCIENCE PTS</span>
+        <strong id="hud-science-score" class="hud-mission-pts">0</strong>
+      </div>
+      <div class="hud-mission-progress-bar">
+        <div id="hud-mission-fill" class="hud-mission-fill" style="width: 0%;"></div>
+      </div>
+    </div>
+
+    <!-- Center Context Action Prompt -->
+    <div id="hud-action-prompt" class="hud-action-prompt hidden">
+      <div class="hud-action-key">E</div>
+      <div class="hud-action-body">
+        <div id="hud-action-text" class="hud-action-text">SCAN OUTCROP</div>
+        <div id="hud-action-progress" class="hud-action-progress hidden">
+          <div id="hud-action-fill" class="hud-action-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hazard Warning Banner -->
+    <div id="hud-hazard-banner" class="hud-hazard-banner hidden">
+      <span class="hud-hazard-icon">⚠</span>
+      <span id="hud-hazard-text">HAZARD ZONE</span>
+    </div>
+
+    <!-- Center Screen In-Game Notification Text (Pure typography, no panel/window) -->
+    <div id="hud-center-alert" class="hud-center-alert hidden" aria-live="assertive">
+      <div id="hud-center-title" class="hud-center-title">NEW DISCOVERY!</div>
+      <div id="hud-center-subtitle" class="hud-center-subtitle">Layered mudstone transition scanned</div>
+    </div>
+
+    <!-- Bottom Left: GTA-Style Corner GPS Radar Minimap & Compact Telemetry -->
+    <div class="hud-radar-pod">
+      <div class="hud-radar-frame">
+        <canvas id="hud-radar-canvas" width="220" height="220" class="hud-radar-canvas" aria-label="GPS Radar Minimap"></canvas>
+        <div class="hud-radar-compass">
+          <span class="hud-compass-cardinal" id="hud-compass-text">N</span>
+        </div>
+        <div class="hud-radar-range">500M</div>
+      </div>
+      <div class="hud-telemetry-strip">
+        <div class="hud-speedometer" title="SIM — speed modelled from drive physics">
+          <strong id="hud-speed-val" class="hud-speed-digits">0</strong>
+          <span class="hud-speed-unit">KM/H</span>
+        </div>
+        <div class="hud-stat-col">
+          <div class="hud-bar-meta">
+            <span class="hud-stat-label">BATTERY</span>
+            <span id="hud-battery-val" class="hud-stat-val">100%</span>
+          </div>
+          <div class="hud-bar-track">
+            <div id="hud-battery-bar" class="hud-bar-fill battery-fill" style="width: 100%;"></div>
+          </div>
+        </div>
+        <div class="hud-stat-col hud-slope-col" title="MEASURED — DEM surface slope angle">
+          <div class="hud-bar-meta">
+            <span class="hud-stat-label">SLOPE</span>
+            <span id="hud-slope-val" class="hud-stat-val">0.0°</span>
+          </div>
+          <div class="hud-bar-track">
+            <div id="hud-slope-bar" class="hud-bar-fill slope-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="hud-radar-controls">WASD DRIVE · SHIFT OVERDRIVE · E SCAN</div>
+    </div>
+
+    <!-- Bottom Right: Dynamic Tactical POI Feed -->
+    <div class="hud-poi-feed" title="MEASURED — element positions and distances derived from DEM coordinates">
+      <div class="hud-poi-head">TACTICAL RADAR · NEARBY</div>
+      <ul id="hud-scanner-list" class="hud-scanner-list">
+        <li class="hud-scanner-empty">SCANNING SECTOR…</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Compact, non-blocking drive hint (replaces the old placeholder modal) -->
+  <section id="game-explore-overlay" class="explore-hint hidden" aria-label="Explore phase controls">
+    <div class="eh-head">
+      <span class="eh-badge">TRAVERSE</span>
+      <button id="btn-explore-hint-close" class="eh-close" type="button" title="Dismiss">×</button>
+    </div>
+    <h3 class="eh-title">Route locked — <span id="explore-locked-route">Route A</span></h3>
+    <p class="eh-copy">Drive to the destination. Scan science sites when you get close.</p>
+    <div class="eh-actions">
+      <button id="btn-go-debrief" class="btn-game-primary btn-skip">Skip to debrief →</button>
+    </div>
+  </section>
+
   <!-- ===== EXPLORE PHASE 3D MAP CARD ===== -->
   <aside id="explore-map-card" class="explore-map-card hidden" role="region" aria-label="Explore Phase Controls">
     <div class="emc-left">
@@ -939,6 +1050,9 @@
         <span class="tag-pill measured">REFERENCE TRAVERSE REVEALED</span>
         <button id="btn-debrief-close" class="game-close-btn" type="button" title="Close debrief and inspect 3D map" aria-label="Close debrief overlay">×</button>
       </div>
+
+      <!-- Rover Drive Mission Summary (Dynamic) -->
+      <div id="debrief-mission-summary" class="debrief-summary-card hidden"></div>
 
       <div id="debrief-outcome-banner" class="debrief-outcome-banner complete">
         <div class="dob-status">MAP SURVEY &amp; SELECTION COMPLETE</div>
@@ -1127,6 +1241,11 @@
       </div>
       <div class="game-actions" style="margin-top:14px;display:flex;justify-content:flex-end;">
         <button id="btn-dm-dismiss" class="btn-game-primary" type="button">Close</button>
+      </div>
+
+      <div class="game-actions" style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+        <button id="btn-debrief-home" class="btn-game-primary" type="button">← Mission Select</button>
+        <button id="btn-debrief-dismiss" class="btn-game-primary" type="button">Inspect 3D Terrain &amp; Path</button>
       </div>
     </div>
   </section>
