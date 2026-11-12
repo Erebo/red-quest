@@ -450,6 +450,7 @@ export function createSurveyKitController({
     getActiveTool: () => activeTool,
     setActiveTool,
     clearTool,
+    deactivate: clearTool,
     scanPoint,
     showRoutePinReading,
     showElementIdentifiedPin,

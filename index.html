@@ -632,7 +632,7 @@
         <button id="btn-reset-plan" class="btn-planner-tool sandbox-only" title="Reset start &amp; goal to default locations">↺ Reset Endpoints</button>
         <button id="btn-go-choose" class="btn-game-primary" style="display:none;">Proceed to Choose →</button>
         <button id="btn-back-analyze" class="btn-planner-tool" style="display:none;">← Analyze</button>
-        <button id="btn-lock-route" class="btn-game-lock" style="display:none;">Lock in route</button>
+        <button id="btn-lock-route" class="btn-game-lock" style="display:none;">Lock in &amp; Explore →</button>
       </div>
       <div class="ph-right">
         <button id="btn-toggle-planner" class="planner-toggle-btn" title="Toggle route planner panel">▼ Collapse</button>
@@ -765,21 +765,22 @@
     </div>
   </section>
 
-  <section id="game-explore-overlay" class="game-overlay hidden overlay-top" role="dialog" aria-label="Explore phase">
-    <div class="game-card compact">
-      <div class="game-card-top">
-        <span class="tag-pill game">EXPLORE · ROUTE LOCKED</span>
-        <button id="btn-explore-close" class="game-close-btn" type="button" title="Explore 3D terrain" aria-label="Close explore overlay">×</button>
+  <!-- ===== EXPLORE PHASE 3D MAP CARD ===== -->
+  <aside id="explore-map-card" class="explore-map-card hidden" role="region" aria-label="Explore Phase Controls">
+    <div class="emc-left">
+      <div class="emc-badge-row">
+        <span class="tag-pill game">EXPLORE · 3D MAP SURVEY</span>
+        <strong id="explore-card-route" class="emc-route">ROUTE A</strong>
       </div>
-      <h2>EXPLORE — Locked In <span id="explore-locked-route">Route A</span></h2>
-      <p class="game-story">Inspect your locked traverse across the 3D Gale Crater terrain, or proceed to the Debrief summary.</p>
-      <div class="game-actions">
-        <button id="btn-explore-map" class="btn-planner-tool" type="button">Explore 3D Map</button>
-        <button id="btn-go-debrief" class="btn-game-primary" type="button">Continue to Debrief →</button>
-      </div>
+      <p class="emc-desc">Explore your chosen path on the 3D Gale Crater terrain. Inspect elevations, slopes, and checkpoints.</p>
     </div>
-  </section>
+    <div class="emc-right">
+      <button id="btn-explore-change-route" class="btn-planner-tool" type="button">← Choose Route</button>
+      <button id="btn-explore-finish" class="btn-game-primary" type="button">Finish Exploration → Debrief</button>
+    </div>
+  </aside>
 
+  <!-- ===== DEBRIEF PHASE OVERLAY ===== -->
   <section id="game-debrief-overlay" class="game-overlay hidden overlay-top" role="dialog" aria-label="Debrief summary">
     <div class="game-card wide debrief-card">
       <div class="game-card-top">
@@ -787,31 +788,59 @@
         <span class="tag-pill measured">REFERENCE TRAVERSE REVEALED</span>
         <button id="btn-debrief-close" class="game-close-btn" type="button" title="Close debrief and inspect 3D map" aria-label="Close debrief overlay">×</button>
       </div>
-      <h2 style="flex-shrink:0;">DEBRIEF — True Values &amp; Accuracy</h2>
+
+      <div id="debrief-outcome-banner" class="debrief-outcome-banner complete">
+        <div class="dob-status">MAP SURVEY &amp; SELECTION COMPLETE</div>
+        <div class="dob-sub">Review candidate route findings, survey planning accuracy, and Curiosity reference data.</div>
+      </div>
+
       <div class="debrief-scroll-body">
-        <p class="game-story">Curiosity's actual traverse (<span id="debrief-ref-stats">—</span> <span class="tag-pill measured">MEASURED</span>) is visible on the 3D terrain alongside your chosen route (<strong id="debrief-locked-route">No route chosen</strong>).</p>
-        <div class="table-wrap" style="margin-top:8px;">
-          <table class="planner-table">
-            <thead>
-              <tr>
-                <th>Route</th>
-                <th>Profile <span class="tag-pill game">MISSION RULE</span></th>
-                <th>Distance <span class="tag-pill measured">MEASURED</span></th>
-                <th>Est. Time <span class="sim-badge">MODELED</span></th>
-                <th>Energy <span class="sim-badge">MODELED</span></th>
-                <th>Radiation <span class="sim-badge">MODELED</span></th>
-                <th>Science <span class="tag-pill game">MISSION RULE</span></th>
-                <th>Risk <span class="sim-badge">MODELED</span></th>
-              </tr>
-            </thead>
-            <tbody id="debrief-true-tbody"></tbody>
-          </table>
+        <!-- Summary Cards Grid -->
+        <div class="debrief-summary-grid">
+          <div class="ds-card">
+            <span class="ds-card-lbl">Route Chosen</span>
+            <strong id="debrief-summary-route" class="ds-card-val">—</strong>
+            <span class="tag-pill game">MISSION RULE</span>
+          </div>
+          <div class="ds-card">
+            <span class="ds-card-lbl">Measured Distance</span>
+            <strong id="debrief-summary-dist" class="ds-card-val">—</strong>
+            <span class="tag-pill measured">MEASURED DEM</span>
+          </div>
+          <div class="ds-card">
+            <span class="ds-card-lbl">Cumulative Climb</span>
+            <strong id="debrief-summary-climb" class="ds-card-val">—</strong>
+            <span class="tag-pill dem">DERIVED FROM DEM</span>
+          </div>
+          <div class="ds-card">
+            <span class="ds-card-lbl">Hazardous Slopes (&gt;25°)</span>
+            <strong id="debrief-summary-slope" class="ds-card-val">—</strong>
+            <span class="tag-pill dem">DERIVED FROM DEM</span>
+          </div>
         </div>
 
+        <!-- Analysis Accuracy Reveal (Estimates vs True Values) -->
+        <div id="debrief-calc-reveal" class="debrief-calc-reveal">
+          <div class="dcr-head">
+            <h3>Survey &amp; Planning Accuracy — Your Answers vs. True Metrics <span class="tag-pill game">MISSION RULE</span></h3>
+            <span class="calc-head-sub">Pre-lock survey scans, estimates &amp; calculator accuracy vs. true route metrics</span>
+          </div>
+          <div class="dcr-summary">
+            <div class="dcr-stat-row">
+              <span>Accuracy / Rank: <strong id="debrief-calc-acc">—</strong></span>
+              <span>Answered: <strong id="debrief-calc-answered">0 / 12</strong></span>
+              <span>Survey Score: <strong id="debrief-calc-score">0 / 200 pts</strong></span>
+            </div>
+            <div id="debrief-calc-neutral" class="dcr-neutral">—</div>
+          </div>
+          <div id="debrief-calc-tables" class="dcr-routes-grid"></div>
+        </div>
+
+        <!-- Neutral Comparison of Chosen Route with Curiosity Traverse -->
         <div id="debrief-curiosity-comparison" class="debrief-curiosity-comp">
           <div class="dcr-head">
-            <h3>Route vs. Curiosity Reference Comparison (Start → Boxwork Core Zone)</h3>
-            <span class="calc-head-sub">Side-by-side comparison only · Distance <span class="tag-pill measured">MEASURED</span> · Slope tiers <span class="tag-pill measured">MEASURED DEM</span> / <span class="tag-pill game">MISSION RULE</span></span>
+            <h3>Traverse vs. Curiosity Reference Comparison (Start → Boxwork Core Zone)</h3>
+            <span class="calc-head-sub">Neutral side-by-side comparison (Sols 3721–4868) · Distance <span class="tag-pill measured">MEASURED</span> · Slopes <span class="tag-pill measured">MEASURED DEM</span> / <span class="tag-pill game">15°/25° MISSION RULE</span></span>
           </div>
           <div class="table-wrap" style="margin-top:6px;">
             <table class="planner-table debrief-comp-table">
@@ -829,27 +858,56 @@
           </div>
         </div>
 
-        <div id="debrief-calc-reveal" class="debrief-calc-reveal">
-          <div class="dcr-head">
-            <h3>Survey &amp; Planning Accuracy — Your Answers vs. True Metrics <span class="tag-pill game">MISSION RULE</span></h3>
-            <span class="calc-head-sub">Shows your Survey Kit &amp; Calculator accuracy vs. true route values</span>
+        <!-- All Candidate Routes True Baseline Table -->
+        <div class="table-wrap" style="margin-top:12px;">
+          <div class="dcr-head" style="margin-bottom:6px;">
+            <h3 style="font-size:12px;color:#cbd5e1;margin:0;">True Route Baseline Metrics Reference</h3>
           </div>
-          <div class="dcr-summary">
-            <div class="dcr-stat-row">
-              <span>Accuracy / Rank: <strong id="debrief-calc-acc">—</strong></span>
-              <span>Answered: <strong id="debrief-calc-answered">0 / 12</strong></span>
-              <span>Total Score: <strong id="debrief-calc-score">0 / 200 pts</strong></span>
-            </div>
-            <div id="debrief-calc-neutral" class="dcr-neutral">—</div>
-          </div>
-          <div id="debrief-calc-tables" class="dcr-routes-grid"></div>
+          <table class="planner-table">
+            <thead>
+              <tr>
+                <th>Route</th>
+                <th>Profile <span class="tag-pill game">MISSION RULE</span></th>
+                <th>Distance <span class="tag-pill measured">MEASURED</span></th>
+                <th>Est. Time <span class="sim-badge">MODELED</span></th>
+                <th>Energy <span class="sim-badge">MODELED</span></th>
+                <th>Radiation <span class="sim-badge">MODELED</span></th>
+                <th>Science <span class="tag-pill game">MISSION RULE</span></th>
+                <th>Risk <span class="sim-badge">MODELED</span></th>
+              </tr>
+            </thead>
+            <tbody id="debrief-true-tbody"></tbody>
+          </table>
         </div>
       </div>
 
       <div class="game-actions debrief-actions">
-        <button id="btn-debrief-dismiss" class="btn-planner-tool" type="button">Close</button>
-        <button id="btn-debrief-choose" class="btn-planner-tool" type="button">Choose a Route →</button>
-        <button id="btn-debrief-explore" class="btn-game-primary hidden" type="button">Start Exploration →</button>
+        <button id="btn-debrief-proceed-game" class="btn-game-primary" type="button">Proceed to Game →</button>
+        <button id="btn-debrief-choose" class="btn-planner-tool" type="button">← Choose Another Route</button>
+        <button id="btn-debrief-replay" class="btn-game-lock" type="button" title="Reset Level 1 and replay from Briefing">↺ Replay Level 1</button>
+        <button id="btn-debrief-free" class="btn-planner-tool" type="button" title="Switch to Research Mode to freely explore full Gale Crater 3D layers">Research Mode (Free Map) →</button>
+        <button id="btn-debrief-dismiss" class="btn-planner-tool" type="button">Close &amp; View Map</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Proceed to Game / Expedition Deployment Modal -->
+  <section id="game-proceed-modal" class="game-overlay hidden overlay-top" role="dialog" aria-modal="true" aria-labelledby="gpm-title">
+    <div class="game-card compact">
+      <div class="game-card-top">
+        <span class="tag-pill game">EXPEDITION READY</span>
+        <span class="tag-pill measured">SURVEY COMPLETE</span>
+        <button id="btn-gpm-close" class="game-close-btn" type="button" title="Close" aria-label="Close modal">×</button>
+      </div>
+      <h2 id="gpm-title">Surface Traverse Locked In!</h2>
+      <p class="game-story">
+        The route survey and corridor plan for <strong id="gpm-route-name">Route A</strong> are certified into mission command.
+        The surface expedition module is prepared for surface operations.
+      </p>
+      <div class="game-actions" style="margin-top:16px;">
+        <button id="btn-gpm-back-debrief" class="btn-planner-tool" type="button">Back to Debrief</button>
+        <button id="btn-gpm-back-map" class="btn-planner-tool" type="button">Explore 3D Map</button>
+        <button id="btn-gpm-replay" class="btn-game-lock" type="button">↺ Replay Mission</button>
       </div>
     </div>
   </section>

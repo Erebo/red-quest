@@ -61,11 +61,18 @@ export function populateBriefingUI(levelData) {
   }
 }
 
-export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = null) {
+export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = null, surveyScore = 0) {
   const refStatsEl = document.getElementById('debrief-ref-stats');
   const lockedEl = document.getElementById('debrief-locked-route');
   const tbodyEl = document.getElementById('debrief-true-tbody');
   const compTbodyEl = document.getElementById('debrief-comp-tbody');
+
+  // Outcome banner & summary elements
+  const bannerEl = document.getElementById('debrief-outcome-banner');
+  const summaryRouteEl = document.getElementById('debrief-summary-route');
+  const summaryDistEl = document.getElementById('debrief-summary-dist');
+  const summaryClimbEl = document.getElementById('debrief-summary-climb');
+  const summarySlopeEl = document.getElementById('debrief-summary-slope');
 
   const refM = levelData.referenceRoute.metrics;
   if (refStatsEl) {
@@ -73,8 +80,35 @@ export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = n
   }
 
   const chosen = levelData.candidateRoutes.find(r => r.id === lockedRouteId);
+  const chosenName = chosen ? `${chosen.blindLabel} (${chosen.trueName})` : 'No route chosen yet';
   if (lockedEl) {
-    lockedEl.textContent = chosen ? `${chosen.blindLabel} (${chosen.trueName})` : 'No route chosen yet';
+    lockedEl.textContent = chosenName;
+  }
+  if (summaryRouteEl) {
+    summaryRouteEl.textContent = chosen ? chosen.blindLabel : '—';
+  }
+  if (summaryDistEl && chosen) {
+    summaryDistEl.textContent = `${chosen.metrics.distKm.value.toFixed(2)} km`;
+  }
+  if (summaryClimbEl && chosen) {
+    summaryClimbEl.textContent = `+${chosen.metrics.ascentM.value.toFixed(1)} m`;
+  }
+  if (summarySlopeEl && chosen) {
+    summarySlopeEl.textContent = `${chosen.metrics.pctHaz.value.toFixed(1)}% >25° (${chosen.metrics.maxSlopeDeg.value.toFixed(1)}° max)`;
+  }
+
+  if (bannerEl) {
+    bannerEl.className = 'debrief-outcome-banner complete';
+    const statusEl = bannerEl.querySelector('.dob-status');
+    const subEl = bannerEl.querySelector('.dob-sub');
+    if (statusEl) {
+      statusEl.textContent = chosen ? `MAP SURVEY & SELECTION: ${chosen.blindLabel.toUpperCase()}` : 'MAP SURVEY & EVALUATION';
+    }
+    if (subEl) {
+      subEl.textContent = chosen
+        ? `Traverse corridor for ${chosen.blindLabel} (${chosen.trueName}) surveyed and verified across Gale Crater DEM.`
+        : 'Review candidate route metrics, survey accuracy, and Curiosity traverse baseline.';
+    }
   }
 
   if (tbodyEl) {

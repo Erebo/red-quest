@@ -236,20 +236,31 @@ const htElev = document.getElementById('ht-elev');
 const htTier = document.getElementById('ht-tier');
 const elevationProfileBox = document.getElementById('elevation-profile-box');
 const gameBriefingOverlay = document.getElementById('game-briefing-overlay');
-const gameExploreOverlay = document.getElementById('game-explore-overlay');
 const gameDebriefOverlay = document.getElementById('game-debrief-overlay');
 const btnStartMission = document.getElementById('btn-start-mission');
 const btnGoChoose = document.getElementById('btn-go-choose');
 const btnBackAnalyze = document.getElementById('btn-back-analyze');
 const btnLockRoute = document.getElementById('btn-lock-route');
-const btnGoDebrief = document.getElementById('btn-go-debrief');
-const btnExploreClose = document.getElementById('btn-explore-close');
-const btnExploreMap = document.getElementById('btn-explore-map');
 const btnDebriefClose = document.getElementById('btn-debrief-close');
 const btnDebriefDismiss = document.getElementById('btn-debrief-dismiss');
 const btnDebriefChoose = document.getElementById('btn-debrief-choose');
-const btnDebriefExplore = document.getElementById('btn-debrief-explore');
-const exploreLockedRoute = document.getElementById('explore-locked-route');
+const btnDebriefProceedGame = document.getElementById('btn-debrief-proceed-game');
+const btnDebriefReplay = document.getElementById('btn-debrief-replay');
+const btnDebriefFree = document.getElementById('btn-debrief-free');
+
+// Explore Map Card DOM Elements
+const exploreMapCard = document.getElementById('explore-map-card');
+const exploreCardRoute = document.getElementById('explore-card-route');
+const btnExploreChangeRoute = document.getElementById('btn-explore-change-route');
+const btnExploreFinish = document.getElementById('btn-explore-finish');
+
+// Proceed to Game Modal DOM Elements
+const gameProceedModal = document.getElementById('game-proceed-modal');
+const gpmRouteName = document.getElementById('gpm-route-name');
+const btnGpmClose = document.getElementById('btn-gpm-close');
+const btnGpmBackDebrief = document.getElementById('btn-gpm-back-debrief');
+const btnGpmBackMap = document.getElementById('btn-gpm-back-map');
+const btnGpmReplay = document.getElementById('btn-gpm-replay');
 const dataMethodsModal = document.getElementById('data-methods-modal');
 const btnDataMethods = document.getElementById('btn-data-methods');
 const btnDmClose = document.getElementById('btn-dm-close');
@@ -321,6 +332,7 @@ let awaitingSurveyResultContinue = false;
 let debriefOverlayDismissed = false;
 let exploreOverlayDismissed = false;
 let frozenSurveyEval = null;
+let frozenRouteCalcSnapshot = null;
 let lastCalcMaskedState = null;
 
 function isRouteCalcMasked() {
@@ -403,7 +415,7 @@ function renderDebriefCalculatorReveal() {
     neutralEl: debriefCalcNeutral,
     tablesEl: debriefCalcTables,
     candidates: plannerCandidates,
-    frozenSnapshot: routeCalc.getFrozenSnapshot()
+    frozenSnapshot: frozenRouteCalcSnapshot || (routeCalc ? routeCalc.getFrozenSnapshot() : null)
   });
 }
 
@@ -4456,8 +4468,8 @@ function syncPanelsToViewMode() {
     }
   }
 
-  // Bottom Mission Dock (only in MISSION ANALYZE & CHOOSE)
-  const showDock = currentViewMode === 'MISSION' && canPlan;
+  // Bottom Mission Dock (Inspector, Legend, Lenses, Codex; Survey Kit & Routes visible in ANALYZE/CHOOSE)
+  const showDock = currentViewMode === 'MISSION' && !isBriefing;
   if (missionDock) {
     missionDock.classList.toggle('hidden', !showDock);
   }
@@ -4468,6 +4480,9 @@ function syncPanelsToViewMode() {
   if (btnDockLegend) {
     btnDockLegend.classList.toggle('active', showLegend);
     btnDockLegend.setAttribute('aria-expanded', showLegend ? 'true' : 'false');
+  }
+  if (btnCalcToggle) {
+    btnCalcToggle.classList.toggle('hidden', isPostLock || !showDock);
   }
   if (btnLenses) {
     btnLenses.classList.toggle('hidden', !showDock);
@@ -4482,6 +4497,7 @@ function syncPanelsToViewMode() {
     btnCodex.setAttribute('aria-expanded', showCodex ? 'true' : 'false');
   }
   if (btnDockRoutes) {
+    btnDockRoutes.classList.toggle('hidden', isPostLock || !showDock);
     const routesExpanded = !prefs.plannerCollapsed;
     btnDockRoutes.classList.toggle('active', routesExpanded);
     btnDockRoutes.setAttribute('aria-expanded', routesExpanded ? 'true' : 'false');
@@ -4495,7 +4511,7 @@ function syncPanelsToViewMode() {
     }
   }
   if (legendRefRow) {
-    const showRefLegend = !isBriefing && (currentViewMode !== 'MISSION' || showCuriosityPath);
+    const showRefLegend = (currentViewMode === 'RESEARCH') || (isPostLock && showCuriosityPath);
     legendRefRow.classList.toggle('hidden', !showRefLegend);
   }
   if (codexPanel) {
@@ -4505,7 +4521,7 @@ function syncPanelsToViewMode() {
 
   const isDebrief = screen === GAME_STATES.DEBRIEF;
   if (curiosityRefGroup && curiosityRefLine) {
-    const showTrimmedRef = currentViewMode === 'MISSION' && !isBriefing && showCuriosityPath;
+    const showTrimmedRef = (currentViewMode === 'RESEARCH') || (currentViewMode === 'MISSION' && isPostLock && showCuriosityPath);
     curiosityRefGroup.visible = showTrimmedRef;
     if (curiosityRefLine.material) {
       curiosityRefLine.material.color.setHex(isDebrief ? 0xf8fafc : 0xcbd5e1);
@@ -4516,7 +4532,7 @@ function syncPanelsToViewMode() {
 
   // Map labels context
   if (mapLabels) {
-    mapLabels.setAnchorHidden('curiosity-ref-path', currentViewMode !== 'MISSION' || isBriefing || !showCuriosityPath);
+    mapLabels.setAnchorHidden('curiosity-ref-path', currentViewMode === 'MISSION' ? (!isPostLock || !showCuriosityPath) : false);
     mapLabels.setViewContext({ isBriefing, isPostLock, isDebrief });
   }
 
@@ -4604,38 +4620,36 @@ function applyGameScreenState(state) {
   updatePhaseStepper(screen);
 
   // Overlays
-  const showResultOverlay = screen === GAME_STATES.EXPLORE && awaitingSurveyResultContinue;
   if (gameBriefingOverlay) gameBriefingOverlay.classList.toggle('hidden', screen !== GAME_STATES.BRIEFING);
-  if (surveyResultOverlay) {
-    surveyResultOverlay.classList.toggle('hidden', !showResultOverlay);
-    if (showResultOverlay && frozenSurveyEval) {
-      renderSurveyResultOverlayDOM({
-        elemScoreEl: sroElemScore,
-        hazScoreEl: sroHazScore,
-        totalScoreEl: sroTotalScore,
-        rankEl: sroRank,
-        identSummaryEl: sroIdentSummary,
-        hazIndexRowEl: sroHazIndexRow,
-        tablesWrapEl: sroTablesWrap,
-        evaluation: frozenSurveyEval
+  if (gameDebriefOverlay) gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF || debriefOverlayDismissed);
+  if (exploreMapCard) exploreMapCard.classList.toggle('hidden', screen !== GAME_STATES.EXPLORE);
+  if (gameProceedModal && screen !== GAME_STATES.DEBRIEF) gameProceedModal.classList.add('hidden');
+
+  // Candidate lines visibility: only locked route visible in EXPLORE/DEBRIEF
+  if (candidateLines) {
+    if (screen === GAME_STATES.EXPLORE || screen === GAME_STATES.DEBRIEF) {
+      Object.keys(candidateLines).forEach(candId => {
+        if (candidateLines[candId]) {
+          candidateLines[candId].visible = (candId === state.lockedRouteId);
+        }
+      });
+    } else {
+      Object.keys(candidateLines).forEach(candId => {
+        if (candidateLines[candId]) {
+          candidateLines[candId].visible = true;
+        }
       });
     }
   }
-  if (gameExploreOverlay) {
-    gameExploreOverlay.classList.toggle('hidden', screen !== GAME_STATES.EXPLORE || showResultOverlay || exploreOverlayDismissed);
-  }
-  if (gameDebriefOverlay) {
-    gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF || debriefOverlayDismissed);
-  }
-  if (screen === GAME_STATES.DEBRIEF) {
-    const hasLockedRoute = Boolean(state.lockedRouteId);
-    if (btnDebriefExplore) {
-      btnDebriefExplore.classList.toggle('hidden', !hasLockedRoute);
-    }
-    if (btnDebriefChoose) {
-      btnDebriefChoose.textContent = hasLockedRoute ? 'Change Route' : 'Choose a Route →';
-      btnDebriefChoose.classList.toggle('btn-game-primary', !hasLockedRoute);
-      btnDebriefChoose.classList.toggle('btn-planner-tool', hasLockedRoute);
+
+  // Survey Kit scan gating: no new scans in CHOOSE or post-lock
+  if (surveyKit) {
+    if (screen === GAME_STATES.CHOOSE || screen === GAME_STATES.EXPLORE || screen === GAME_STATES.DEBRIEF) {
+      if (typeof surveyKit.deactivate === 'function') {
+        surveyKit.deactivate();
+      } else if (typeof surveyKit.clearTool === 'function') {
+        surveyKit.clearTool();
+      }
     }
   }
 
@@ -4673,6 +4687,9 @@ function applyGameScreenState(state) {
 
   // Planner panel & blinded Route A/B/C controls
   const showPlanner = screen === GAME_STATES.ANALYZE || screen === GAME_STATES.CHOOSE;
+  if (showPlanner && panelPrefs.MISSION) {
+    panelPrefs.MISSION.plannerCollapsed = false;
+  }
   if (plannerPanel) {
     plannerPanel.classList.toggle('hidden', !showPlanner);
     plannerPanel.classList.toggle('game-blinded', showPlanner);
@@ -4681,18 +4698,22 @@ function applyGameScreenState(state) {
 
   if (btnGoChoose) btnGoChoose.style.display = screen === GAME_STATES.ANALYZE ? 'inline-block' : 'none';
   if (btnBackAnalyze) btnBackAnalyze.style.display = screen === GAME_STATES.CHOOSE ? 'inline-block' : 'none';
-  if (btnLockRoute) btnLockRoute.style.display = screen === GAME_STATES.CHOOSE ? 'inline-block' : 'none';
+  if (btnLockRoute) {
+    btnLockRoute.style.display = screen === GAME_STATES.CHOOSE ? 'inline-block' : 'none';
+    const sel = plannerCandidates.find(c => c.id === (state.selectedRouteId || selectedCandidateId));
+    btnLockRoute.textContent = `Lock in & Explore ${sel ? sel.name : 'Route'} →`;
+  }
 
   if (plannerStatus) {
     if (screen === GAME_STATES.ANALYZE) {
       plannerStatus.textContent = 'Step 1 (Analyze): inspect terrain layers & Routes A, B, C';
     } else if (screen === GAME_STATES.CHOOSE) {
-      plannerStatus.textContent = 'Step 2 (Choose): pick Route A, B, or C & Lock in route';
+      plannerStatus.textContent = 'Step 2 (Choose): review route estimates & Lock in route';
     }
   }
 
   if (showPlanner) {
-    const selectedCand = plannerCandidates.find(c => c.id === selectedCandidateId);
+    const selectedCand = plannerCandidates.find(c => c.id === (state.selectedRouteId || selectedCandidateId));
     if (selectedCand) {
       if (profileRouteName) {
         profileRouteName.textContent = selectedCand.name.toUpperCase();
@@ -4703,13 +4724,31 @@ function applyGameScreenState(state) {
   }
 
   if (screen === GAME_STATES.EXPLORE) {
-    const locked = level01.candidateRoutes.find(r => r.id === state.lockedRouteId);
-    if (exploreLockedRoute) exploreLockedRoute.textContent = locked ? locked.blindLabel : 'Route A';
+    if (exploreMapCard) {
+      exploreMapCard.classList.remove('hidden');
+      const sel = plannerCandidates.find(c => c.id === (state.lockedRouteId || state.selectedRouteId));
+      if (exploreCardRoute && sel) {
+        exploreCardRoute.textContent = sel.name.toUpperCase();
+        exploreCardRoute.style.color = sel.color;
+      }
+    }
   }
 
   if (screen === GAME_STATES.DEBRIEF) {
-    populateDebriefUI(level01, state.lockedRouteId, trimmedCuriosityData);
+    const surveyEval = frozenSurveyEval || (surveyLog ? surveyLog.evaluateCurrent() : null);
+    const sScore = surveyEval ? surveyEval.totalScore : 0;
+    populateDebriefUI(level01, state.lockedRouteId, trimmedCuriosityData, sScore);
     renderDebriefCalculatorReveal();
+
+    const hasLockedRoute = Boolean(state.lockedRouteId);
+    if (btnDebriefProceedGame) {
+      btnDebriefProceedGame.classList.toggle('hidden', !hasLockedRoute);
+    }
+    if (btnDebriefChoose) {
+      btnDebriefChoose.textContent = hasLockedRoute ? '← Choose Another Route' : 'Choose a Route →';
+      btnDebriefChoose.classList.toggle('btn-game-primary', !hasLockedRoute);
+      btnDebriefChoose.classList.toggle('btn-planner-tool', hasLockedRoute);
+    }
   }
 
   syncPanelsToViewMode();
@@ -4911,51 +4950,37 @@ function bindGameEvents() {
   if (btnLockRoute) {
     btnLockRoute.addEventListener('click', () => {
       debriefOverlayDismissed = false;
-      exploreOverlayDismissed = false;
+      // Freeze all estimates permanently at this moment
       if (surveyLog) {
         frozenSurveyEval = surveyLog.evaluateCurrent();
-        awaitingSurveyResultContinue = true;
-      } else {
-        awaitingSurveyResultContinue = false;
+      }
+      if (routeCalc) {
+        frozenRouteCalcSnapshot = routeCalc.getFrozenSnapshot();
       }
       levelState.lockInRoute();
     });
   }
 
-  if (btnSurveyResultContinue) {
-    btnSurveyResultContinue.addEventListener('click', () => {
-      awaitingSurveyResultContinue = false;
-      exploreOverlayDismissed = false;
-      if (surveyResultOverlay) surveyResultOverlay.classList.add('hidden');
-      if (gameExploreOverlay && levelState.getState().screen === GAME_STATES.EXPLORE) {
-        gameExploreOverlay.classList.remove('hidden');
-      }
-      syncPanelsToViewMode();
-    });
-  }
-
-  const dismissExploreOverlay = () => {
-    exploreOverlayDismissed = true;
-    applyGameScreenState(levelState.getState());
-  };
-
-  if (btnExploreClose) {
-    btnExploreClose.addEventListener('click', dismissExploreOverlay);
-  }
-  if (btnExploreMap) {
-    btnExploreMap.addEventListener('click', dismissExploreOverlay);
-  }
-
-  if (btnGoDebrief) {
-    btnGoDebrief.addEventListener('click', () => {
+  // Explore Phase Map Survey Controls
+  if (btnExploreFinish) {
+    btnExploreFinish.addEventListener('click', () => {
       debriefOverlayDismissed = false;
       levelState.goToDebrief();
     });
   }
 
+  if (btnExploreChangeRoute) {
+    btnExploreChangeRoute.addEventListener('click', () => {
+      debriefOverlayDismissed = false;
+      panelPrefs[currentViewMode].plannerCollapsed = false;
+      levelState.goToChoose();
+    });
+  }
+
+  // Debrief Action Buttons
   const dismissDebriefOverlay = () => {
     debriefOverlayDismissed = true;
-    applyGameScreenState(levelState.getState());
+    if (gameDebriefOverlay) gameDebriefOverlay.classList.add('hidden');
   };
 
   if (btnDebriefClose) {
@@ -4968,19 +4993,89 @@ function bindGameEvents() {
   if (btnDebriefChoose) {
     btnDebriefChoose.addEventListener('click', () => {
       debriefOverlayDismissed = false;
-      exploreOverlayDismissed = false;
-      awaitingSurveyResultContinue = false;
       panelPrefs[currentViewMode].plannerCollapsed = false;
       levelState.goToChoose();
     });
   }
 
-  if (btnDebriefExplore) {
-    btnDebriefExplore.addEventListener('click', () => {
-      if (!levelState.getState().lockedRouteId) return;
+  // Interactive Stage Tracker Clicks
+  const phaseSteps = document.querySelectorAll('#game-phase-bar .phase-step');
+  phaseSteps.forEach(step => {
+    step.addEventListener('click', () => {
+      const targetPhase = step.dataset.phase;
+      if (!targetPhase) return;
+      playUiSound('click');
+      if (targetPhase === GAME_STATES.BRIEFING) {
+        if (gameBriefingOverlay) gameBriefingOverlay.classList.remove('hidden');
+      } else if (targetPhase === GAME_STATES.ANALYZE) {
+        debriefOverlayDismissed = false;
+        levelState.goToAnalyze();
+      } else if (targetPhase === GAME_STATES.CHOOSE) {
+        debriefOverlayDismissed = false;
+        panelPrefs[currentViewMode].plannerCollapsed = false;
+        levelState.goToChoose();
+      } else if (targetPhase === GAME_STATES.EXPLORE) {
+        debriefOverlayDismissed = false;
+        if (!levelState.getState().lockedRouteId) {
+          levelState.selectRoute(levelState.getState().selectedRouteId || 'route-a');
+          if (surveyLog) frozenSurveyEval = surveyLog.evaluateCurrent();
+          if (routeCalc) frozenRouteCalcSnapshot = routeCalc.getFrozenSnapshot();
+          levelState.lockInRoute();
+        } else {
+          levelState.goToExplore();
+        }
+      } else if (targetPhase === GAME_STATES.DEBRIEF) {
+        debriefOverlayDismissed = false;
+        levelState.goToDebrief();
+      }
+    });
+  });
+
+  if (btnDebriefProceedGame) {
+    btnDebriefProceedGame.addEventListener('click', () => {
+      const lockedCand = plannerCandidates.find(c => c.id === levelState.getState().lockedRouteId);
+      if (gpmRouteName) gpmRouteName.textContent = lockedCand ? lockedCand.name : 'Selected Route';
+      if (gameProceedModal) gameProceedModal.classList.remove('hidden');
+    });
+  }
+
+  const closeProceedModal = () => {
+    if (gameProceedModal) gameProceedModal.classList.add('hidden');
+  };
+  if (btnGpmClose) btnGpmClose.addEventListener('click', closeProceedModal);
+  if (btnGpmBackDebrief) btnGpmBackDebrief.addEventListener('click', closeProceedModal);
+  if (btnGpmBackMap) {
+    btnGpmBackMap.addEventListener('click', () => {
+      closeProceedModal();
+      debriefOverlayDismissed = true;
+      applyGameScreenState(levelState.getState());
+    });
+  }
+  if (btnGpmReplay) {
+    btnGpmReplay.addEventListener('click', () => {
+      closeProceedModal();
+      if (btnDebriefReplay) btnDebriefReplay.click();
+    });
+  }
+
+  if (btnDebriefReplay) {
+    btnDebriefReplay.addEventListener('click', () => {
       debriefOverlayDismissed = false;
-      exploreOverlayDismissed = true;
-      levelState.goToExplore();
+            frozenSurveyEval = null;
+      frozenRouteCalcSnapshot = null;
+            if (surveyKit) surveyKit.reset();
+      if (surveyLog) surveyLog.reset();
+      if (routeCalc) routeCalc.reset();
+      levelState.resetLevel();
+      syncPanelsToViewMode();
+    });
+  }
+
+  if (btnDebriefFree) {
+    btnDebriefFree.addEventListener('click', () => {
+      debriefOverlayDismissed = false;
+      if (gameDebriefOverlay) gameDebriefOverlay.classList.add('hidden');
+      setViewMode('RESEARCH');
     });
   }
 
@@ -5062,12 +5157,12 @@ function bindGameEvents() {
     if (routeCalc) routeCalc.setDrawerOpen(false);
     if (surveyKit) surveyKit.reset();
     if (surveyLog) surveyLog.reset();
-    awaitingSurveyResultContinue = false;
-    debriefOverlayDismissed = false;
-    exploreOverlayDismissed = false;
+            debriefOverlayDismissed = false;
     frozenSurveyEval = null;
+    frozenRouteCalcSnapshot = null;
     levelState.resetLevel();
     resetCustomizationToStandard();
+    syncPanelsToViewMode();
   });
 }
 
