@@ -61,11 +61,12 @@ export function populateBriefingUI(levelData) {
   }
 }
 
-export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = null) {
+export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = null, driveStats = null) {
   const refStatsEl = document.getElementById('debrief-ref-stats');
   const lockedEl = document.getElementById('debrief-locked-route');
   const tbodyEl = document.getElementById('debrief-true-tbody');
   const compTbodyEl = document.getElementById('debrief-comp-tbody');
+  const summaryBox = document.getElementById('debrief-mission-summary');
 
   const refM = levelData.referenceRoute.metrics;
   if (refStatsEl) {
@@ -75,6 +76,53 @@ export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = n
   const chosen = levelData.candidateRoutes.find(r => r.id === lockedRouteId);
   if (lockedEl) {
     lockedEl.textContent = chosen ? `${chosen.blindLabel} (${chosen.trueName})` : '—';
+  }
+
+  // Populate Drive Performance Summary Card if available
+  if (summaryBox) {
+    if (driveStats) {
+      summaryBox.classList.remove('hidden');
+      const distKm = (driveStats.totalDistanceM / 1000.0).toFixed(2);
+      const batRem = Math.round(driveStats.batteryRemainingPct || 100);
+      const sciPts = driveStats.scienceScore || 0;
+      const poiCount = driveStats.discoveredCount || 0;
+      
+      // Calculate Grade:
+      // High score (>300) + good battery (>50%) = A+
+      // >200 or >30% = A
+      // else B
+      let grade = 'A';
+      if (sciPts >= 350 && batRem >= 50) grade = 'A+';
+      else if (sciPts >= 200 || batRem >= 60) grade = 'A';
+      else if (batRem >= 30) grade = 'B';
+      else grade = 'C';
+
+      summaryBox.innerHTML = `
+        <div class="dms-grade-badge">
+          <span class="dms-grade-title">MISSION GRADE</span>
+          <strong class="dms-grade-val">${grade}</strong>
+        </div>
+        <div class="dms-stats-grid">
+          <div class="dms-stat-card">
+            <span class="dms-lbl">Science Gathered <span class="tag-pill game">GAME</span></span>
+            <strong class="dms-val text-cyan">+${sciPts} pts</strong>
+            <small>${poiCount} outcrops/cores logged</small>
+          </div>
+          <div class="dms-stat-card">
+            <span class="dms-lbl">Distance Traversed <span class="tag-pill measured">MEASURED</span></span>
+            <strong class="dms-val">${distKm} km</strong>
+            <small>Actual ground path driven</small>
+          </div>
+          <div class="dms-stat-card">
+            <span class="dms-lbl">Battery Conserved <span class="sim-badge">SIM</span></span>
+            <strong class="dms-val text-green">${batRem}%</strong>
+            <small>Power reserves remaining</small>
+          </div>
+        </div>
+      `;
+    } else {
+      summaryBox.classList.add('hidden');
+    }
   }
 
   if (tbodyEl) {

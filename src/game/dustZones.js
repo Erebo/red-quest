@@ -173,3 +173,108 @@ export function createDustZonesOverlay(sampleElevFn, localToMesh, minElev) {
 
   return { group, updateExaggeration };
 }
+
+/**
+ * Creates swirling dust storm particle clouds inside each Level 1 dust storm zone
+ * and hazard dust devil radius, active during Mars Rover Explore mode.
+ */
+export function createDustStormParticles({ sampleElevFn, localToMesh, minElev }) {
+  const group = new THREE.Group();
+  group.name = 'DustStormParticlesGroup';
+  group.visible = false;
+
+  const PARTICLES_PER_ZONE = 320;
+  const zones = LEVEL1_DUST_ZONES;
+  const totalParticles = zones.length * PARTICLES_PER_ZONE;
+  const positions = new Float32Array(totalParticles * 3);
+  const particleMeta = [];
+
+  let pIdx = 0;
+  for (let zIdx = 0; zIdx < zones.length; zIdx++) {
+    const z = zones[zIdx];
+    for (let i = 0; i < PARTICLES_PER_ZONE; i++) {
+      // Uniform random distribution inside ellipse
+      const angle = Math.random() * Math.PI * 2;
+      const rad = Math.sqrt(Math.random()); // sqrt ensures uniform area distribution
+      const ex = z.rx * rad * Math.cos(angle);
+      const ey = z.ry * rad * Math.sin(angle);
+      const lx = z.cx + ex * Math.cos(z.rotRad) - ey * Math.sin(z.rotRad);
+      const ly = z.cy + ex * Math.sin(z.rotRad) + ey * Math.cos(z.rotRad);
+      const elev = sampleElevFn ? sampleElevFn(lx, ly) : minElev;
+      const { meshX, meshZ } = localToMesh(lx, ly);
+
+      const heightOffset = 1.0 + Math.random() * 26.0;
+      const meshY = (elev - minElev) + heightOffset;
+
+      positions[pIdx * 3] = meshX;
+      positions[pIdx * 3 + 1] = meshY;
+      positions[pIdx * 3 + 2] = meshZ;
+
+      particleMeta.push({
+        zone: z,
+        relAngle: angle,
+        relRad: rad,
+        heightOffset,
+        rotSpeed: 0.25 + Math.random() * 0.45,
+        bobSpeed: 0.8 + Math.random() * 1.5,
+        elev
+      });
+      pIdx++;
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  const material = new THREE.PointsMaterial({
+    color: 0xdf8858,
+    size: 4.8,
+    transparent: true,
+    opacity: 0.65,
+    depthWrite: false,
+    blending: THREE.NormalBlending
+  });
+
+  const pointsMesh = new THREE.Points(geometry, material);
+  pointsMesh.renderOrder = 8;
+  group.add(pointsMesh);
+
+  let currentExaggeration = 1.0;
+
+  function update(dt, nowSec) {
+    if (!group.visible) return;
+    const pos = geometry.attributes.position;
+    for (let i = 0; i < totalParticles; i++) {
+      const meta = particleMeta[i];
+      meta.relAngle += meta.rotSpeed * dt;
+
+      const z = meta.zone;
+      const ex = z.rx * meta.relRad * Math.cos(meta.relAngle);
+      const ey = z.ry * meta.relRad * Math.sin(meta.relAngle);
+      const lx = z.cx + ex * Math.cos(z.rotRad) - ey * Math.sin(z.rotRad);
+      const ly = z.cy + ex * Math.sin(z.rotRad) + ey * Math.cos(z.rotRad);
+
+      const { meshX, meshZ } = localToMesh(lx, ly);
+      const bob = Math.sin(nowSec * meta.bobSpeed + i) * 1.5;
+      const meshY = (meta.elev - minElev) * currentExaggeration + (meta.heightOffset + bob) * currentExaggeration;
+
+      pos.setXYZ(i, meshX, meshY, meshZ);
+    }
+    pos.needsUpdate = true;
+  }
+
+  function setExaggeration(exag) {
+    currentExaggeration = exag;
+  }
+
+  function setVisible(visible) {
+    group.visible = visible;
+  }
+
+  return {
+    group,
+    update,
+    setExaggeration,
+    setVisible
+  };
+}
