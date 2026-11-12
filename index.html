@@ -137,6 +137,7 @@
   <div id="mission-objective-banner" class="mission-objective-banner mission-only-ctrl hidden" role="status" aria-live="polite">
     <span class="mob-tag">OBJECTIVE</span>
     <span id="objective-banner-text">Explore the map, then choose a route</span>
+    <button id="btn-banner-action" class="mob-action-btn hidden" type="button">View Debrief</button>
   </div>
 
   <!-- Floating Top-Right Map Filter Controls (Vertical Exag Badge, Show All Elements & Labels) -->
@@ -759,80 +760,91 @@
     </div>
   </section>
 
-  <section id="game-explore-overlay" class="game-overlay hidden overlay-top" role="dialog" aria-label="Explore phase placeholder">
+  <section id="game-explore-overlay" class="game-overlay hidden overlay-top" role="dialog" aria-label="Explore phase">
     <div class="game-card compact">
       <div class="game-card-top">
-        <span class="tag-pill game">EXPLORE · PLACEHOLDER</span>
+        <span class="tag-pill game">EXPLORE · ROUTE LOCKED</span>
+        <button id="btn-explore-close" class="game-close-btn" type="button" title="Explore 3D terrain" aria-label="Close explore overlay">×</button>
       </div>
       <h2>EXPLORE — Locked In <span id="explore-locked-route">Route A</span></h2>
-      <p class="game-story">Placeholder screen: rover driving simulation along your chosen traverse will be implemented in the next step.</p>
+      <p class="game-story">Inspect your locked traverse across the 3D Gale Crater terrain, or proceed to the Debrief summary.</p>
       <div class="game-actions">
-        <button id="btn-go-debrief" class="btn-game-primary">Continue to Debrief →</button>
+        <button id="btn-explore-map" class="btn-planner-tool" type="button">Explore 3D Map</button>
+        <button id="btn-go-debrief" class="btn-game-primary" type="button">Continue to Debrief →</button>
       </div>
     </div>
   </section>
 
-  <section id="game-debrief-overlay" class="game-overlay hidden overlay-top" role="dialog" aria-label="Debrief phase placeholder">
-    <div class="game-card wide">
+  <section id="game-debrief-overlay" class="game-overlay hidden overlay-top" role="dialog" aria-label="Debrief summary">
+    <div class="game-card wide debrief-card">
       <div class="game-card-top">
-        <span class="tag-pill game">DEBRIEF · PLACEHOLDER</span>
+        <span class="tag-pill game">DEBRIEF</span>
         <span class="tag-pill measured">REFERENCE TRAVERSE REVEALED</span>
+        <button id="btn-debrief-close" class="game-close-btn" type="button" title="Close debrief and inspect 3D map" aria-label="Close debrief overlay">×</button>
       </div>
-      <h2>DEBRIEF — True Values &amp; Curiosity Reference</h2>
-      <p class="game-story">Placeholder screen: Curiosity's actual traverse (<span id="debrief-ref-stats">—</span> <span class="tag-pill measured">MEASURED</span>) is now visible on the 3D terrain alongside your locked route (<strong id="debrief-locked-route">—</strong>).</p>
-      <div class="table-wrap" style="margin-top:8px;">
-        <table class="planner-table">
-          <thead>
-            <tr>
-              <th>Route</th>
-              <th>Strategy <span class="tag-pill game">GAME</span></th>
-              <th>Distance <span class="tag-pill measured">MEASURED</span></th>
-              <th>Est. Time <span class="sim-badge">SIM</span></th>
-              <th>Energy <span class="sim-badge">SIM</span></th>
-              <th>Radiation <span class="sim-badge">SIM</span></th>
-              <th>Science <span class="tag-pill game">GAME</span></th>
-              <th>Risk <span class="sim-badge">SIM</span></th>
-            </tr>
-          </thead>
-          <tbody id="debrief-true-tbody"></tbody>
-        </table>
-      </div>
-
-      <div id="debrief-curiosity-comparison" class="debrief-curiosity-comp">
-        <div class="dcr-head">
-          <h3>Route vs. Curiosity Reference Comparison (Start → Boxwork Core Zone)</h3>
-          <span class="calc-head-sub">Side-by-side comparison only · Distance <span class="tag-pill measured">MEASURED</span> · Slope tiers <span class="tag-pill measured">MEASURED DEM</span> / <span class="tag-pill game">GAME RULE</span></span>
-        </div>
-        <div class="table-wrap" style="margin-top:6px;">
-          <table class="planner-table debrief-comp-table">
+      <h2 style="flex-shrink:0;">DEBRIEF — True Values &amp; Accuracy</h2>
+      <div class="debrief-scroll-body">
+        <p class="game-story">Curiosity's actual traverse (<span id="debrief-ref-stats">—</span> <span class="tag-pill measured">MEASURED</span>) is visible on the 3D terrain alongside your chosen route (<strong id="debrief-locked-route">No route chosen</strong>).</p>
+        <div class="table-wrap" style="margin-top:8px;">
+          <table class="planner-table">
             <thead>
               <tr>
-                <th>Path</th>
-                <th>Distance<br><span class="tag-pill measured">MEASURED</span></th>
-                <th>Easy (&lt;15°)<br><span class="tag-pill game">GAME RULE</span></th>
-                <th>Moderate (15°–25°)<br><span class="tag-pill game">GAME RULE</span></th>
-                <th>Hazardous (&gt;25°)<br><span class="tag-pill game">GAME RULE</span></th>
+                <th>Route</th>
+                <th>Strategy <span class="tag-pill game">GAME</span></th>
+                <th>Distance <span class="tag-pill measured">MEASURED</span></th>
+                <th>Est. Time <span class="sim-badge">SIM</span></th>
+                <th>Energy <span class="sim-badge">SIM</span></th>
+                <th>Radiation <span class="sim-badge">SIM</span></th>
+                <th>Science <span class="tag-pill game">GAME</span></th>
+                <th>Risk <span class="sim-badge">SIM</span></th>
               </tr>
             </thead>
-            <tbody id="debrief-comp-tbody"></tbody>
+            <tbody id="debrief-true-tbody"></tbody>
           </table>
+        </div>
+
+        <div id="debrief-curiosity-comparison" class="debrief-curiosity-comp">
+          <div class="dcr-head">
+            <h3>Route vs. Curiosity Reference Comparison (Start → Boxwork Core Zone)</h3>
+            <span class="calc-head-sub">Side-by-side comparison only · Distance <span class="tag-pill measured">MEASURED</span> · Slope tiers <span class="tag-pill measured">MEASURED DEM</span> / <span class="tag-pill game">GAME RULE</span></span>
+          </div>
+          <div class="table-wrap" style="margin-top:6px;">
+            <table class="planner-table debrief-comp-table">
+              <thead>
+                <tr>
+                  <th>Path</th>
+                  <th>Distance<br><span class="tag-pill measured">MEASURED</span></th>
+                  <th>Easy (&lt;15°)<br><span class="tag-pill game">GAME RULE</span></th>
+                  <th>Moderate (15°–25°)<br><span class="tag-pill game">GAME RULE</span></th>
+                  <th>Hazardous (&gt;25°)<br><span class="tag-pill game">GAME RULE</span></th>
+                </tr>
+              </thead>
+              <tbody id="debrief-comp-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="debrief-calc-reveal" class="debrief-calc-reveal">
+          <div class="dcr-head">
+            <h3>Survey &amp; Planning Accuracy — Your Answers vs. True Metrics <span class="tag-pill game">GAME RULE</span></h3>
+            <span class="calc-head-sub">Shows your Survey Kit &amp; Calculator accuracy vs. true route values</span>
+          </div>
+          <div class="dcr-summary">
+            <div class="dcr-stat-row">
+              <span>Accuracy / Rank: <strong id="debrief-calc-acc">—</strong></span>
+              <span>Answered: <strong id="debrief-calc-answered">0 / 12</strong></span>
+              <span>Total Score: <strong id="debrief-calc-score">0 / 200 pts</strong></span>
+            </div>
+            <div id="debrief-calc-neutral" class="dcr-neutral">—</div>
+          </div>
+          <div id="debrief-calc-tables" class="dcr-routes-grid"></div>
         </div>
       </div>
 
-      <div id="debrief-calc-reveal" class="debrief-calc-reveal">
-        <div class="dcr-head">
-          <h3>Planning Accuracy — Estimates vs. True Route Metrics <span class="tag-pill game">GAME RULE</span></h3>
-          <span class="calc-head-sub">≤10% Sharp (10 pts) · ≤25% Close (5 pts) · &gt;25% Off (0 pts) · Skipped (0 pts)</span>
-        </div>
-        <div class="dcr-summary">
-          <div class="dcr-stat-row">
-            <span>Planning accuracy: <strong id="debrief-calc-acc">—</strong></span>
-            <span>Answered: <strong id="debrief-calc-answered">0 / 12</strong></span>
-            <span>Planning score: <strong id="debrief-calc-score">0 / 120 pts</strong></span>
-          </div>
-          <div id="debrief-calc-neutral" class="dcr-neutral">—</div>
-        </div>
-        <div id="debrief-calc-tables" class="dcr-routes-grid"></div>
+      <div class="game-actions debrief-actions">
+        <button id="btn-debrief-dismiss" class="btn-planner-tool" type="button">Close</button>
+        <button id="btn-debrief-choose" class="btn-planner-tool" type="button">Choose a Route →</button>
+        <button id="btn-debrief-explore" class="btn-game-primary hidden" type="button">Start Exploration →</button>
       </div>
     </div>
   </section>

@@ -540,7 +540,18 @@ body.cursor-survey-tool .spc-close{pointer-events:auto!important}
 .spc-tags{display:flex;flex-wrap:wrap;gap:4px}
 
 /* ===== Debrief Calculator Reveal & Reference Comparison ===== */
-#game-debrief-overlay .game-card.wide{max-height:calc(100vh - 96px);overflow-y:auto}
+#game-debrief-overlay{padding:48px 18px 20px}
+#game-debrief-overlay .game-card.wide{max-height:calc(100vh - var(--hud-bottom, 60px) - 72px);display:flex;flex-direction:column;overflow:hidden}
+#game-debrief-overlay .debrief-scroll-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:4px}
+#game-debrief-overlay .debrief-scroll-body::-webkit-scrollbar{width:5px}
+#game-debrief-overlay .debrief-scroll-body::-webkit-scrollbar-thumb{background:rgba(230,126,34,.35);border-radius:3px}
+#game-debrief-overlay .debrief-actions{flex-shrink:0;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.1);flex-wrap:wrap;align-items:center}
+#game-debrief-overlay .debrief-actions .hidden{display:none}
+.game-close-btn{margin-left:auto;min-width:36px;min-height:36px;border-radius:var(--rq-radius-sm);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);color:#cbd5e1;font-size:20px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s,color .15s}
+.game-close-btn:hover{background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.55);color:#fff}
+.mob-action-btn{pointer-events:auto;margin-left:6px;padding:3px 10px;min-height:28px;border-radius:999px;background:rgba(230,126,34,.24);border:1px solid rgba(230,126,34,.7);color:#ffe4c4;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.mob-action-btn:hover{background:#e67e22;border-color:#ff9c52;color:#fff}
+.mob-action-btn.hidden{display:none}
 #game-debrief-overlay .planner-table th,#game-debrief-overlay .planner-table td{padding:5px 6px;font-size:11.5px;white-space:normal}
 .debrief-curiosity-comp{margin-top:12px;padding:10px 12px;background:rgba(255,255,255,.025);border:1px solid rgba(203,213,225,.28);border-radius:6px}
 .debrief-calc-reveal{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}

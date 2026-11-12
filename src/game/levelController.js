@@ -74,7 +74,7 @@ export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = n
 
   const chosen = levelData.candidateRoutes.find(r => r.id === lockedRouteId);
   if (lockedEl) {
-    lockedEl.textContent = chosen ? `${chosen.blindLabel} (${chosen.trueName})` : '—';
+    lockedEl.textContent = chosen ? `${chosen.blindLabel} (${chosen.trueName})` : 'No route chosen yet';
   }
 
   if (tbodyEl) {

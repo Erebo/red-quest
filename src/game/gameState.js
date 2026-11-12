@@ -21,10 +21,10 @@ export const GAME_STATE_ORDER = Object.freeze([
 
 const ALLOWED_TRANSITIONS = {
   [GAME_STATES.BRIEFING]: [GAME_STATES.ANALYZE],
-  [GAME_STATES.ANALYZE]: [GAME_STATES.CHOOSE],
-  [GAME_STATES.CHOOSE]: [GAME_STATES.EXPLORE, GAME_STATES.ANALYZE],
-  [GAME_STATES.EXPLORE]: [GAME_STATES.DEBRIEF],
-  [GAME_STATES.DEBRIEF]: []
+  [GAME_STATES.ANALYZE]: [GAME_STATES.CHOOSE, GAME_STATES.DEBRIEF],
+  [GAME_STATES.CHOOSE]: [GAME_STATES.EXPLORE, GAME_STATES.ANALYZE, GAME_STATES.DEBRIEF],
+  [GAME_STATES.EXPLORE]: [GAME_STATES.DEBRIEF, GAME_STATES.CHOOSE],
+  [GAME_STATES.DEBRIEF]: [GAME_STATES.CHOOSE, GAME_STATES.EXPLORE]
 };
 
 export function createGameState(defaultRouteId = 'route-a') {
@@ -70,6 +70,20 @@ export function createGameState(defaultRouteId = 'route-a') {
     goToChoose() {
       if (state.screen === GAME_STATES.ANALYZE) {
         transitionTo(GAME_STATES.CHOOSE);
+      } else if (state.screen === GAME_STATES.EXPLORE || state.screen === GAME_STATES.DEBRIEF) {
+        const prevState = { ...state };
+        state = {
+          ...state,
+          lockedRouteId: null,
+          screen: GAME_STATES.CHOOSE
+        };
+        notify(prevState);
+      }
+    },
+
+    goToExplore() {
+      if (state.screen === GAME_STATES.DEBRIEF && state.lockedRouteId) {
+        transitionTo(GAME_STATES.EXPLORE);
       }
     },
 
@@ -103,7 +117,11 @@ export function createGameState(defaultRouteId = 'route-a') {
     },
 
     goToDebrief() {
-      if (state.screen === GAME_STATES.EXPLORE) {
+      if (
+        state.screen === GAME_STATES.EXPLORE ||
+        state.screen === GAME_STATES.ANALYZE ||
+        state.screen === GAME_STATES.CHOOSE
+      ) {
         transitionTo(GAME_STATES.DEBRIEF);
       }
     },

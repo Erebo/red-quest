@@ -45,7 +45,8 @@ import {
 import { createSurveyKitController } from './game/surveyKit.js';
 import {
   createSurveyLogController,
-  renderSurveyResultOverlayDOM
+  renderSurveyResultOverlayDOM,
+  renderDebriefSurveyRevealDOM
 } from './game/surveyLog.js';
 import { createDustZonesOverlay } from './game/dustZones.js';
 import { playUiSound } from './config.js';
@@ -222,6 +223,7 @@ const iMobilityRow = document.getElementById('i-mobility-row');
 const btnLenses = document.getElementById('btn-lenses');
 const missionObjectiveBanner = document.getElementById('mission-objective-banner');
 const objectiveBannerText = document.getElementById('objective-banner-text');
+const btnBannerAction = document.getElementById('btn-banner-action');
 const missionDock = document.getElementById('mission-dock');
 const btnDockInspector = document.getElementById('btn-dock-inspector');
 const btnDockLegend = document.getElementById('btn-dock-legend');
@@ -241,6 +243,12 @@ const btnGoChoose = document.getElementById('btn-go-choose');
 const btnBackAnalyze = document.getElementById('btn-back-analyze');
 const btnLockRoute = document.getElementById('btn-lock-route');
 const btnGoDebrief = document.getElementById('btn-go-debrief');
+const btnExploreClose = document.getElementById('btn-explore-close');
+const btnExploreMap = document.getElementById('btn-explore-map');
+const btnDebriefClose = document.getElementById('btn-debrief-close');
+const btnDebriefDismiss = document.getElementById('btn-debrief-dismiss');
+const btnDebriefChoose = document.getElementById('btn-debrief-choose');
+const btnDebriefExplore = document.getElementById('btn-debrief-explore');
 const exploreLockedRoute = document.getElementById('explore-locked-route');
 
 // Labels Dropdown, Detail Card, Map Legend & 6 Decision Lenses DOM Elements
@@ -306,6 +314,8 @@ let surveyKit = null;
 let surveyLog = null;
 let dustZonesOverlay = null;
 let awaitingSurveyResultContinue = false;
+let debriefOverlayDismissed = false;
+let exploreOverlayDismissed = false;
 let frozenSurveyEval = null;
 let lastCalcMaskedState = null;
 
@@ -369,6 +379,18 @@ function syncRouteCalcPanelUi() {
 }
 
 function renderDebriefCalculatorReveal() {
+  const surveyEval = frozenSurveyEval || (surveyLog ? surveyLog.evaluateCurrent() : null);
+  if (surveyEval) {
+    renderDebriefSurveyRevealDOM({
+      accEl: debriefCalcAcc,
+      answeredEl: debriefCalcAnswered,
+      scoreEl: debriefCalcScore,
+      neutralEl: debriefCalcNeutral,
+      tablesEl: debriefCalcTables,
+      evaluation: surveyEval
+    });
+    return;
+  }
   if (!routeCalc) return;
   renderDebriefCalcRevealDOM({
     accEl: debriefCalcAcc,
@@ -2233,6 +2255,8 @@ function resetCustomizationToStandard() {
     surveyLog.reset();
   }
   awaitingSurveyResultContinue = false;
+  debriefOverlayDismissed = false;
+  exploreOverlayDismissed = false;
   frozenSurveyEval = null;
   labelCatChips.forEach(chip => {
     chip.classList.add('active');
@@ -3133,6 +3157,14 @@ function bindUIEvents() {
       if (surveyKit && surveyKit.getActiveTool()) {
         surveyKit.clearTool();
         syncSurveyKitUi();
+      }
+      const screen = levelState.getState().screen;
+      if (screen === GAME_STATES.DEBRIEF && gameDebriefOverlay && !gameDebriefOverlay.classList.contains('hidden')) {
+        debriefOverlayDismissed = true;
+        applyGameScreenState(levelState.getState());
+      } else if (screen === GAME_STATES.EXPLORE && gameExploreOverlay && !gameExploreOverlay.classList.contains('hidden')) {
+        exploreOverlayDismissed = true;
+        applyGameScreenState(levelState.getState());
       }
     }
   });
@@ -4383,14 +4415,36 @@ function syncPanelsToViewMode() {
   if (missionObjectiveBanner && objectiveBannerText) {
     const showBanner = currentViewMode === 'MISSION' && !isBriefing;
     missionObjectiveBanner.classList.toggle('hidden', !showBanner);
+    const lockedId = levelState.getState().lockedRouteId;
     if (screen === GAME_STATES.ANALYZE) {
       objectiveBannerText.textContent = 'Explore the map, then choose a route';
     } else if (screen === GAME_STATES.CHOOSE) {
       objectiveBannerText.textContent = 'Compare Routes A, B, and C, then lock in your plan';
     } else if (screen === GAME_STATES.EXPLORE) {
-      objectiveBannerText.textContent = 'Executing locked traverse toward the boxwork core';
+      const lockedCand = level01.candidateRoutes.find(r => r.id === lockedId);
+      objectiveBannerText.textContent = lockedCand
+        ? `Exploring locked traverse — ${lockedCand.blindLabel}`
+        : 'Executing locked traverse toward the boxwork core';
     } else if (screen === GAME_STATES.DEBRIEF) {
       objectiveBannerText.textContent = 'Debrief — review estimates, true values & Curiosity reference';
+    }
+    if (btnBannerAction) {
+      const showExploreDebriefBtn =
+        screen === GAME_STATES.EXPLORE &&
+        !awaitingSurveyResultContinue &&
+        exploreOverlayDismissed;
+      const showReopenDebriefBtn =
+        screen === GAME_STATES.DEBRIEF &&
+        debriefOverlayDismissed;
+      if (showExploreDebriefBtn) {
+        btnBannerAction.textContent = 'View Debrief →';
+        btnBannerAction.classList.remove('hidden');
+      } else if (showReopenDebriefBtn) {
+        btnBannerAction.textContent = 'Open Debrief';
+        btnBannerAction.classList.remove('hidden');
+      } else {
+        btnBannerAction.classList.add('hidden');
+      }
     }
   }
 
@@ -4559,8 +4613,23 @@ function applyGameScreenState(state) {
       });
     }
   }
-  if (gameExploreOverlay) gameExploreOverlay.classList.toggle('hidden', screen !== GAME_STATES.EXPLORE || showResultOverlay);
-  if (gameDebriefOverlay) gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF);
+  if (gameExploreOverlay) {
+    gameExploreOverlay.classList.toggle('hidden', screen !== GAME_STATES.EXPLORE || showResultOverlay || exploreOverlayDismissed);
+  }
+  if (gameDebriefOverlay) {
+    gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF || debriefOverlayDismissed);
+  }
+  if (screen === GAME_STATES.DEBRIEF) {
+    const hasLockedRoute = Boolean(state.lockedRouteId);
+    if (btnDebriefExplore) {
+      btnDebriefExplore.classList.toggle('hidden', !hasLockedRoute);
+    }
+    if (btnDebriefChoose) {
+      btnDebriefChoose.textContent = hasLockedRoute ? 'Change Route' : 'Choose a Route →';
+      btnDebriefChoose.classList.toggle('btn-game-primary', !hasLockedRoute);
+      btnDebriefChoose.classList.toggle('btn-planner-tool', hasLockedRoute);
+    }
+  }
 
   // Full reference rover/timeline traverse stays hidden until DEBRIEF in MISSION mode (trimmed dashed Curiosity path shows from ANALYZE+)
   const isPostLock = screen === GAME_STATES.EXPLORE || screen === GAME_STATES.DEBRIEF;
@@ -4833,6 +4902,8 @@ function bindGameEvents() {
 
   if (btnLockRoute) {
     btnLockRoute.addEventListener('click', () => {
+      debriefOverlayDismissed = false;
+      exploreOverlayDismissed = false;
       if (surveyLog) {
         frozenSurveyEval = surveyLog.evaluateCurrent();
         awaitingSurveyResultContinue = true;
@@ -4846,16 +4917,75 @@ function bindGameEvents() {
   if (btnSurveyResultContinue) {
     btnSurveyResultContinue.addEventListener('click', () => {
       awaitingSurveyResultContinue = false;
+      exploreOverlayDismissed = false;
       if (surveyResultOverlay) surveyResultOverlay.classList.add('hidden');
       if (gameExploreOverlay && levelState.getState().screen === GAME_STATES.EXPLORE) {
         gameExploreOverlay.classList.remove('hidden');
       }
+      syncPanelsToViewMode();
     });
+  }
+
+  const dismissExploreOverlay = () => {
+    exploreOverlayDismissed = true;
+    applyGameScreenState(levelState.getState());
+  };
+
+  if (btnExploreClose) {
+    btnExploreClose.addEventListener('click', dismissExploreOverlay);
+  }
+  if (btnExploreMap) {
+    btnExploreMap.addEventListener('click', dismissExploreOverlay);
   }
 
   if (btnGoDebrief) {
     btnGoDebrief.addEventListener('click', () => {
+      debriefOverlayDismissed = false;
       levelState.goToDebrief();
+    });
+  }
+
+  const dismissDebriefOverlay = () => {
+    debriefOverlayDismissed = true;
+    applyGameScreenState(levelState.getState());
+  };
+
+  if (btnDebriefClose) {
+    btnDebriefClose.addEventListener('click', dismissDebriefOverlay);
+  }
+  if (btnDebriefDismiss) {
+    btnDebriefDismiss.addEventListener('click', dismissDebriefOverlay);
+  }
+
+  if (btnDebriefChoose) {
+    btnDebriefChoose.addEventListener('click', () => {
+      debriefOverlayDismissed = false;
+      exploreOverlayDismissed = false;
+      awaitingSurveyResultContinue = false;
+      panelPrefs[currentViewMode].plannerCollapsed = false;
+      levelState.goToChoose();
+    });
+  }
+
+  if (btnDebriefExplore) {
+    btnDebriefExplore.addEventListener('click', () => {
+      if (!levelState.getState().lockedRouteId) return;
+      debriefOverlayDismissed = false;
+      exploreOverlayDismissed = true;
+      levelState.goToExplore();
+    });
+  }
+
+  if (btnBannerAction) {
+    btnBannerAction.addEventListener('click', () => {
+      const screen = levelState.getState().screen;
+      if (screen === GAME_STATES.EXPLORE) {
+        debriefOverlayDismissed = false;
+        levelState.goToDebrief();
+      } else if (screen === GAME_STATES.DEBRIEF) {
+        debriefOverlayDismissed = false;
+        applyGameScreenState(levelState.getState());
+      }
     });
   }
 
@@ -4907,6 +5037,8 @@ function bindGameEvents() {
     if (surveyKit) surveyKit.reset();
     if (surveyLog) surveyLog.reset();
     awaitingSurveyResultContinue = false;
+    debriefOverlayDismissed = false;
+    exploreOverlayDismissed = false;
     frozenSurveyEval = null;
     levelState.resetLevel();
     resetCustomizationToStandard();
