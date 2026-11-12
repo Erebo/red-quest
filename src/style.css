@@ -234,7 +234,7 @@ body.mode-mission #layers-panel.open .panel-body{max-height:calc(var(--side-max-
 #elevation-chart{width:100%;height:100%;display:block;cursor:crosshair}
 
 /* Toast */
-.planner-toast{position:absolute;top:46px;left:50%;transform:translateX(-50%);background:rgba(231,76,60,.92);color:#fff;padding:6px 14px;border-radius:4px;font-size:11px;font-weight:600;z-index:90;box-shadow:0 4px 16px rgba(0,0,0,.5);pointer-events:none;transition:opacity .25s ease}
+.planner-toast{position:absolute;top:46px;left:50%;transform:translateX(-50%);background:rgba(231,76,60,.92);color:#fff;padding:6px 14px;border-radius:4px;font-size:11px;font-weight:600;z-index:90;box-shadow:0 4px 16px rgba(0,0,0,.5);pointer-events:auto;transition:opacity .25s ease}
 .planner-toast.hidden{opacity:0;pointer-events:none;display:none}
 
 /* ===== Level 1 Game Structure Styles ===== */
@@ -316,7 +316,7 @@ body.mode-mission #layers-panel.open .panel-body{max-height:calc(var(--side-max-
 .ml-src.src-game{background:rgba(0,210,255,.16);color:#7fe6ff}
 .ml-src.src-sim{background:rgba(230,126,34,.2);color:#ffae63}
 
-.marker-hover-card{position:fixed;top:0;left:0;z-index:58;pointer-events:none;background:rgba(14,17,23,.95);border:1px solid rgba(230,126,34,.55);border-radius:5px;padding:7px 10px;max-width:295px;box-shadow:0 6px 20px rgba(0,0,0,.65);font-size:11px;line-height:1.35}
+.marker-hover-card{position:fixed;top:0;left:0;z-index:58;pointer-events:auto;background:rgba(14,17,23,.95);border:1px solid rgba(230,126,34,.55);border-radius:5px;padding:7px 10px;max-width:295px;box-shadow:0 6px 20px rgba(0,0,0,.65);font-size:11px;line-height:1.35}
 .marker-hover-card.hidden{display:none}
 .mhc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px}
 .mhc-head strong{color:#fff;font-size:11.5px}
@@ -521,16 +521,15 @@ body.mode-research .mission-only-ctrl,body.mode-research .mission-only-legend,bo
 .sro-hi-sub{font-size:10px;color:#9eb0c4;font-family:var(--mono)}
 .calc-masked-val{font-family:var(--mono);font-size:9.5px;color:#7c8da1;font-style:italic}
 
-/* Active Survey tool: crosshair & prevent map-label pills or pin bodies from intercepting clicks */
+/* Active Survey tool: crosshair & prevent map-label pills from intercepting clicks; cards remain hoverable for auto-dismiss pause */
 body.cursor-survey-tool #canvas-container{cursor:crosshair!important}
 body.cursor-survey-tool .map-labels-layer,body.cursor-survey-tool .map-labels-layer .map-label{pointer-events:none!important}
-body.cursor-survey-tool .survey-pin-card{pointer-events:none!important}
 body.cursor-survey-tool .spc-close{pointer-events:auto!important}
 
 /* Floating Survey Pin Cards */
 .survey-pins-layer{position:absolute;inset:0;z-index:28;pointer-events:none;overflow:hidden}
 .survey-pins-layer.hidden{display:none}
-.survey-pin-card{position:absolute;top:0;left:0;pointer-events:none;min-width:175px;max-width:255px;background:rgba(13,17,24,.95);border:1px solid rgba(56,189,248,.58);border-radius:6px;padding:7px 9px;box-shadow:0 8px 24px rgba(0,0,0,.72);font-size:11px;color:#e2e8f0;transition:opacity .15s ease}
+.survey-pin-card{position:absolute;top:0;left:0;pointer-events:auto;min-width:175px;max-width:255px;background:rgba(13,17,24,.95);border:1px solid rgba(56,189,248,.58);border-radius:6px;padding:7px 9px;box-shadow:0 8px 24px rgba(0,0,0,.72);font-size:11px;color:#e2e8f0;transition:opacity .15s ease}
 .survey-pin-card .spc-close{pointer-events:auto}
 .survey-pin-card.offscreen{display:none}
 .spc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px}

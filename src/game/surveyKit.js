@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { FAMILY_META } from './missionElements.js';
 import { sampleDustAtPoint } from './dustZones.js';
+import { autoDismiss, cancelAutoDismiss } from '../ui/autoDismiss.js';
 
 const MAX_SURVEY_PINS = 5;
 const SURVEY_RADIUS_M = 150.0;
@@ -72,14 +73,15 @@ export function createSurveyKitController({
     });
   }
 
-  function removePinById(pinId) {
+  function removePinById(pinId, { skipCancel = false } = {}) {
     const idx = pins.findIndex(p => p.id === pinId);
     if (idx === -1) return;
     const [removed] = pins.splice(idx, 1);
     if (removed.markerGroup) group.remove(removed.markerGroup);
     removed.markerMats.forEach(m => m.dispose());
-    if (removed.cardEl && removed.cardEl.parentNode) {
-      removed.cardEl.parentNode.removeChild(removed.cardEl);
+    if (removed.cardEl) {
+      if (!skipCancel) cancelAutoDismiss(removed.cardEl, { removeEl: false, invokeCallback: false });
+      if (removed.cardEl.parentNode) removed.cardEl.parentNode.removeChild(removed.cardEl);
     }
     applyAgeFade();
   }
@@ -89,8 +91,9 @@ export function createSurveyKitController({
       const p = pins.pop();
       if (p.markerGroup) group.remove(p.markerGroup);
       p.markerMats.forEach(m => m.dispose());
-      if (p.cardEl && p.cardEl.parentNode) {
-        p.cardEl.parentNode.removeChild(p.cardEl);
+      if (p.cardEl) {
+        cancelAutoDismiss(p.cardEl, { removeEl: false, invokeCallback: false });
+        if (p.cardEl.parentNode) p.cardEl.parentNode.removeChild(p.cardEl);
       }
     }
   }
@@ -273,10 +276,6 @@ export function createSurveyKitController({
       closeBtn.className = 'spc-close';
       closeBtn.textContent = '×';
       closeBtn.title = 'Close pin';
-      closeBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        removePinById(pinId);
-      });
       headRow.appendChild(titleEl);
       headRow.appendChild(closeBtn);
 
@@ -292,6 +291,13 @@ export function createSurveyKitController({
       cardEl.appendChild(valEl);
       cardEl.appendChild(tagsEl);
       pinLayerEl.appendChild(cardEl);
+      autoDismiss(cardEl, {
+        ms: 3500,
+        kind: 'survey-reading',
+        closeBtn,
+        offsetMode: 'cssVar',
+        onClose: () => removePinById(pinId, { skipCancel: true })
+      });
     }
 
     pins.push({
@@ -425,8 +431,10 @@ export function createSurveyKitController({
       const clampedY = Math.max(76, Math.min(height - 32, sy));
 
       p.cardEl.classList.remove('offscreen');
-      p.cardEl.style.transform = `translate3d(${clampedX.toFixed(1)}px, ${clampedY.toFixed(1)}px, 0) translate(-50%, -100%)`;
-      p.cardEl.style.opacity = String(p.ageAlpha);
+      p.cardEl.style.transform = `translate3d(${clampedX.toFixed(1)}px, ${clampedY.toFixed(1)}px, 0) translate(-50%, -100%) translate(var(--ad-offset-x, 0px), var(--ad-offset-y, 0px))`;
+      if (!p.cardEl.classList.contains('ad-fading')) {
+        p.cardEl.style.opacity = String(p.ageAlpha);
+      }
     }
   }
 

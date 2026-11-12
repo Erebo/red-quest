@@ -5,6 +5,7 @@
  */
 
 import * as THREE from 'three';
+import { autoDismiss, cancelAutoDismiss, ensurePopupInDom } from '../ui/autoDismiss.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const MAX_VISIBLE_STANDARD = 8;
@@ -98,6 +99,7 @@ export function createMapLabelController({
   const tmpVec = new THREE.Vector3();
 
   if (ldcCloseBtn) {
+    // Immediate close handled via shared autoDismiss manager when card opens; keep fallback guard
     ldcCloseBtn.addEventListener('click', () => hideDetailCard());
   }
 
@@ -181,6 +183,7 @@ export function createMapLabelController({
 
   function showHoverCard(anchor, clientX, clientY) {
     if (!hoverCardEl || !anchor || briefingActive) return;
+    ensurePopupInDom(hoverCardEl);
     hoveredAnchorId = anchor.id;
 
     mhcNameEl.textContent = anchor.hoverTitle || anchor.label;
@@ -220,15 +223,28 @@ export function createMapLabelController({
     const y = Math.max(40, Math.min(window.innerHeight - cardH - 10, clientY + 14));
     hoverCardEl.style.left = `${x}px`;
     hoverCardEl.style.top = `${y}px`;
+    hoverCardEl.style.right = '';
+    hoverCardEl.style.bottom = '';
+    hoverCardEl.style.transform = '';
+    autoDismiss(hoverCardEl, {
+      ms: 3500,
+      kind: 'hover-card',
+      onClose: () => { hoveredAnchorId = null; }
+    });
   }
 
   function hideHoverCard() {
+    if (hoverCardEl && hoverCardEl.matches(':hover')) return;
     hoveredAnchorId = null;
-    if (hoverCardEl) hoverCardEl.classList.add('hidden');
+    if (hoverCardEl) {
+      cancelAutoDismiss(hoverCardEl, { removeEl: true, invokeCallback: false });
+      hoverCardEl.classList.add('hidden');
+    }
   }
 
   function showDetailCard(anchor) {
     if (!detailCardEl || !anchor || briefingActive) return;
+    ensurePopupInDom(detailCardEl);
     hideHoverCard();
     if (ldcTitleEl) ldcTitleEl.textContent = anchor.hoverTitle || anchor.label;
     if (ldcCategoryEl) ldcCategoryEl.textContent = `${CATEGORY_ICONS[anchor.category] || '•'} ${anchor.categoryLabel || anchor.category}`;
@@ -253,8 +269,19 @@ export function createMapLabelController({
     if (ldcWhyEl) ldcWhyEl.textContent = anchor.whyItMatters;
     if (ldcTagsEl) buildProvenanceBadges(ldcTagsEl, anchor);
 
+    detailCardEl.style.right = '';
+    detailCardEl.style.bottom = '';
+    detailCardEl.style.transform = '';
     detailCardEl.classList.remove('hidden');
     detailCardEl.dataset.anchorId = anchor.id;
+    autoDismiss(detailCardEl, {
+      ms: 3500,
+      kind: 'detail-card',
+      closeBtn: ldcCloseBtn,
+      onClose: () => {
+        delete detailCardEl.dataset.anchorId;
+      }
+    });
     if (typeof onSelectAnchor === 'function') {
       onSelectAnchor(anchor);
     }
@@ -262,6 +289,7 @@ export function createMapLabelController({
 
   function hideDetailCard() {
     if (detailCardEl) {
+      cancelAutoDismiss(detailCardEl, { removeEl: true, invokeCallback: false });
       detailCardEl.classList.add('hidden');
       delete detailCardEl.dataset.anchorId;
     }

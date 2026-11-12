@@ -52,6 +52,11 @@ import { playUiSound } from './config.js';
 import { createIntroController } from './ui/intro.js';
 import { createMissionSelectController } from './ui/missionSelect.js';
 import { createTutorialController } from './ui/tutorial.js';
+import {
+  autoDismiss,
+  cancelAutoDismiss,
+  ensurePopupInDom
+} from './ui/autoDismiss.js';
 
 // --- Performance & Timing Metrics ---
 const appStartTime = performance.now();
@@ -2263,21 +2268,23 @@ function resetCustomizationToStandard() {
 }
 
 // --- Route Planner Engine & UI ---
-let toastTimeout = null;
 function showPlannerToast(message) {
   if (!plannerToast) return;
+  ensurePopupInDom(plannerToast);
   plannerToast.textContent = message;
-  plannerToast.classList.remove('hidden');
   plannerToast.style.display = 'block';
-  plannerToast.style.opacity = '1';
-  clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => {
-    plannerToast.style.opacity = '0';
-    setTimeout(() => {
-      plannerToast.classList.add('hidden');
+  plannerToast.style.left = '';
+  plannerToast.style.top = '';
+  plannerToast.style.right = '';
+  plannerToast.style.bottom = '';
+  plannerToast.style.transform = '';
+  autoDismiss(plannerToast, {
+    ms: 3500,
+    kind: 'toast',
+    onClose: () => {
       plannerToast.style.display = 'none';
-    }, 250);
-  }, 3500);
+    }
+  });
 }
 
 function createStartAndGoalMarkers() {
@@ -3301,10 +3308,18 @@ function bindUIEvents() {
         const u = hits[0].object.userData;
         const curScreen = levelState.getState().screen;
         const isPostLock = curScreen === GAME_STATES.EXPLORE || curScreen === GAME_STATES.DEBRIEF;
+        ensurePopupInDom(sciencePopup);
         popupTitle.textContent = u.title;
         popupSol.textContent = isPostLock ? u.solLabel : 'Sol: hidden until Explore';
         if (popupSrc) popupSrc.textContent = 'measured (Curiosity traverse); description unverified';
-        sciencePopup.classList.remove('hidden');
+        sciencePopup.style.right = '';
+        sciencePopup.style.bottom = '';
+        sciencePopup.style.transform = '';
+        autoDismiss(sciencePopup, {
+          ms: 3500,
+          kind: 'science-popup',
+          closeBtn: popupClose
+        });
         return;
       }
     }
@@ -3348,11 +3363,19 @@ function bindUIEvents() {
     }
   });
 
-  if (popupClose) popupClose.addEventListener('click', () => sciencePopup.classList.add('hidden'));
+  if (popupClose) {
+    popupClose.addEventListener('click', () => {
+      if (sciencePopup) {
+        cancelAutoDismiss(sciencePopup, { removeEl: true, invokeCallback: false });
+      }
+    });
+  }
 
   // Pointer Move & Leave
   window.addEventListener('pointermove', e => {
-    const overLabel = Boolean(e.target && e.target.closest && e.target.closest('.map-label'));
+    const overLabel = Boolean(
+      e.target && e.target.closest && (e.target.closest('.map-label') || e.target.closest('#marker-hover-card'))
+    );
     isHoveringLabelDom = overLabel;
     if (e.target !== renderer.domElement) {
       hideHoverTooltip();
