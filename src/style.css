@@ -573,9 +573,77 @@ body.cursor-survey-tool .spc-close{pointer-events:auto!important}
 .perf-corner.hidden{display:none!important}
 .perf-corner.above-timeline{bottom:64px}
 
-/* ===== Keep RESEARCH Mode Compact & Unchanged ===== */
+/* ===== RESEARCH Mode: Preserves Layout & Theory Content with Light MISSION-Family Skin ===== */
 .phase-ico,.phase-check,.mode-ico,.hud-icon-btn,.hud-help-btn{display:none}
-body.mode-research #map-top-controls .ui-ico{display:none}
+
+body.mode-research .mode-ico{display:inline-block;width:17px;height:17px;flex-shrink:0}
+body.mode-research #hud-header{height:auto;min-height:46px;padding:4px 12px;gap:8px;background:rgba(12,15,21,.96);border-bottom:1px solid rgba(255,255,255,.12);font-size:12px}
+body.mode-research #hud-header .h-badge{background:rgba(230,126,34,.2);border:1px solid rgba(230,126,34,.55);color:#ffb066;font-family:var(--mono);font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:var(--rq-radius-sm);letter-spacing:.08em}
+body.mode-research .hud-brand{font-size:15px;letter-spacing:.6px;color:#fff}
+body.mode-research .hud-sub{font-size:12px;color:#94a3b8}
+body.mode-research .game-phase-bar{padding:2px 6px;border-radius:var(--rq-radius-sm);border-color:rgba(255,255,255,.1);background:rgba(255,255,255,.03)}
+body.mode-research .phase-step{padding:2px 6px;border-radius:5px;font-size:10px}
+body.mode-research .mode-toggle{margin-left:auto;border-radius:var(--rq-radius-sm);border-color:rgba(255,255,255,.16);background:rgba(255,255,255,.04)}
+body.mode-research .mode-btn{min-height:34px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-family:var(--sans);transition:background .15s,color .15s}
+
+body.mode-research #map-top-controls{top:calc(var(--hud-bottom, 48px) + 6px)}
+body.mode-research #map-top-controls .ui-ico{display:inline-block;width:18px;height:18px;flex-shrink:0}
+body.mode-research #map-top-controls .lenses-btn{min-height:36px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;border-radius:var(--rq-radius-sm);background:rgba(12,16,23,.92);backdrop-filter:blur(10px);font-size:12.5px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.55);transition:transform .14s ease,background .18s ease,border-color .18s ease}
+body.mode-research #map-top-controls .lenses-btn:hover{transform:translateY(-1px)}
+body.mode-research .labels-dropdown{background:rgba(12,16,23,.97);border-color:rgba(255,255,255,.16);border-radius:var(--rq-radius-md)}
+body.mode-research .ld-chip,body.mode-research .ld-show-all{border-radius:var(--rq-radius-sm)}
+
+body.mode-research .side-panel{top:calc(var(--hud-bottom, 48px) + 4px)}
+body.mode-research .panel-body{background:rgba(12,15,22,.93);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14);box-shadow:0 12px 34px rgba(0,0,0,.72)}
+body.mode-research .side-panel.left .panel-body{border-left:0;border-radius:0 var(--rq-radius-md) var(--rq-radius-md) 0}
+body.mode-research .side-panel.right .panel-body{border-right:0;border-radius:var(--rq-radius-md) 0 0 var(--rq-radius-md)}
+body.mode-research .panel-body h3{font-size:13px;font-weight:800;letter-spacing:.7px;color:#ff9c52;margin-bottom:10px}
+body.mode-research .panel-toggle{background:rgba(12,15,22,.94);border:1px solid rgba(255,255,255,.16);color:#cbd5e1;border-radius:6px;transition:border-color .15s,color .15s}
+body.mode-research .panel-toggle:hover{border-color:rgba(230,126,34,.65);color:#ffb066}
+
+body.mode-research .layer-group{margin-bottom:8px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.11);border-radius:var(--rq-radius-sm)}
+body.mode-research .layer-group > summary{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#f1f5f9;padding:7px 9px;background:rgba(255,255,255,.035);border-bottom:1px solid rgba(255,255,255,.06);list-style:none}
+body.mode-research .layer-group > summary::-webkit-details-marker{display:none}
+body.mode-research .layer-group:not([open]) > summary{border-bottom:none}
+body.mode-research .layer-group > summary .tag-pill,
+body.mode-research .layer-group > summary .sim-badge{margin-left:auto}
+body.mode-research .rl-ico{width:16px;height:16px;color:#7fe6ff;flex-shrink:0}
+body.mode-research .lrow{font-size:11.5px;color:#dbe3ed;padding:4px 0}
+body.mode-research .slider-row{font-size:11px;color:#94a3b8;padding:3px 0}
+body.mode-research .slider-row select{background:rgba(15,20,28,.9);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:3px 6px;color:#e2e8f0;font-size:11px}
+body.mode-research .legend-details{margin:4px 0 2px}
+body.mode-research .legend-toggle{font-size:10.5px;color:#93c5fd;font-weight:600}
+body.mode-research .legend-body{background:rgba(0,0,0,.24);border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:6px 8px;margin-top:3px;font-size:10.5px;color:#dbe3ed}
+body.mode-research .legend-note{color:#94a3b8;font-style:normal;font-size:10px;line-height:1.38;margin-top:4px}
+
+body.mode-research .btn-reset-custom,
+body.mode-research .btn-row button,
+body.mode-research .unpin-btn{border-radius:var(--rq-radius-sm);transition:transform .14s ease,background .18s ease,border-color .18s ease,box-shadow .18s ease}
+body.mode-research .btn-reset-custom{padding:8px 10px;font-size:11.5px}
+body.mode-research .btn-row button{padding:7px 8px;font-size:11.5px}
+body.mode-research .btn-reset-custom:hover,
+body.mode-research .btn-row button:hover{transform:translateY(-1px)}
+
+body.mode-research .insp-section{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.09);border-radius:var(--rq-radius-sm);padding:6px 8px}
+body.mode-research .insp-section h4{color:#94a3b8;font-size:10.5px;display:flex;align-items:center;justify-content:space-between}
+body.mode-research .env-section{background:rgba(230,126,34,.04);border-color:rgba(230,126,34,.32)}
+body.mode-research .env-section h4{color:#ffb066}
+body.mode-research .ig{font-size:11.5px;padding:2px 0}
+body.mode-research .il{color:#94a3b8;font-size:10.5px}
+body.mode-research .iv{color:#f1f5f9;font-size:11.5px}
+
+body.mode-research .map-legend{background:rgba(12,15,22,.92);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14);border-radius:var(--rq-radius-md);box-shadow:0 10px 28px rgba(0,0,0,.65)}
+body.mode-research .planner-panel{background:rgba(12,15,22,.93);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14);border-radius:var(--rq-radius-md);box-shadow:0 12px 34px rgba(0,0,0,.72)}
+body.mode-research .badge-plan{border-radius:5px;background:rgba(56,189,248,.16);border-color:rgba(56,189,248,.48);color:#7fe6ff}
+body.mode-research .btn-planner-tool,
+body.mode-research .planner-toggle-btn{border-radius:var(--rq-radius-sm);padding:4px 10px;font-size:11px;border-color:rgba(255,255,255,.15);transition:transform .14s ease,background .15s ease,border-color .15s ease}
+body.mode-research .btn-planner-tool:hover,
+body.mode-research .planner-toggle-btn:hover{transform:translateY(-1px)}
+body.mode-research .elevation-profile-container{border-radius:var(--rq-radius-sm);border-color:rgba(255,255,255,.1)}
+body.mode-research #timeline-bar{background:rgba(12,15,21,.95);backdrop-filter:blur(12px);border-top:1px solid rgba(255,255,255,.12)}
+body.mode-research .tl-btn,
+body.mode-research .sp{border-radius:6px}
+body.mode-research .popup{background:rgba(12,16,23,.96);border-radius:var(--rq-radius-md);border-color:rgba(230,126,34,.55);box-shadow:0 14px 36px rgba(0,0,0,.78)}
 
 /* ===== PHASE A: Gamified UI Scale & Tokens (MISSION Mode Only) ===== */
 body.mode-mission{font-size:var(--rq-font-body)}
