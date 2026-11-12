@@ -37,18 +37,69 @@ export function populateBriefingUI(levelData) {
   const startEl = document.getElementById('briefing-start');
   const goalEl = document.getElementById('briefing-goal');
   const targetsList = document.getElementById('briefing-targets-list');
+  const targetsCards = document.getElementById('briefing-targets-cards');
 
   if (titleEl) titleEl.textContent = levelData.title.value;
   if (storyEl) storyEl.textContent = levelData.story.value;
 
   if (startEl) {
     const s = levelData.start;
-    startEl.textContent = `North entry · X ${s.x.toFixed(1)} m, Y ${s.y.toFixed(1)} m · Elev ${s.elevation.toFixed(1)} m · Slope ${s.slopeDeg.toFixed(1)}°`;
+    if (startEl.classList.contains('bcorr-specs')) {
+      startEl.innerHTML = `
+        <div class="bcorr-spec"><span class="bc-k">Grid</span><span class="bc-v">X ${s.x.toFixed(1)} m, Y ${s.y.toFixed(1)} m</span></div>
+        <div class="bcorr-spec"><span class="bc-k">Geo</span><span class="bc-v">${s.lon ? s.lon.toFixed(4) + '° E' : '137.3979° E'}, ${s.lat ? s.lat.toFixed(4) + '° S' : '-4.7638° S'}</span></div>
+        <div class="bcorr-spec"><span class="bc-k">Elevation</span><span class="bc-v">${s.elevation.toFixed(1)} m</span></div>
+        <div class="bcorr-spec"><span class="bc-k">Local Slope</span><span class="bc-v">${s.slopeDeg.toFixed(1)}° (${s.slopeDeg < 15 ? 'Safe <15°' : 'Moderate'})</span></div>
+      `;
+    } else {
+      startEl.textContent = `North entry · X ${s.x.toFixed(1)} m, Y ${s.y.toFixed(1)} m · Elev ${s.elevation.toFixed(1)} m · Slope ${s.slopeDeg.toFixed(1)}°`;
+    }
   }
 
   if (goalEl) {
     const g = levelData.goal;
-    goalEl.textContent = `Boxwork Core · X ${g.x.toFixed(1)} m, Y ${g.y.toFixed(1)} m · Elev ${g.elevation.toFixed(1)} m · Slope ${g.slopeDeg.toFixed(1)}°`;
+    if (goalEl.classList.contains('bcorr-specs')) {
+      goalEl.innerHTML = `
+        <div class="bcorr-spec"><span class="bc-k">Grid</span><span class="bc-v">X ${g.x.toFixed(1)} m, Y ${g.y.toFixed(1)} m</span></div>
+        <div class="bcorr-spec"><span class="bc-k">Geo</span><span class="bc-v">${g.lon ? g.lon.toFixed(4) + '° E' : '137.3804° E'}, ${g.lat ? g.lat.toFixed(4) + '° S' : '-4.8064° S'}</span></div>
+        <div class="bcorr-spec"><span class="bc-k">Elevation</span><span class="bc-v">${g.elevation.toFixed(1)} m</span></div>
+        <div class="bcorr-spec"><span class="bc-k">Local Slope</span><span class="bc-v">${g.slopeDeg.toFixed(1)}° (${g.slopeDeg < 15 ? 'Safe <15°' : 'Moderate'})</span></div>
+      `;
+    } else {
+      goalEl.textContent = `Boxwork Core · X ${g.x.toFixed(1)} m, Y ${g.y.toFixed(1)} m · Elev ${g.elevation.toFixed(1)} m · Slope ${g.slopeDeg.toFixed(1)}°`;
+    }
+  }
+
+  const targetNotes = [
+    "First entry into polygonally fractured bedrock network with mineralized ridge veins.",
+    "Crest of prominent boxwork ridge; transition into primary polygonal fracture structures.",
+    "Nevado Sajama drill exploration; probing sulfate-clay transition minerals."
+  ];
+
+  if (targetsCards) {
+    targetsCards.innerHTML = '';
+    levelData.scienceTargets.forEach((t, idx) => {
+      const card = document.createElement('div');
+      card.className = 'target-dossier-card';
+      const note = targetNotes[idx] || "Orbital and surface science waypoint.";
+      card.innerHTML = `
+        <div class="tdc-top">
+          <div class="tdc-badge-wrap">
+            <span class="tdc-num">TARGET 0${idx + 1}</span>
+            <span class="tdc-sol">${t.label || ('SOL ' + t.sol)}</span>
+          </div>
+          <span class="tag-pill measured">MEASURED</span>
+        </div>
+        <div class="tdc-title">${t.title}</div>
+        <div class="tdc-metrics">
+          <span>Elev: <strong>${t.elevation.toFixed(1)} m</strong></span>
+          <span>Slope: <strong>${t.slopeDeg.toFixed(1)}°</strong></span>
+          <span>Grid: <strong>(${t.x.toFixed(0)}, ${t.y.toFixed(0)})</strong></span>
+        </div>
+        <div class="tdc-desc">${note}</div>
+      `;
+      targetsCards.appendChild(card);
+    });
   }
 
   if (targetsList) {

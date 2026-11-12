@@ -5457,6 +5457,14 @@ async function loadAssetsAndInit() {
         savedPanelsBeforeTutorial = null;
         panelPrefs.MISSION.plannerCollapsed = snap.plannerCollapsed;
         setMissionSidePanel(snap.activeSidePanel);
+
+        // When tutorial finishes or is skipped, always bring up the Level 1 Mission Briefing card
+        hasPlayedIntro = false;
+        levelState.resetLevel();
+        if (gameBriefingOverlay) {
+          gameBriefingOverlay.classList.remove('hidden');
+        }
+        applyGameScreenState(levelState.getState());
       }
     });
 

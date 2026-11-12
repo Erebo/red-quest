@@ -13,7 +13,7 @@ export const TUTORIAL_STEPS = [
     id: 'welcome',
     title: 'Mission Goal',
     text: 'Welcome to Gale Crater! Your goal is to reach the three science targets and the boxwork core safely.',
-    selectors: ['#briefing-targets-list', '#game-briefing-overlay .game-card'],
+    selectors: ['#briefing-targets-cards', '#briefing-targets-list', '#game-briefing-overlay .game-card'],
     actionType: null,
     spotlightPad: 10
   },
