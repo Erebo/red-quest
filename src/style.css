@@ -271,7 +271,7 @@ body.mode-mission #layers-panel.open .panel-body{max-height:calc(var(--side-max-
 
 .game-card{background:var(--panel);border:1px solid rgba(230,126,34,.45);border-radius:8px;padding:18px 22px;max-width:640px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,.75)}
 .game-card.compact{max-width:460px}
-.game-card.wide{max-width:860px}
+.game-card.wide{max-width:min(1040px,95vw)}
 .game-card-top{display:flex;gap:6px;margin-bottom:8px;align-items:center}
 .game-card h1{font-size:18px;color:#fff;margin-bottom:8px}
 .game-card h2{font-size:15px;color:#fff;margin-bottom:8px}
@@ -305,6 +305,11 @@ body.mode-mission #layers-panel.open .panel-body{max-height:calc(var(--side-max-
 .map-label.cat-materials .ml-icon{color:#f24dff}
 .map-label.cat-hazards .ml-icon{color:#ff6a5c}
 .map-label.cat-science .ml-icon{color:#ffa94d}
+.map-label.route-tag{padding:2px 7px;border-radius:999px;font-weight:800;font-size:11px;letter-spacing:.4px;gap:4px;border-width:1.5px;background:rgba(8,11,16,.94)}
+.map-label.route-tag .ml-icon{font-size:9px}
+.map-label.route-tag .ml-src{display:none}
+.map-label.curiosity-ref-pill{border-color:rgba(203,213,225,.55);color:#e2e8f0}
+.map-label.curiosity-ref-pill .ml-icon{color:#cbd5e1}
 .ml-src{font-size:8.5px;font-weight:700;padding:0 4px;border-radius:2px;letter-spacing:.2px;text-transform:uppercase;font-family:var(--mono)}
 .ml-src.src-measured{background:rgba(46,204,113,.16);color:#7fe4a8}
 .ml-src.src-derived{background:rgba(155,180,205,.18);color:#c3d4e6}
@@ -362,7 +367,7 @@ body.mode-mission #layers-panel.open .panel-body{max-height:calc(var(--side-max-
 .leg-fam-sci{border-radius:50%;background:#38bdf8;border:1px solid #bae6fd}
 .leg-fam-mys{border-radius:50%;background:rgba(245,158,11,.25);border:1px solid #f59e0b;color:#fde68a;font-size:8px;font-weight:700}
 .leg-line{width:14px;height:3px;border-radius:2px;flex-shrink:0}
-.leg-ref{background:repeating-linear-gradient(90deg,#9fb4c7 0,#9fb4c7 4px,transparent 4px,transparent 6px);height:2px}
+.leg-ref{background:repeating-linear-gradient(90deg,#cbd5e1 0,#cbd5e1 4px,transparent 4px,transparent 8px);height:2px}
 body.mode-research .mission-only-ctrl,body.mode-research .mission-only-legend,body.mode-research .codex-panel,body.mode-research .calc-panel,body.mode-research .survey-pins-layer{display:none!important}
 .ld-chip.hidden{display:none}
 
@@ -491,8 +496,10 @@ body.cursor-survey-tool .spc-close{pointer-events:auto!important}
 .spc-val{font-size:11px;color:#f1f5f9;line-height:1.35;margin-bottom:5px}
 .spc-tags{display:flex;flex-wrap:wrap;gap:4px}
 
-/* ===== Debrief Calculator Reveal ===== */
+/* ===== Debrief Calculator Reveal & Reference Comparison ===== */
 #game-debrief-overlay .game-card.wide{max-height:calc(100vh - 96px);overflow-y:auto}
+#game-debrief-overlay .planner-table th,#game-debrief-overlay .planner-table td{padding:5px 6px;font-size:11.5px;white-space:normal}
+.debrief-curiosity-comp{margin-top:12px;padding:10px 12px;background:rgba(255,255,255,.025);border:1px solid rgba(203,213,225,.28);border-radius:6px}
 .debrief-calc-reveal{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
 .dcr-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px}
 .dcr-head h3{font-size:12.5px;color:#fff;letter-spacing:.3px;display:inline-flex;align-items:center;gap:6px}

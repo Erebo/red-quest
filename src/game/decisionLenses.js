@@ -219,22 +219,16 @@ function sampleStops(stops, t) {
  * Satellite lens overlay: thin red perimeter outline ONLY where slope > 25°, no red fill.
  */
 export function buildSlopeHazardOutlineTexture(rawSlopes) {
-  const size = 512;
+  // Match DEM resolution (~1 px contour boundary around >25° hazard polygons)
+  const size = 1024;
   const mask = new Uint8Array(size * size);
 
   for (let py = 0; py < size; py++) {
-    const r0 = Math.min(DEM_GRID_SIZE - 1, Math.floor((py / size) * (DEM_GRID_SIZE - 1)));
-    const r1 = Math.min(DEM_GRID_SIZE - 1, r0 + 1);
+    const r = Math.min(DEM_GRID_SIZE - 1, Math.round((py / (size - 1)) * (DEM_GRID_SIZE - 1)));
+    const rowOff = r * DEM_GRID_SIZE;
     for (let px = 0; px < size; px++) {
-      const c0 = Math.min(DEM_GRID_SIZE - 1, Math.floor((px / size) * (DEM_GRID_SIZE - 1)));
-      const c1 = Math.min(DEM_GRID_SIZE - 1, c0 + 1);
-      const maxS = Math.max(
-        rawSlopes[r0 * DEM_GRID_SIZE + c0],
-        rawSlopes[r0 * DEM_GRID_SIZE + c1],
-        rawSlopes[r1 * DEM_GRID_SIZE + c0],
-        rawSlopes[r1 * DEM_GRID_SIZE + c1]
-      );
-      if (maxS > 25.0) mask[py * size + px] = 1;
+      const c = Math.min(DEM_GRID_SIZE - 1, Math.round((px / (size - 1)) * (DEM_GRID_SIZE - 1)));
+      if (rawSlopes[rowOff + c] > 25.0) mask[py * size + px] = 1;
     }
   }
 
@@ -259,12 +253,12 @@ export function buildSlopeHazardOutlineTexture(rawSlopes) {
       out[o] = 242;
       out[o + 1] = 82;
       out[o + 2] = 72;
-      out[o + 3] = 220;
+      out[o + 3] = 255;
     }
   }
 
   ctx.putImageData(imgData, 0, 0);
-  return makeCanvasTexture(canvas, { nearest: false });
+  return makeCanvasTexture(canvas, { nearest: true });
 }
 
 /**

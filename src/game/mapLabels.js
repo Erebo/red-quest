@@ -85,10 +85,12 @@ export function createMapLabelController({
   let showAllMode = false;
   let activeLens = 'satellite';
   let postLockRevealed = false;
+  let debriefActive = false;
   let briefingActive = true;
   let hoveredAnchorId = null;
   let forceDirty = true;
 
+  const hiddenAnchorIds = new Set();
   const anchorById = new Map();
   const labelEls = new Map();
   const leaderEls = new Map();
@@ -102,8 +104,8 @@ export function createMapLabelController({
   function resortAnchorsForLens() {
     const boosts = LENS_CATEGORY_BOOST[activeLens] || LENS_CATEGORY_BOOST.satellite;
     sortedAnchors = [...anchors].sort((a, b) => {
-      const pa = (a.basePriority || 50) + (boosts[a.category] || 0);
-      const pb = (b.basePriority || 50) + (boosts[b.category] || 0);
+      const pa = (a.basePriority || 50) + (a.noLensBoost ? 0 : (boosts[a.category] || 0));
+      const pb = (b.basePriority || 50) + (b.noLensBoost ? 0 : (boosts[b.category] || 0));
       return pb - pa;
     });
     forceDirty = true;
@@ -140,16 +142,32 @@ export function createMapLabelController({
     resortAnchorsForLens();
   }
 
-  function setViewContext({ isBriefing, isPostLock }) {
+  function setViewContext({ isBriefing, isPostLock, isDebrief = false }) {
     briefingActive = !!isBriefing;
     postLockRevealed = !!isPostLock;
+    debriefActive = !!isDebrief;
     syncLayerVisibility();
+  }
+
+  function setAnchorHidden(id, hidden) {
+    if (hidden) hiddenAnchorIds.add(id);
+    else hiddenAnchorIds.delete(id);
+    if (hidden && detailCardEl && detailCardEl.dataset.anchorId === id) {
+      hideDetailCard();
+    }
+    if (hidden && hoveredAnchorId === id) {
+      hideHoverCard();
+    }
+    forceDirty = true;
   }
 
   function buildProvenanceBadges(targetEl, anchor) {
     targetEl.innerHTML = '';
-    if (anchor.tags && anchor.tags.length) {
-      anchor.tags.forEach(t => targetEl.appendChild(createTagBadge(t.text, t.cls)));
+    const tagList = (debriefActive && anchor.tagsDebrief && anchor.tagsDebrief.length)
+      ? anchor.tagsDebrief
+      : anchor.tags;
+    if (tagList && tagList.length) {
+      tagList.forEach(t => targetEl.appendChild(createTagBadge(t.text, t.cls)));
       return;
     }
     if (anchor.category === 'science') {
@@ -166,7 +184,12 @@ export function createMapLabelController({
     hoveredAnchorId = anchor.id;
 
     mhcNameEl.textContent = anchor.hoverTitle || anchor.label;
-    mhcDescEl.textContent = (postLockRevealed && anchor.whatPostLock) ? anchor.whatPostLock : anchor.whatItIs;
+    mhcDescEl.textContent =
+      (debriefActive && anchor.whatDebrief)
+        ? anchor.whatDebrief
+        : (postLockRevealed && anchor.whatPostLock)
+          ? anchor.whatPostLock
+          : anchor.whatItIs;
 
     if (mhcEffectEl) {
       if (anchor.effectOnMission) {
@@ -219,7 +242,12 @@ export function createMapLabelController({
       }
     }
     if (ldcWhatEl) {
-      ldcWhatEl.textContent = (postLockRevealed && anchor.whatPostLock) ? anchor.whatPostLock : anchor.whatItIs;
+      ldcWhatEl.textContent =
+        (debriefActive && anchor.whatDebrief)
+          ? anchor.whatDebrief
+          : (postLockRevealed && anchor.whatPostLock)
+            ? anchor.whatPostLock
+            : anchor.whatItIs;
     }
     if (ldcDatasetEl) ldcDatasetEl.textContent = anchor.dataset;
     if (ldcWhyEl) ldcWhyEl.textContent = anchor.whyItMatters;
@@ -254,16 +282,21 @@ export function createMapLabelController({
       if (layerEl) {
         const pill = document.createElement('button');
         pill.type = 'button';
-        pill.className = `map-label cat-${a.category} hidden-label`;
+        pill.className = `map-label cat-${a.category}${a.pillClass ? ` ${a.pillClass}` : ''} hidden-label`;
         pill.dataset.anchorId = a.id;
 
         const iconSpan = document.createElement('span');
         iconSpan.className = 'ml-icon';
-        iconSpan.textContent = CATEGORY_ICONS[a.category] || '•';
+        iconSpan.textContent = a.iconText || CATEGORY_ICONS[a.category] || '•';
 
         const textSpan = document.createElement('span');
         textSpan.className = 'ml-text';
         textSpan.textContent = a.label;
+
+        if (a.accentColor) {
+          pill.style.borderColor = a.accentColor;
+          iconSpan.style.color = a.accentColor;
+        }
 
         const chipSpan = document.createElement('span');
         const chipType = a.sourceChip || 'measured';
@@ -384,12 +417,12 @@ export function createMapLabelController({
     );
   }
 
-  function update(camera, width, height, plannerTopY, rightLimitX = width - 10, leftLimitX = 10) {
+  function update(camera, width, height, plannerTopY, rightLimitX = width - 10, leftLimitX = 10, topLimitY = 44, obstacleBoxes = []) {
     if (briefingActive || !anyCategoryEnabled() || !sortedAnchors.length || !layerEl) return;
 
-    const placedBoxes = [];
+    const placedBoxes = obstacleBoxes && obstacleBoxes.length ? [...obstacleBoxes] : [];
     let visibleCount = 0;
-    const minY = 44;
+    const minY = Math.max(44, topLimitY);
     const maxY = Math.min(height - 14, plannerTopY > 120 ? plannerTopY - 6 : height - 14);
     const minX = Math.max(10, leftLimitX);
     const maxX = Math.max(minX + 120, Math.min(width - 10, rightLimitX));
@@ -397,7 +430,7 @@ export function createMapLabelController({
     for (let i = 0; i < sortedAnchors.length; i++) {
       const a = sortedAnchors[i];
 
-      if (!enabledCategories.has(a.category) || (a.requirePostLock && !postLockRevealed)) {
+      if (hiddenAnchorIds.has(a.id) || !enabledCategories.has(a.category) || (a.requirePostLock && !postLockRevealed)) {
         applyLabelVisual(a.id, false, 0, 0, 0, 0, 0, false);
         continue;
       }
@@ -443,11 +476,12 @@ export function createMapLabelController({
       const boxH = a._boxH || 21;
 
       if (!showAllMode) {
-        const box = { left: sx - boxW * 0.5, right: sx + boxW * 0.5, top: sy - boxH, bottom: sy };
-        if (box.left < minX || box.right > maxX || box.top < minY || box.bottom > maxY) {
+        if (sx < minX + boxW * 0.5 || sx > maxX - boxW * 0.5 || sy < minY - 18 || sy > maxY + 12) {
           applyLabelVisual(a.id, false, 0, 0, 0, 0, 0, false);
           continue;
         }
+        const py = Math.max(minY + boxH, Math.min(maxY, sy));
+        const box = { left: sx - boxW * 0.5, right: sx + boxW * 0.5, top: py - boxH, bottom: py };
         if (placedBoxes.some(b => boxesOverlap(box, b, 6))) {
           applyLabelVisual(a.id, false, 0, 0, 0, 0, 0, false);
           continue;
@@ -461,7 +495,7 @@ export function createMapLabelController({
 
         placedBoxes.push(box);
         visibleCount++;
-        applyLabelVisual(a.id, true, sx, sy, opacity, sx, sy, false);
+        applyLabelVisual(a.id, true, sx, py, opacity, sx, py, false);
       } else {
         // Show all mode: find nearest non-overlapping slot and draw SVG leader line back to anchor
         let chosenX = sx;
@@ -511,6 +545,7 @@ export function createMapLabelController({
   return {
     setAnchors,
     setCategoryEnabled,
+    setAnchorHidden,
     setShowAll,
     setActiveLens,
     setViewContext,

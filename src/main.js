@@ -248,6 +248,7 @@ const mhcSol = document.getElementById('mhc-sol');
 const mhcDesc = document.getElementById('mhc-desc');
 const mhcTags = document.getElementById('mhc-tags');
 const mhcEffect = document.getElementById('mhc-effect');
+const btnCuriosityPath = document.getElementById('btn-curiosity-path');
 const btnShowAllElements = document.getElementById('btn-show-all-elements');
 const chipCatMystery = document.getElementById('chip-cat-mystery');
 const btnCodex = document.getElementById('btn-codex');
@@ -261,6 +262,7 @@ const legendMysteryRow = document.getElementById('legend-mystery-row');
 let routeElementCounts = {};
 let missionElements = null;
 let showAllElements = false;
+let showCuriosityPath = true;
 
 const btnCalcToggle = document.getElementById('btn-calc-toggle');
 const routeCalcPanel = document.getElementById('route-calc-panel');
@@ -434,7 +436,12 @@ function renderFieldCodex() {
 }
 
 function handleAnchorOrElementSelect(anchorOrId) {
-  if (!missionElements || !anchorOrId) return;
+  if (!anchorOrId) return;
+  if (typeof anchorOrId === 'object' && anchorOrId.routeId) {
+    selectCandidate(anchorOrId.routeId, { userInitiated: true });
+    return;
+  }
+  if (!missionElements) return;
   const id = typeof anchorOrId === 'string' ? anchorOrId : anchorOrId.id;
   if (!id) return;
   const el = missionElements.getElementById(id);
@@ -520,6 +527,8 @@ let hoveredCandidateId = null;
 let cachedPlannerTop = window.innerHeight;
 let cachedLabelLeftLimit = 10;
 let cachedLabelRightLimit = window.innerWidth - 10;
+let cachedLabelTopLimit = 44;
+let cachedLabelObstacleBoxes = [];
 let terrainAnalysisWorker = null;
 const sunCache = {};
 let svfCache = null;
@@ -631,6 +640,10 @@ let themisMesh = null;
 let routeGroup = null;
 let routeLine = null;
 let trailLine = null;
+let curiosityRefGroup = null;
+let curiosityRefLine = null;
+let curiosityRefGeom = null;
+let trimmedCuriosityData = null;
 let roverGroup = null;
 let roverBeacon = null;
 let scienceMarkersGroup = null;
@@ -764,8 +777,11 @@ function disposeOldTerrainMeshes() {
 
 function getMissionLensMeshMap() {
   return {
-    satellite: [{ mesh: hazardOutlineMesh, maxOpacity: 0.90 }],
-    terrain: [{ mesh: lensTerrainMesh, maxOpacity: 0.92 }],
+    satellite: [{ mesh: hazardOutlineMesh, maxOpacity: 0.40 }],
+    terrain: [
+      { mesh: lensTerrainMesh, maxOpacity: 0.92 },
+      { mesh: hazardOutlineMesh, maxOpacity: 1.0 }
+    ],
     minerals: [{ mesh: lensMineralsMesh, maxOpacity: 0.95 }],
     heat: [{ mesh: lensHeatMesh, maxOpacity: 0.85 }],
     sun: [{ mesh: lensSunMesh, maxOpacity: 0.86 }],
@@ -782,18 +798,24 @@ function applyMissionLensWeightsToMeshes(now = performance.now()) {
   }
 
   const map = getMissionLensMeshMap();
+  const accumOpacity = new Map();
   LENS_KEYS.forEach(k => {
     const w = lensBlend.current[k] || 0;
     (map[k] || []).forEach(({ mesh, maxOpacity }) => {
       if (!mesh) return;
-      if (w > 0.005) {
-        mesh.visible = true;
-        mesh.material.opacity = maxOpacity * w;
-      } else {
-        mesh.visible = false;
-        mesh.material.opacity = 0;
-      }
+      accumOpacity.set(mesh, (accumOpacity.get(mesh) || 0) + maxOpacity * w);
     });
+  });
+
+  accumOpacity.forEach((op, mesh) => {
+    const clamped = Math.min(1.0, op);
+    if (clamped > 0.005) {
+      mesh.visible = true;
+      mesh.material.opacity = clamped;
+    } else {
+      mesh.visible = false;
+      mesh.material.opacity = 0;
+    }
   });
 
   // Soft pulsing highlight on >25° steep terrain inside lensTerrainMesh GPU shader
@@ -849,7 +871,8 @@ function createTerrainLayers(satTex, slopeTex, crismHydTex, crismPhyTex, themisT
 
   // MISSION Mode 6 Full-Terrain Lens Meshes
   if (lensTextures) {
-    hazardOutlineMesh = addTerrainOverlayMesh(lensTextures.hazardOutlineTex, 0.90, -3.5, 0.02);
+    hazardOutlineMesh = addTerrainOverlayMesh(lensTextures.hazardOutlineTex, 0.40, -4.0, 0.04);
+    hazardOutlineMesh.renderOrder = 3;
     lensTerrainMesh = addTerrainOverlayMesh(lensTextures.terrainRampTex, 0.92, -2.0);
     const pulseUniform = { value: 0.0 };
     lensTerrainMesh.material.customProgramCacheKey = () => 'redquest-terrain-pulse-v1';
@@ -922,6 +945,139 @@ function updateGeometryHeights(geo, skipNormals = false) {
   }
   pos.needsUpdate = true;
   if (!skipNormals) geo.computeVertexNormals();
+}
+
+function intersectSegmentBoxFirst(p0, p1, b) {
+  const dx = p1.x - p0.x;
+  const dy = p1.y - p0.y;
+  let tmin = 0.0;
+  let tmax = 1.0;
+  for (const [d, minB, maxB, v0] of [
+    [dx, b.xMin, b.xMax, p0.x],
+    [dy, b.yMin, b.yMax, p0.y]
+  ]) {
+    if (Math.abs(d) < 1e-12) {
+      if (v0 < minB || v0 > maxB) return null;
+    } else {
+      let t1 = (minB - v0) / d;
+      let t2 = (maxB - v0) / d;
+      if (t1 > t2) [t1, t2] = [t2, t1];
+      tmin = Math.max(tmin, t1);
+      tmax = Math.min(tmax, t2);
+      if (tmin > tmax) return null;
+    }
+  }
+  return tmin;
+}
+
+function computeTrimmedCuriosityRoute(points, bounds) {
+  if (!points || !points.length) return null;
+  const trimmedPts = [points[0]];
+  let cumDist = 0;
+  let ascentM = 0;
+  let easyLen = 0;
+  let modLen = 0;
+  let hazLen = 0;
+  let maxSlopeDeg = 0;
+
+  const sampleStepSlope = (ax, ay) => {
+    if (!rawSlopes) return 0;
+    const { col, row } = localToGrid(ax, ay);
+    return sampleGridBilinear(rawSlopes, col, row);
+  };
+
+  for (let i = 1; i < points.length; i++) {
+    const p0 = points[i - 1];
+    const p1 = points[i];
+    const tEnter = intersectSegmentBoxFirst(p0, p1, bounds);
+    if (tEnter !== null && tEnter >= 0 && tEnter <= 1) {
+      const hitPt = {
+        x: p0.x + (p1.x - p0.x) * tEnter,
+        y: p0.y + (p1.y - p0.y) * tEnter,
+        elevation: p0.elevation + (p1.elevation - p0.elevation) * tEnter,
+        sol: p0.sol
+      };
+      const dz = hitPt.elevation - p0.elevation;
+      const step = Math.hypot(hitPt.x - p0.x, hitPt.y - p0.y, dz);
+      if (step > 0) {
+        cumDist += step;
+        if (dz > 0) ascentM += dz;
+        const sl = sampleStepSlope((p0.x + hitPt.x) * 0.5, (p0.y + hitPt.y) * 0.5);
+        maxSlopeDeg = Math.max(maxSlopeDeg, sl);
+        if (sl < 15.0) easyLen += step;
+        else if (sl <= 25.0) modLen += step;
+        else hazLen += step;
+        trimmedPts.push(hitPt);
+      }
+      break;
+    }
+
+    const dz = p1.elevation - p0.elevation;
+    const step = Math.hypot(p1.x - p0.x, p1.y - p0.y, dz);
+    cumDist += step;
+    if (dz > 0) ascentM += dz;
+    const sl = sampleStepSlope((p0.x + p1.x) * 0.5, (p0.y + p1.y) * 0.5);
+    maxSlopeDeg = Math.max(maxSlopeDeg, sl);
+    if (sl < 15.0) easyLen += step;
+    else if (sl <= 25.0) modLen += step;
+    else hazLen += step;
+    trimmedPts.push(p1);
+  }
+
+  const invTotal = cumDist > 0 ? 100.0 / cumDist : 0;
+  return {
+    points: trimmedPts,
+    distKm: cumDist / 1000.0,
+    ascentM,
+    maxSlopeDeg,
+    pctEasy: easyLen * invTotal,
+    pctMod: modLen * invTotal,
+    pctHaz: hazLen * invTotal
+  };
+}
+
+function buildCuriosityRefRoute() {
+  if (!routePoints.length || !level01?.goal?.coreZoneBounds) return;
+  trimmedCuriosityData = computeTrimmedCuriosityRoute(routePoints, level01.goal.coreZoneBounds);
+  if (!trimmedCuriosityData || !trimmedCuriosityData.points.length) return;
+
+  const pts = trimmedCuriosityData.points;
+  const flatPositions = new Float32Array(pts.length * 3);
+  for (let i = 0; i < pts.length; i++) {
+    const pt = pts[i];
+    const { meshX, meshZ } = localToMesh(pt.x, pt.y);
+    flatPositions[i * 3] = meshX;
+    flatPositions[i * 3 + 1] = (pt.elevation - minElev) * currentExag + 7.2 * currentExag;
+    flatPositions[i * 3 + 2] = meshZ;
+  }
+
+  curiosityRefGeom = new LineGeometry();
+  curiosityRefGeom.setPositions(flatPositions);
+
+  const curMat = new LineMaterial({
+    color: 0xcbd5e1,
+    linewidth: 2.0,
+    dashed: true,
+    dashScale: 1,
+    dashSize: 28,
+    gapSize: 18,
+    transparent: true,
+    opacity: 0.78,
+    depthTest: true,
+    depthWrite: false
+  });
+  curMat.resolution.set(window.innerWidth, window.innerHeight);
+
+  curiosityRefLine = new Line2(curiosityRefGeom, curMat);
+  curiosityRefLine.computeLineDistances();
+  // Keep Curiosity reference dashed path strictly below player A/B/C routes
+  curiosityRefLine.renderOrder = 8;
+  curiosityRefLine.userData = { isCuriosityRefLine: true };
+
+  trimmedCuriosityData.flatPositions = flatPositions;
+  curiosityRefGroup = new THREE.Group();
+  curiosityRefGroup.add(curiosityRefLine);
+  scene.add(curiosityRefGroup);
 }
 
 // --- Route, Trail, and Rover Construction ---
@@ -1040,6 +1196,7 @@ function createRouteAndRover() {
   routeGroup.add(roverGroup);
   scene.add(routeGroup);
 
+  buildCuriosityRefRoute();
   updateTimelineReplay(3721);
 }
 
@@ -1333,6 +1490,16 @@ function applyVerticalExaggeration(exag, { skipNormals = false, syncSlider = tru
 
   updateStartAndGoalMarkerPositions();
 
+  if (curiosityRefGeom && trimmedCuriosityData && curiosityRefLine) {
+    const pts = trimmedCuriosityData.points;
+    const flat = trimmedCuriosityData.flatPositions;
+    for (let i = 0; i < pts.length; i++) {
+      flat[i * 3 + 1] = (pts[i].elevation - minElev) * currentExag + 7.2 * currentExag;
+    }
+    curiosityRefGeom.setPositions(flat);
+    curiosityRefLine.computeLineDistances();
+  }
+
   if (candidateLines) {
     Object.values(candidateLines).forEach(candGroup => {
       const wps = candGroup.userData?.waypoints;
@@ -1344,7 +1511,11 @@ function applyVerticalExaggeration(exag, { skipNormals = false, syncSlider = tru
         }
         geom.setPositions(flat);
       }
+      if (candGroup.userData?.chevrons && wps) {
+        candGroup.userData.arcTable = buildRouteArcTable(wps);
+      }
     });
+    updateCandidateRouteChevrons(performance.now());
   }
 }
 
@@ -1454,9 +1625,17 @@ function updatePointInspector(lx, ly) {
   iXy.textContent = `X ${lx.toFixed(0)} m, Y ${ly.toFixed(0)} m`;
   iLonlat.textContent = `${lon.toFixed(4)}°E, ${Math.abs(lat).toFixed(4)}°S`;
 
+  const curScreen = levelState.getState().screen;
+  const hidePreLockPrivate =
+    currentViewMode === 'MISSION' &&
+    (curScreen === GAME_STATES.BRIEFING || curScreen === GAME_STATES.ANALYZE || curScreen === GAME_STATES.CHOOSE);
+
+  if (iSolRow) {
+    iSolRow.style.display = hidePreLockPrivate ? 'none' : '';
+  }
   if (nearestPt) {
-    if (levelState.getState().screen !== GAME_STATES.DEBRIEF) {
-      iSol.textContent = 'Hidden until Debrief';
+    if (hidePreLockPrivate) {
+      iSol.textContent = 'Hidden until lock-in';
     } else {
       const distStr = distM < 8 ? 'At rover waypoint' : `${Math.round(distM)} m away`;
       iSol.textContent = `Sol ${nearestPt.sol} (${distStr})`;
@@ -1513,10 +1692,7 @@ function updatePointInspector(lx, ly) {
   const elevCost = 15.0 * (elev - (-4131.74)) / 700.0;
   const mobCost = Math.min(100.0, Math.max(0.0, slopeCost + roughnessCost + elevCost));
 
-  const curScreen = levelState.getState().screen;
-  const hideMobilityPreLock =
-    currentViewMode === 'MISSION' &&
-    (curScreen === GAME_STATES.BRIEFING || curScreen === GAME_STATES.ANALYZE || curScreen === GAME_STATES.CHOOSE);
+  const hideMobilityPreLock = hidePreLockPrivate;
 
   if (iMobilityRow) {
     iMobilityRow.style.display = hideMobilityPreLock ? 'none' : '';
@@ -1734,6 +1910,12 @@ function findHitCandidateRouteId() {
   return null;
 }
 
+function findHitCuriosityRoute() {
+  if (!curiosityRefLine || !curiosityRefGroup || !curiosityRefGroup.visible) return false;
+  const hits = raycaster.intersectObject(curiosityRefLine, false);
+  return hits.length > 0;
+}
+
 function handlePointerInspection(clientX, clientY) {
   const now = performance.now();
   if (now - lastRaycastTime < 33) return; // Throttle to 30 FPS
@@ -1774,12 +1956,23 @@ function handlePointerInspection(clientX, clientY) {
     mapLabels.hideHoverCard();
   }
 
-  // 2. Check candidate route hover (Line2)
+  // 2. Check candidate route hover (Line2) above Curiosity reference line
   const nextRouteHoverId = findHitCandidateRouteId();
   if (nextRouteHoverId !== hoveredCandidateId) {
     hoveredCandidateId = nextRouteHoverId;
     updateCandidateRouteStyles();
   }
+
+  if (!hoveredCandidateId && findHitCuriosityRoute() && mapLabels) {
+    const curAnchor = mapLabels.getAnchorById('curiosity-ref-path');
+    if (curAnchor) {
+      mapLabels.showHoverCard(curAnchor, clientX, clientY);
+      hideHoverTooltip();
+      renderer.domElement.style.cursor = 'pointer';
+      return;
+    }
+  }
+
   renderer.domElement.style.cursor = hoveredCandidateId ? 'pointer' : '';
 
   if (isPinned) {
@@ -2056,24 +2249,31 @@ function createStartAndGoalMarkers() {
   plannerGroup = new THREE.Group();
   scene.add(plannerGroup);
 
-  // 1. START Marker (Green glowing ground anchor)
+  // 1. START Marker (Green glowing ground anchor, drawn above route lines)
   startMarker = new THREE.Group();
   startMarker.userData = { markerKey: 'start' };
   const sRingGeo = new THREE.RingGeometry(18, 28, 36);
   sRingGeo.rotateX(-Math.PI / 2);
-  const sRingMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71, side: THREE.DoubleSide, depthWrite: false });
-  startMarker.add(new THREE.Mesh(sRingGeo, sRingMat));
+  const sRingMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71, side: THREE.DoubleSide, depthWrite: false, depthTest: false });
+  const sRingMesh = new THREE.Mesh(sRingGeo, sRingMat);
+  sRingMesh.position.y = 13.0;
+  sRingMesh.renderOrder = 30;
+  startMarker.add(sRingMesh);
 
   const sHaloGeo = new THREE.RingGeometry(30, 44, 36);
   sHaloGeo.rotateX(-Math.PI / 2);
-  const sHaloMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
-  startMarker.add(new THREE.Mesh(sHaloGeo, sHaloMat));
+  const sHaloMat = new THREE.MeshBasicMaterial({ color: 0x2ecc71, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, depthTest: false });
+  const sHaloMesh = new THREE.Mesh(sHaloGeo, sHaloMat);
+  sHaloMesh.position.y = 13.0;
+  sHaloMesh.renderOrder = 30;
+  startMarker.add(sHaloMesh);
 
   const sPole = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.6, 1.6, 65, 8),
-    new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.8, roughness: 0.2 })
+    new THREE.CylinderGeometry(1.8, 1.8, 70, 8),
+    new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.8, roughness: 0.2, depthTest: false })
   );
-  sPole.position.y = 32.5;
+  sPole.position.y = 35;
+  sPole.renderOrder = 31;
   startMarker.add(sPole);
 
   const sFlagShape = new THREE.Shape();
@@ -2083,44 +2283,54 @@ function createStartAndGoalMarkers() {
   sFlagShape.closePath();
   const sFlag = new THREE.Mesh(
     new THREE.ShapeGeometry(sFlagShape),
-    new THREE.MeshBasicMaterial({ color: 0x2ecc71, side: THREE.DoubleSide })
+    new THREE.MeshBasicMaterial({ color: 0x2ecc71, side: THREE.DoubleSide, depthTest: false })
   );
-  sFlag.position.set(0, 62, 0);
+  sFlag.position.set(0, 66, 0);
+  sFlag.renderOrder = 32;
   startMarker.add(sFlag);
 
   const sBeacon = new THREE.Mesh(
-    new THREE.OctahedronGeometry(8.5, 0),
-    new THREE.MeshStandardMaterial({ color: 0x2ecc71, emissive: 0x2ecc71, emissiveIntensity: 0.85 })
+    new THREE.OctahedronGeometry(9.0, 0),
+    new THREE.MeshStandardMaterial({ color: 0x2ecc71, emissive: 0x2ecc71, emissiveIntensity: 0.85, depthTest: false })
   );
-  sBeacon.position.y = 68;
+  sBeacon.position.y = 74;
+  sBeacon.renderOrder = 32;
   startMarker.add(sBeacon);
   plannerGroup.add(startMarker);
 
-  // 2. GOAL Marker (Gold glowing beacon anchor)
+  // 2. GOAL Marker (Gold glowing beacon anchor, drawn above route lines)
   goalMarker = new THREE.Group();
   goalMarker.userData = { markerKey: 'goal' };
   const gRingGeo1 = new THREE.RingGeometry(12, 20, 36);
   gRingGeo1.rotateX(-Math.PI / 2);
-  const gRingMat = new THREE.MeshBasicMaterial({ color: 0xf1c40f, side: THREE.DoubleSide, depthWrite: false });
-  goalMarker.add(new THREE.Mesh(gRingGeo1, gRingMat));
+  const gRingMat = new THREE.MeshBasicMaterial({ color: 0xf1c40f, side: THREE.DoubleSide, depthWrite: false, depthTest: false });
+  const gRingMesh1 = new THREE.Mesh(gRingGeo1, gRingMat);
+  gRingMesh1.position.y = 13.0;
+  gRingMesh1.renderOrder = 30;
+  goalMarker.add(gRingMesh1);
 
   const gRingGeo2 = new THREE.RingGeometry(26, 38, 36);
   gRingGeo2.rotateX(-Math.PI / 2);
-  const gHaloMat = new THREE.MeshBasicMaterial({ color: 0xf1c40f, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false });
-  goalMarker.add(new THREE.Mesh(gRingGeo2, gHaloMat));
+  const gHaloMat = new THREE.MeshBasicMaterial({ color: 0xf1c40f, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false, depthTest: false });
+  const gRingMesh2 = new THREE.Mesh(gRingGeo2, gHaloMat);
+  gRingMesh2.position.y = 13.0;
+  gRingMesh2.renderOrder = 30;
+  goalMarker.add(gRingMesh2);
 
   const gNeedle = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.6, 1.6, 70, 8),
-    new THREE.MeshStandardMaterial({ color: 0xf1c40f, metalness: 0.8 })
+    new THREE.CylinderGeometry(1.8, 1.8, 76, 8),
+    new THREE.MeshStandardMaterial({ color: 0xf1c40f, metalness: 0.8, depthTest: false })
   );
-  gNeedle.position.y = 35;
+  gNeedle.position.y = 38;
+  gNeedle.renderOrder = 31;
   goalMarker.add(gNeedle);
 
   const gBeacon = new THREE.Mesh(
-    new THREE.OctahedronGeometry(10.5, 0),
-    new THREE.MeshStandardMaterial({ color: 0xf1c40f, emissive: 0xf1c40f, emissiveIntensity: 0.95 })
+    new THREE.OctahedronGeometry(11.0, 0),
+    new THREE.MeshStandardMaterial({ color: 0xf1c40f, emissive: 0xf1c40f, emissiveIntensity: 0.95, depthTest: false })
   );
-  gBeacon.position.y = 74;
+  gBeacon.position.y = 80;
+  gBeacon.renderOrder = 32;
   goalMarker.add(gBeacon);
   plannerGroup.add(goalMarker);
 
@@ -2168,24 +2378,127 @@ function requestRouteComputation() {
   });
 }
 
+const ROUTE_CHEVRON_COUNT = 10;
+const prefersReducedMotionQuery = typeof window !== 'undefined' && window.matchMedia
+  ? window.matchMedia('(prefers-reduced-motion: reduce)')
+  : null;
+
+const SHARED_CHEVRON_OUTLINE_GEO = (() => {
+  const s = new THREE.Shape();
+  s.moveTo(0, 17);
+  s.lineTo(13, -10);
+  s.lineTo(0, -3);
+  s.lineTo(-13, -10);
+  s.closePath();
+  const geo = new THREE.ShapeGeometry(s);
+  geo.rotateX(-Math.PI / 2);
+  return geo;
+})();
+
+const SHARED_CHEVRON_INNER_GEO = (() => {
+  const s = new THREE.Shape();
+  s.moveTo(0, 13);
+  s.lineTo(9.5, -7);
+  s.lineTo(0, -1.5);
+  s.lineTo(-9.5, -7);
+  s.closePath();
+  const geo = new THREE.ShapeGeometry(s);
+  geo.rotateX(-Math.PI / 2);
+  return geo;
+})();
+
+function buildRouteArcTable(waypoints) {
+  if (!waypoints || waypoints.length < 2) return null;
+  const pts = [];
+  const cum = [0];
+  let total = 0;
+  for (let i = 0; i < waypoints.length; i++) {
+    const wp = waypoints[i];
+    const { meshX, meshZ } = localToMesh(wp.x, wp.y);
+    const meshY = (wp.z - minElev) * currentExag + 11.5 * currentExag;
+    pts.push({ x: meshX, y: meshY, z: meshZ });
+    if (i > 0) {
+      const prev = pts[i - 1];
+      total += Math.hypot(meshX - prev.x, meshZ - prev.z);
+      cum.push(total);
+    }
+  }
+  return { pts, cum, total };
+}
+
+function sampleRouteArcAtU(arcTable, u) {
+  if (!arcTable || !arcTable.pts.length || arcTable.total <= 0) return null;
+  const target = Math.max(0, Math.min(1, u)) * arcTable.total;
+  const { pts, cum } = arcTable;
+  let lo = 0;
+  let hi = cum.length - 1;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] <= target) lo = mid;
+    else hi = mid;
+  }
+  const p0 = pts[lo];
+  const p1 = pts[Math.min(pts.length - 1, lo + 1)];
+  const segLen = cum[lo + 1] - cum[lo];
+  const frac = segLen > 1e-6 ? (target - cum[lo]) / segLen : 0;
+  const x = p0.x + (p1.x - p0.x) * frac;
+  const y = p0.y + (p1.y - p0.y) * frac;
+  const z = p0.z + (p1.z - p0.z) * frac;
+  const yaw = Math.atan2(p1.x - p0.x, p0.z - p1.z);
+  return { x, y, z, yaw };
+}
+
+function updateCandidateRouteChevrons(now = performance.now()) {
+  if (!candidateLines) return;
+  const reduced = Boolean(prefersReducedMotionQuery && prefersReducedMotionQuery.matches);
+  const phase = reduced ? 0.04 : ((now * 0.000085) % 1.0);
+
+  Object.keys(candidateLines).forEach(candId => {
+    const group = candidateLines[candId];
+    const { chevrons, arcTable } = group?.userData || {};
+    if (!chevrons || !chevrons.length) return;
+    const isSel = candId === selectedCandidateId && group.visible;
+    for (let i = 0; i < chevrons.length; i++) {
+      const mesh = chevrons[i];
+      mesh.visible = isSel;
+      if (!isSel || !arcTable) continue;
+      // Place evenly along (0.04 .. 0.96) flowing monotonically Start -> Goal
+      const rawU = ((i / chevrons.length) + phase) % 1.0;
+      const u = 0.04 + rawU * 0.92;
+      const sample = sampleRouteArcAtU(arcTable, u);
+      if (sample) {
+        mesh.position.set(sample.x, sample.y, sample.z);
+        mesh.rotation.y = sample.yaw;
+      }
+    }
+  });
+}
+
 function updateCandidateRouteStyles() {
   Object.keys(candidateLines).forEach(candId => {
     const group = candidateLines[candId];
-    const { coreLine, glowLine } = group.userData;
+    const { coreLine, casingLine, glowLine } = group.userData;
     const isSel = candId === selectedCandidateId;
     const isHov = candId === hoveredCandidateId;
 
+    // Uniform width & casing across all player routes A/B/C; only opacity & glow highlight selection
     if (coreLine && coreLine.material) {
-      coreLine.material.linewidth = isSel ? 5.0 : (isHov ? 4.2 : 2.8);
-      coreLine.material.opacity = isSel ? 1.0 : (isHov ? 0.92 : 0.48);
-      coreLine.renderOrder = isSel ? 12 : (isHov ? 11 : 7);
+      coreLine.material.linewidth = 3.8;
+      coreLine.material.opacity = isSel ? 1.0 : (isHov ? 0.85 : 0.65);
+      coreLine.renderOrder = isSel ? 20 : (isHov ? 16 : 12);
+    }
+    if (casingLine && casingLine.material) {
+      casingLine.material.linewidth = 7.4;
+      casingLine.material.opacity = isSel ? 0.95 : (isHov ? 0.80 : 0.65);
+      casingLine.renderOrder = isSel ? 19 : (isHov ? 15 : 11);
     }
     if (glowLine && glowLine.material) {
-      glowLine.material.linewidth = isSel ? 13.0 : (isHov ? 10.5 : 7.5);
-      glowLine.material.opacity = isSel ? 0.28 : (isHov ? 0.22 : 0.12);
-      glowLine.renderOrder = isSel ? 11 : (isHov ? 10 : 6);
+      glowLine.material.linewidth = 13.5;
+      glowLine.material.opacity = isSel ? 0.44 : (isHov ? 0.28 : 0.14);
+      glowLine.renderOrder = isSel ? 18 : (isHov ? 14 : 10);
     }
   });
+  updateCandidateRouteChevrons(performance.now());
 }
 
 function buildCandidateRouteLines(candidates) {
@@ -2211,40 +2524,81 @@ function buildCandidateRouteLines(candidates) {
       group.userData.waypoints = c.waypoints;
       group.userData.flatPositions = flatPositions;
       group.userData.geom.setPositions(flatPositions);
+      group.userData.arcTable = buildRouteArcTable(c.waypoints);
       group.visible = true;
     } else {
       const geom = new LineGeometry();
       geom.setPositions(flatPositions);
+      const routeColorHex = new THREE.Color(c.color).getHex();
 
       const glowMat = new LineMaterial({
-        color: new THREE.Color(c.color).getHex(),
-        linewidth: 10.0,
+        color: routeColorHex,
+        linewidth: 13.5,
         transparent: true,
-        opacity: 0.20,
+        opacity: 0.18,
         blending: THREE.AdditiveBlending,
         depthTest: true,
-        depthWrite: false
+        depthWrite: false,
+        dashed: false
       });
       glowMat.resolution.set(window.innerWidth, window.innerHeight);
 
-      const coreMat = new LineMaterial({
-        color: new THREE.Color(c.color).getHex(),
-        linewidth: 4.0,
+      const casingMat = new LineMaterial({
+        color: 0x080b10,
+        linewidth: 7.4,
         transparent: true,
         opacity: 0.90,
         depthTest: true,
-        depthWrite: false
+        depthWrite: false,
+        dashed: false
+      });
+      casingMat.resolution.set(window.innerWidth, window.innerHeight);
+
+      const coreMat = new LineMaterial({
+        color: routeColorHex,
+        linewidth: 3.8,
+        transparent: true,
+        opacity: 0.90,
+        depthTest: true,
+        depthWrite: false,
+        dashed: false
       });
       coreMat.resolution.set(window.innerWidth, window.innerHeight);
 
       const glowLine = new Line2(geom, glowMat);
       glowLine.userData = { isCandidateLine: true, id: c.id };
+      const casingLine = new Line2(geom, casingMat);
+      casingLine.userData = { isCandidateLine: true, id: c.id };
       const coreLine = new Line2(geom, coreMat);
       coreLine.userData = { isCandidateLine: true, id: c.id };
 
+      const chevrons = [];
       const group = new THREE.Group();
       group.add(glowLine);
+      group.add(casingLine);
       group.add(coreLine);
+
+      for (let i = 0; i < ROUTE_CHEVRON_COUNT; i++) {
+        const chev = new THREE.Group();
+        const bg = new THREE.Mesh(
+          SHARED_CHEVRON_OUTLINE_GEO,
+          new THREE.MeshBasicMaterial({ color: 0x080b10, side: THREE.DoubleSide, transparent: true, opacity: 0.95, depthWrite: false })
+        );
+        bg.renderOrder = 21;
+        const fg = new THREE.Mesh(
+          SHARED_CHEVRON_INNER_GEO,
+          new THREE.MeshBasicMaterial({ color: routeColorHex, side: THREE.DoubleSide, transparent: true, opacity: 1.0, depthWrite: false })
+        );
+        fg.position.y = 0.6;
+        fg.renderOrder = 22;
+        chev.add(bg);
+        chev.add(fg);
+        chev.visible = false;
+        chev.userData = { isCandidateLine: true, id: c.id };
+        group.add(chev);
+        chevrons.push(chev);
+      }
+
       group.userData = {
         isCandidateLine: true,
         id: c.id,
@@ -2252,8 +2606,11 @@ function buildCandidateRouteLines(candidates) {
         flatPositions,
         color: c.color,
         geom,
+        glowLine,
+        casingLine,
         coreLine,
-        glowLine
+        chevrons,
+        arcTable: buildRouteArcTable(c.waypoints)
       };
       plannerGroup.add(group);
       candidateLines[c.id] = group;
@@ -2600,8 +2957,11 @@ function bindUIEvents() {
   });
 
   if (lyrRoute) lyrRoute.addEventListener('change', () => {
-    const isDebrief = levelState.getState().screen === GAME_STATES.DEBRIEF;
-    if (routeGroup) routeGroup.visible = isDebrief && lyrRoute.checked;
+    const screen = levelState.getState().screen;
+    const showFullRoute = currentViewMode === 'RESEARCH'
+      ? lyrRoute.checked
+      : (screen === GAME_STATES.DEBRIEF && lyrRoute.checked);
+    if (routeGroup) routeGroup.visible = showFullRoute;
     if (scienceMarkersGroup) scienceMarkersGroup.visible = lyrRoute.checked;
     if (startFlagGroup) startFlagGroup.visible = lyrRoute.checked;
   });
@@ -2855,6 +3215,15 @@ function bindUIEvents() {
       return;
     }
 
+    // 3b. Check clicking on Curiosity Reference Dashed Line (Line2)
+    if (findHitCuriosityRoute() && mapLabels) {
+      const curAnchor = mapLabels.getAnchorById('curiosity-ref-path');
+      if (curAnchor) {
+        mapLabels.showDetailCard(curAnchor);
+        return;
+      }
+    }
+
     // 3. Pin clicked terrain point (opens Point Inspector cleanly in MISSION mode, closing other side panels)
     const hit = getTerrainIntersection(raycaster.ray);
     if (hit) {
@@ -2908,10 +3277,14 @@ function bindUIEvents() {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
     Object.values(candidateLines).forEach(group => {
-      const { coreLine, glowLine } = group.userData || {};
+      const { coreLine, casingLine, glowLine } = group.userData || {};
       if (coreLine && coreLine.material) coreLine.material.resolution.set(window.innerWidth, window.innerHeight);
+      if (casingLine && casingLine.material) casingLine.material.resolution.set(window.innerWidth, window.innerHeight);
       if (glowLine && glowLine.material) glowLine.material.resolution.set(window.innerWidth, window.innerHeight);
     });
+    if (curiosityRefLine && curiosityRefLine.material) {
+      curiosityRefLine.material.resolution.set(window.innerWidth, window.innerHeight);
+    }
     updateLayoutBounds();
   });
 }
@@ -3302,7 +3675,8 @@ function buildLevelMapAnchors() {
     id: 'start',
     category: 'mission',
     categoryLabel: 'Mission Anchor',
-    basePriority: 100,
+    basePriority: 200,
+    noLensBoost: true,
     sourceChip: 'measured',
     label: 'Start',
     hoverTitle: 'Start',
@@ -3313,7 +3687,7 @@ function buildLevelMapAnchors() {
     tags: [{ text: 'measured', cls: 'measured' }, { text: 'game anchor', cls: 'game' }],
     worldX: startMesh.meshX,
     worldZ: startMesh.meshZ,
-    getWorldY: () => sampleWorldY(level01.start.x, level01.start.y, 72)
+    getWorldY: () => sampleWorldY(level01.start.x, level01.start.y, 28)
   });
 
   const goalMesh = localToMesh(level01.goal.x, level01.goal.y);
@@ -3321,7 +3695,8 @@ function buildLevelMapAnchors() {
     id: 'goal',
     category: 'mission',
     categoryLabel: 'Mission Anchor',
-    basePriority: 98,
+    basePriority: 198,
+    noLensBoost: true,
     sourceChip: 'game',
     label: 'Goal: boxwork core zone',
     hoverTitle: 'Goal: boxwork core zone',
@@ -3375,7 +3750,8 @@ function buildLevelMapAnchors() {
       id: t.id,
       category: 'science',
       categoryLabel: t.id === 'target-3' ? 'Science · Drill site' : 'Science · Science target',
-      basePriority: 90 - idx * 2,
+      basePriority: 190 - idx * 2,
+      noLensBoost: true,
       sourceChip: 'measured',
       label: `Target ${idx + 1}`,
       hoverTitle: t.id === 'target-3' ? (elem?.name || 'Drill site: Nevado Sajama drill') : `Target ${idx + 1}: ${t.title}`,
@@ -3547,6 +3923,76 @@ function buildLevelMapAnchors() {
     });
   });
 
+  // --- CANDIDATE ROUTE START TAGS (A / B / C, counted in 8-label cap below Start/Goal/Targets) ---
+  if (level01 && Array.isArray(level01.candidateRoutes)) {
+    const targetTagOffsets = [860, 740, 1280];
+    level01.candidateRoutes.forEach((r, idx) => {
+      const wps = r.waypoints || [];
+      if (!wps.length) return;
+      const goalDist = targetTagOffsets[idx] || (290 + idx * 150);
+      let acc = 0;
+      let chosenWp = wps[0];
+      for (let i = 1; i < wps.length; i++) {
+        acc += Math.hypot(wps[i].x - wps[i - 1].x, wps[i].y - wps[i - 1].y);
+        chosenWp = wps[i];
+        if (acc >= goalDist) break;
+      }
+      const shortTag = r.blindLabel ? r.blindLabel.replace(/^Route\s+/i, '') : String.fromCharCode(65 + idx);
+      const tagMesh = localToMesh(chosenWp.x, chosenWp.y);
+      anchors.push({
+        id: `route-tag-${shortTag.toLowerCase()}`,
+        routeId: r.id,
+        category: 'mission',
+        categoryLabel: `Candidate Traverse · ${r.blindLabel}`,
+        basePriority: 122 - idx,
+        noLensBoost: true,
+        sourceChip: 'game',
+        pillClass: 'route-tag',
+        iconText: '▸',
+        accentColor: r.blindColor,
+        label: shortTag,
+        hoverTitle: `${r.blindLabel} (Candidate start)`,
+        whatItIs: `Candidate traverse ${r.blindLabel} (${r.metrics.distKm.value.toFixed(2)} km measured path). Click to select this route.`,
+        dataset: 'Red Quest A* terrain planner (USGS Gale DEM)',
+        whyItMatters: `Highlights the initial departure corridor of ${r.blindLabel} from the shared Start point.`,
+        tags: [{ text: 'game', cls: 'game' }, { text: 'measured DEM', cls: 'measured' }],
+        worldX: tagMesh.meshX,
+        worldZ: tagMesh.meshZ,
+        getWorldY: () => sampleWorldY(chosenWp.x, chosenWp.y, 18)
+      });
+    });
+  }
+
+  // --- CURIOSITY TRIMMED REFERENCE PATH (measured, counted in 8-label cap below A/B/C) ---
+  if (trimmedCuriosityData && trimmedCuriosityData.points.length > 0) {
+    const pts = trimmedCuriosityData.points;
+    const anchorPt = pts[Math.floor(pts.length * 0.78)];
+    const curMesh = localToMesh(anchorPt.x, anchorPt.y);
+    anchors.push({
+      id: 'curiosity-ref-path',
+      category: 'mission',
+      categoryLabel: 'Reference Traverse',
+      basePriority: 119,
+      noLensBoost: true,
+      sourceChip: 'measured',
+      pillClass: 'curiosity-ref-pill',
+      iconText: '┈',
+      accentColor: '#cbd5e1',
+      label: "Curiosity's actual path (measured, reference)",
+      hoverTitle: "Curiosity's actual path (measured, reference)",
+      whatItIs: `Trimmed distance to boxwork core zone: ${trimmedCuriosityData.distKm.toFixed(2)} km (measured).`,
+      whatDebrief: `Trimmed distance: ${trimmedCuriosityData.distKm.toFixed(2)} km (measured). Slope tiers along trimmed path (measured DEM, 15°/25° game rule): ${trimmedCuriosityData.pctEasy.toFixed(1)}% Easy (<15°), ${trimmedCuriosityData.pctMod.toFixed(1)}% Moderate (15°–25°), ${trimmedCuriosityData.pctHaz.toFixed(1)}% Hazardous (>25°).`,
+      solText: `Sols ${pts[0].sol}–${pts[pts.length - 1].sol} (trimmed)`,
+      dataset: 'NASA PDS MSL Curiosity Rover Localization + USGS Gale DEM',
+      whyItMatters: 'Actual Curiosity traverse trimmed from Start until its first entry into the boxwork core zone.',
+      tags: [{ text: 'measured', cls: 'measured' }],
+      tagsDebrief: [{ text: 'measured', cls: 'measured' }, { text: 'measured DEM', cls: 'dem' }, { text: 'game rule', cls: 'game' }],
+      worldX: curMesh.meshX,
+      worldZ: curMesh.meshZ,
+      getWorldY: () => sampleWorldY(anchorPt.x, anchorPt.y, 18)
+    });
+  }
+
   return anchors;
 }
 
@@ -3711,14 +4157,32 @@ function updateLayoutBounds() {
     }
   }
 
-  // Keep top-right Labels button clear of open RESEARCH Layers drawer
+  // Keep top-right Labels & Curiosity path buttons clear of open RESEARCH Layers drawer
   const layersOpen = layersPanel && layersPanel.classList.contains('open');
   if (mapTopControls) {
     mapTopControls.style.right = (currentViewMode === 'RESEARCH' && layersOpen) ? '328px' : '12px';
   }
+  if (missionObjectiveBanner && !missionObjectiveBanner.classList.contains('hidden')) {
+    const topRightLeft = topCtrlVisible ? Math.floor(mapTopControls.getBoundingClientRect().left) - 12 : window.innerWidth - 12;
+    const bannerLeftBound = Math.max(12, leftSideRight);
+    const availW = Math.max(180, topRightLeft - bannerLeftBound);
+    missionObjectiveBanner.style.left = `${Math.round(bannerLeftBound + availW * 0.5)}px`;
+    missionObjectiveBanner.style.maxWidth = `${Math.max(180, availW - 12)}px`;
+  }
   const codexOpen = currentViewMode === 'MISSION' && codexPanel && !codexPanel.classList.contains('hidden');
   cachedLabelLeftLimit = Math.max(10, leftSideRight);
   cachedLabelRightLimit = (layersOpen || codexOpen) ? Math.max(200, window.innerWidth - 336) : window.innerWidth - 10;
+  cachedLabelTopLimit = Math.max(44, hudBottom);
+  const obs = [];
+  if (topCtrlVisible && mapTopControls) {
+    const r = mapTopControls.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) obs.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+  }
+  if (missionObjectiveBanner && !missionObjectiveBanner.classList.contains('hidden')) {
+    const r = missionObjectiveBanner.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) obs.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+  }
+  cachedLabelObstacleBoxes = obs;
 }
 
 function syncPanelsToViewMode() {
@@ -3772,9 +4236,14 @@ function syncPanelsToViewMode() {
     if (toggleBtn) toggleBtn.textContent = showLayers ? '▶' : '◀';
   }
 
-  // Top-right filter controls (Show all elements & Labels)
+  // Top-right filter controls (Curiosity path, Show all elements & Labels)
   if (mapTopControls) {
     mapTopControls.classList.toggle('hidden', isBriefing);
+  }
+  if (btnCuriosityPath) {
+    btnCuriosityPath.classList.toggle('hidden', isBriefing || currentViewMode !== 'MISSION');
+    btnCuriosityPath.classList.toggle('active', showCuriosityPath);
+    btnCuriosityPath.setAttribute('aria-pressed', showCuriosityPath ? 'true' : 'false');
   }
   if (btnShowAllElements) {
     btnShowAllElements.classList.toggle('hidden', isBriefing || currentViewMode !== 'MISSION');
@@ -3837,16 +4306,29 @@ function syncPanelsToViewMode() {
     }
   }
   if (legendRefRow) {
-    legendRefRow.classList.toggle('hidden', !isPostLock);
+    const showRefLegend = !isBriefing && (currentViewMode !== 'MISSION' || showCuriosityPath);
+    legendRefRow.classList.toggle('hidden', !showRefLegend);
   }
   if (codexPanel) {
     codexPanel.classList.toggle('hidden', !showCodex);
     if (showCodex) renderFieldCodex();
   }
 
+  const isDebrief = screen === GAME_STATES.DEBRIEF;
+  if (curiosityRefGroup && curiosityRefLine) {
+    const showTrimmedRef = currentViewMode === 'MISSION' && !isBriefing && showCuriosityPath;
+    curiosityRefGroup.visible = showTrimmedRef;
+    if (curiosityRefLine.material) {
+      curiosityRefLine.material.color.setHex(isDebrief ? 0xf8fafc : 0xcbd5e1);
+      curiosityRefLine.material.linewidth = isDebrief ? 2.8 : 2.0;
+      curiosityRefLine.material.opacity = isDebrief ? 0.96 : 0.78;
+    }
+  }
+
   // Map labels context
   if (mapLabels) {
-    mapLabels.setViewContext({ isBriefing, isPostLock });
+    mapLabels.setAnchorHidden('curiosity-ref-path', currentViewMode !== 'MISSION' || isBriefing || !showCuriosityPath);
+    mapLabels.setViewContext({ isBriefing, isPostLock, isDebrief });
   }
 
   // Apply 3D visibility differences between MISSION Lenses and RESEARCH Layers
@@ -3881,18 +4363,22 @@ function syncPanelsToViewMode() {
     hideHoverTooltip();
   }
 
-  // Re-evaluate Traversability index visibility immediately
-  const hideMobilityPreLock =
+  // Re-evaluate Traversability index & Nearest Sol visibility immediately
+  const hidePreLockPrivate =
     currentViewMode === 'MISSION' &&
     (screen === GAME_STATES.BRIEFING || screen === GAME_STATES.ANALYZE || screen === GAME_STATES.CHOOSE);
+  if (iSolRow) {
+    iSolRow.style.display = hidePreLockPrivate ? 'none' : '';
+  }
   if (iMobilityRow) {
-    iMobilityRow.style.display = hideMobilityPreLock ? 'none' : '';
+    iMobilityRow.style.display = hidePreLockPrivate ? 'none' : '';
   }
   const activePt = pinnedPoint || lastTerrainHit;
   if (activePt && rawHeights && rawSlopes) {
     updatePointInspector(activePt.lx, activePt.ly);
-  } else if (iMobility) {
-    iMobility.textContent = hideMobilityPreLock ? 'Hidden until lock-in' : '—';
+  } else {
+    if (iSol) iSol.textContent = hidePreLockPrivate ? 'Hidden until lock-in' : 'Hover terrain';
+    if (iMobility) iMobility.textContent = hidePreLockPrivate ? 'Hidden until lock-in' : '—';
   }
 
   requestAnimationFrame(updateLayoutBounds);
@@ -3933,9 +4419,12 @@ function applyGameScreenState(state) {
   if (gameExploreOverlay) gameExploreOverlay.classList.toggle('hidden', screen !== GAME_STATES.EXPLORE);
   if (gameDebriefOverlay) gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF);
 
-  // Reference route (Curiosity's real traverse) stays hidden until DEBRIEF
+  // Full reference rover/timeline traverse stays hidden until DEBRIEF in MISSION mode (trimmed dashed Curiosity path shows from ANALYZE+)
+  const isPostLock = screen === GAME_STATES.EXPLORE || screen === GAME_STATES.DEBRIEF;
   if (routeGroup) {
-    routeGroup.visible = isRefRevealed && (lyrRoute ? lyrRoute.checked : true);
+    routeGroup.visible = currentViewMode === 'RESEARCH'
+      ? (lyrRoute ? lyrRoute.checked : true)
+      : (isRefRevealed && (lyrRoute ? lyrRoute.checked : true));
   }
   if (lyrRefControls) {
     lyrRefControls.style.display = isRefRevealed ? '' : 'none';
@@ -3947,9 +4436,9 @@ function applyGameScreenState(state) {
     isPlaying = false;
     if (btnPlay) btnPlay.textContent = '▶';
   }
-  if (!isRefRevealed && iSol && iSol.textContent !== '—') {
-    iSol.textContent = 'Hidden until Debrief';
-  } else if (isRefRevealed && iSol && iSol.textContent === 'Hidden until Debrief') {
+  if (!isPostLock && iSol && iSol.textContent !== '—') {
+    iSol.textContent = 'Hidden until lock-in';
+  } else if (isPostLock && iSol && iSol.textContent === 'Hidden until lock-in') {
     iSol.textContent = 'Hover terrain';
   }
 
@@ -3999,7 +4488,7 @@ function applyGameScreenState(state) {
   }
 
   if (screen === GAME_STATES.DEBRIEF) {
-    populateDebriefUI(level01, state.lockedRouteId);
+    populateDebriefUI(level01, state.lockedRouteId, trimmedCuriosityData);
     renderDebriefCalculatorReveal();
   }
 
@@ -4101,6 +4590,16 @@ function bindGameEvents() {
       btnLabelsShowAll.classList.toggle('active', next);
       btnLabelsShowAll.setAttribute('aria-pressed', next ? 'true' : 'false');
       if (mapLabels) mapLabels.setShowAll(next);
+    });
+  }
+
+  if (btnCuriosityPath) {
+    btnCuriosityPath.addEventListener('click', () => {
+      playUiSound('toggle');
+      showCuriosityPath = !showCuriosityPath;
+      btnCuriosityPath.classList.toggle('active', showCuriosityPath);
+      btnCuriosityPath.setAttribute('aria-pressed', showCuriosityPath ? 'true' : 'false');
+      syncPanelsToViewMode();
     });
   }
 
@@ -4691,6 +5190,9 @@ function animate() {
     }
   }
 
+  // Flowing direction chevrons along selected candidate route (Start -> Goal)
+  updateCandidateRouteChevrons(now);
+
   // Dust Particle drift
   updateDustParticles();
 
@@ -4719,7 +5221,9 @@ function animate() {
       window.innerHeight,
       cachedPlannerTop,
       cachedLabelRightLimit,
-      cachedLabelLeftLimit
+      cachedLabelLeftLimit,
+      cachedLabelTopLimit,
+      cachedLabelObstacleBoxes
     );
   }
 

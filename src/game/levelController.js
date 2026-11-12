@@ -61,10 +61,11 @@ export function populateBriefingUI(levelData) {
   }
 }
 
-export function populateDebriefUI(levelData, lockedRouteId) {
+export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = null) {
   const refStatsEl = document.getElementById('debrief-ref-stats');
   const lockedEl = document.getElementById('debrief-locked-route');
   const tbodyEl = document.getElementById('debrief-true-tbody');
+  const compTbodyEl = document.getElementById('debrief-comp-tbody');
 
   const refM = levelData.referenceRoute.metrics;
   if (refStatsEl) {
@@ -94,6 +95,46 @@ export function populateDebriefUI(levelData, lockedRouteId) {
         <td>${m.riskScore.value.toFixed(1)} / 100</td>
       `;
       tbodyEl.appendChild(tr);
+    });
+  }
+
+  if (compTbodyEl) {
+    compTbodyEl.innerHTML = '';
+    const rows = [];
+    if (chosen) {
+      const m = chosen.metrics;
+      rows.push({
+        swatch: chosen.blindColor,
+        label: `Your route (${chosen.blindLabel} · ${chosen.trueName})`,
+        distKm: m.distKm.value,
+        pctEasy: m.pctEasy.value,
+        pctMod: m.pctMod.value,
+        pctHaz: m.pctHaz.value,
+        isSelected: true
+      });
+    }
+    if (trimmedCuriosity) {
+      rows.push({
+        swatch: '#cbd5e1',
+        label: "Curiosity's actual path (trimmed to boxwork core zone)",
+        distKm: trimmedCuriosity.distKm,
+        pctEasy: trimmedCuriosity.pctEasy,
+        pctMod: trimmedCuriosity.pctMod,
+        pctHaz: trimmedCuriosity.pctHaz,
+        isSelected: false
+      });
+    }
+    rows.forEach(row => {
+      const tr = document.createElement('tr');
+      if (row.isSelected) tr.classList.add('selected');
+      tr.innerHTML = `
+        <td><div class="route-cell"><span class="route-swatch" style="background:${row.swatch}"></span>${row.label}</div></td>
+        <td>${row.distKm.toFixed(2)} km</td>
+        <td>${row.pctEasy.toFixed(1)}%</td>
+        <td>${row.pctMod.toFixed(1)}%</td>
+        <td>${row.pctHaz.toFixed(1)}%</td>
+      `;
+      compTbodyEl.appendChild(tr);
     });
   }
 }
