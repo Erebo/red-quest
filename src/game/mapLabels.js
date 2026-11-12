@@ -176,8 +176,8 @@ export function createMapLabelController({
       targetEl.appendChild(createTagBadge(TARGET_PROVENANCE_TAG, 'unverified'));
       return;
     }
-    const chipCls = anchor.sourceChip === 'derived' ? 'dem' : anchor.sourceChip === 'SIM' ? 'sim' : anchor.sourceChip || 'measured';
-    const chipLabel = anchor.sourceChip === 'derived' ? 'derived from DEM' : (anchor.sourceChip || 'measured');
+    const chipCls = anchor.sourceChip === 'derived' ? 'dem' : (anchor.sourceChip === 'SIM' || anchor.sourceChip === 'sim') ? 'sim' : anchor.sourceChip || 'measured';
+    const chipLabel = anchor.sourceChip === 'derived' ? 'derived from DEM' : (anchor.sourceChip === 'SIM' || anchor.sourceChip === 'sim') ? 'MODELED' : anchor.sourceChip === 'game' ? 'MISSION RULE' : (anchor.sourceChip || 'measured');
     targetEl.appendChild(createTagBadge(chipLabel, chipCls));
   }
 

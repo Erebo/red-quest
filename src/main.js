@@ -250,6 +250,10 @@ const btnDebriefDismiss = document.getElementById('btn-debrief-dismiss');
 const btnDebriefChoose = document.getElementById('btn-debrief-choose');
 const btnDebriefExplore = document.getElementById('btn-debrief-explore');
 const exploreLockedRoute = document.getElementById('explore-locked-route');
+const dataMethodsModal = document.getElementById('data-methods-modal');
+const btnDataMethods = document.getElementById('btn-data-methods');
+const btnDmClose = document.getElementById('btn-dm-close');
+const btnDmDismiss = document.getElementById('btn-dm-dismiss');
 
 // Labels Dropdown, Detail Card, Map Legend & 6 Decision Lenses DOM Elements
 const mapTopControls = document.getElementById('map-top-controls');
@@ -463,7 +467,7 @@ function renderFieldCodex() {
         tags.className = 'codex-tags';
         const gameTag = document.createElement('span');
         gameTag.className = 'mhc-tag game';
-        gameTag.textContent = 'GAME';
+        gameTag.textContent = 'MISSION RULE';
         tags.appendChild(gameTag);
 
         if (entry.source === 'derived from DEM') {
@@ -3147,6 +3151,10 @@ function bindUIEvents() {
 
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      if (dataMethodsModal && !dataMethodsModal.classList.contains('hidden')) {
+        dataMethodsModal.classList.add('hidden');
+        return;
+      }
       if (isSettingStart || isSettingGoal) {
         isSettingStart = false;
         isSettingGoal = false;
@@ -3633,12 +3641,12 @@ function buildLensRouteCardHtml(cand) {
     const radObj = st.radiation;
     if (!radObj) {
       metricText = 'Computing…';
-      subText = `Sky-view shelter (SVF < ${SVF_SHELTER_THRESHOLD}, game rule)`;
+      subText = `Sky-view shelter (SVF < ${SVF_SHELTER_THRESHOLD}, mission rule)`;
       barHtml = `<div class="lrs-bar-wrap"><div class="lrs-bar-fill" style="width:0%;"></div></div>`;
     } else {
       const shW = Math.max(0, Math.min(100, radObj.shelteredPct));
       metricText = `SVF ${radObj.avgSvf.toFixed(3)}`;
-      subText = `Sheltered (SVF < ${SVF_SHELTER_THRESHOLD}, game rule): ${radObj.shelteredPct.toFixed(1)}%`;
+      subText = `Sheltered (SVF < ${SVF_SHELTER_THRESHOLD}, mission rule): ${radObj.shelteredPct.toFixed(1)}%`;
       barHtml = `
         <div class="lrs-bar-wrap">
           <div class="lrs-bar-fill" style="width:${shW.toFixed(1)}%;"></div>
@@ -3671,7 +3679,7 @@ function buildLensRouteCardHtml(cand) {
       </div>
       ${barHtml}
       <div class="lrs-sub">${subText}</div>
-      <div class="lrs-along" title="Gameplay surface elements within 150 m of route (no recommendations)">
+      <div class="lrs-along" title="Mission surface elements within 150 m of route (no recommendations)">
         <span class="lrs-along-lbl">Along this route (within 150 m):</span>
         <span class="lrs-along-vals">
           ${isCurrentPostLock()
@@ -3680,7 +3688,7 @@ function buildLensRouteCardHtml(cand) {
                <span class="lrs-cnt sci">Sci ${cnt.science}</span>`
             : `<span class="lrs-cnt">Haz ? · Res ? · Sci ?</span>`
           }
-          <span class="mhc-tag game">GAME</span>
+          <span class="mhc-tag game">MISSION RULE</span>
         </span>
       </div>
     </div>
@@ -3843,7 +3851,7 @@ function buildLevelMapAnchors() {
     solText: `Sol ${level01.start.sol}`,
     dataset: 'NASA PDS MSL Rover Localization + USGS Gale DEM',
     whyItMatters: 'Fixes the common starting elevation and slope entry baseline used to compare climb, traverse length, and exposure across candidates.',
-    tags: [{ text: 'measured', cls: 'measured' }, { text: 'game anchor', cls: 'game' }],
+    tags: [{ text: 'measured', cls: 'measured' }, { text: 'mission anchor', cls: 'game' }],
     worldX: startMesh.meshX,
     worldZ: startMesh.meshZ,
     getWorldY: () => sampleWorldY(level01.start.x, level01.start.y, 28)
@@ -3862,7 +3870,7 @@ function buildLevelMapAnchors() {
     whatItIs: `Shared traverse destination inside the core boxwork zone (Elev ${level01.goal.elevation.toFixed(1)} m).`,
     dataset: 'Level 1 mission target + USGS Gale DEM',
     whyItMatters: 'Establishes a uniform target coordinate so every route alternative solves the same origin-to-destination crossing.',
-    tags: [{ text: 'measured', cls: 'measured' }, { text: 'goal: game', cls: 'game' }],
+    tags: [{ text: 'measured', cls: 'measured' }, { text: 'goal: mission rule', cls: 'game' }],
     worldX: goalMesh.meshX,
     worldZ: goalMesh.meshZ,
     getWorldY: () => sampleWorldY(level01.goal.x, level01.goal.y, 78)
@@ -3882,7 +3890,7 @@ function buildLevelMapAnchors() {
     solText: `Sols ${bz.sols}`,
     dataset: 'Curiosity Campaign Boundary (NASA/JPL)',
     whyItMatters: 'Marks the extent of the destination science zone; candidate paths differ in approach gradient and how closely they enter the margin.',
-    tags: [{ text: 'measured', cls: 'measured' }, { text: 'game', cls: 'game' }],
+    tags: [{ text: 'measured', cls: 'measured' }, { text: 'mission rule', cls: 'game' }],
     worldX: bzMesh.meshX,
     worldZ: bzMesh.meshZ,
     getWorldY: () => sampleWorldY(bz.xMin, bz.yMin, 16)
@@ -3899,7 +3907,7 @@ function buildLevelMapAnchors() {
     const elem = level01Elements.elements.find(e => e.id === t.id);
     const tags = [
       { text: 'measured (Curiosity traverse); description unverified', cls: 'unverified' },
-      { text: 'GAME', cls: 'game' }
+      { text: 'MISSION RULE', cls: 'game' }
     ];
     if (import.meta.env.DEV && elem?.whatIsIt?.verified === false) {
       tags.push({ text: 'verify before submission', cls: 'sim' });
@@ -4031,9 +4039,9 @@ function buildLevelMapAnchors() {
       label: 'Steep slope (>25°)',
       hoverTitle: 'Steep slope (>25°)',
       whatItIs: `Escarpment cluster (${st.pctHaz.toFixed(0)}% cells >25° in 500×500 m, up to ${st.maxSlope.toFixed(1)}°).`,
-      dataset: 'slope_5m.bin (derived from 1 m DEM) · >25° threshold: game rule',
-      whyItMatters: 'Exceeding the 25° gameplay threshold marks high wheel-slip and tilt zones that generally force detours or slower climbing speeds.',
-      tags: [{ text: 'derived from DEM', cls: 'dem' }, { text: 'game rule (>25°)', cls: 'game' }],
+      dataset: 'slope_5m.bin (derived from 1 m DEM) · >25° threshold: mission rule',
+      whyItMatters: 'Exceeding the 25° mission threshold marks high wheel-slip and tilt zones that generally force detours or slower climbing speeds.',
+      tags: [{ text: 'derived from DEM', cls: 'dem' }, { text: 'mission rule (>25°)', cls: 'game' }],
       worldX: stMesh.meshX,
       worldZ: stMesh.meshZ,
       getWorldY: () => sampleWorldY(st.x, st.y, 26)
@@ -4114,7 +4122,7 @@ function buildLevelMapAnchors() {
         whatItIs: `Candidate traverse ${r.blindLabel} (${r.metrics.distKm.value.toFixed(2)} km measured path). Click to select this route.`,
         dataset: 'Red Quest A* terrain planner (USGS Gale DEM)',
         whyItMatters: `Highlights the initial departure corridor of ${r.blindLabel} from the shared Start point.`,
-        tags: [{ text: 'game', cls: 'game' }, { text: 'measured DEM', cls: 'measured' }],
+        tags: [{ text: 'mission rule', cls: 'game' }, { text: 'measured DEM', cls: 'measured' }],
         worldX: tagMesh.meshX,
         worldZ: tagMesh.meshZ,
         getWorldY: () => sampleWorldY(chosenWp.x, chosenWp.y, 18)
@@ -4140,12 +4148,12 @@ function buildLevelMapAnchors() {
       label: "Curiosity's actual path (measured, reference)",
       hoverTitle: "Curiosity's actual path (measured, reference)",
       whatItIs: `Trimmed distance to boxwork core zone: ${trimmedCuriosityData.distKm.toFixed(2)} km (measured).`,
-      whatDebrief: `Trimmed distance: ${trimmedCuriosityData.distKm.toFixed(2)} km (measured). Slope tiers along trimmed path (measured DEM, 15°/25° game rule): ${trimmedCuriosityData.pctEasy.toFixed(1)}% Easy (<15°), ${trimmedCuriosityData.pctMod.toFixed(1)}% Moderate (15°–25°), ${trimmedCuriosityData.pctHaz.toFixed(1)}% Hazardous (>25°).`,
+      whatDebrief: `Trimmed distance: ${trimmedCuriosityData.distKm.toFixed(2)} km (measured). Slope tiers along trimmed path (measured DEM, 15°/25° mission rule): ${trimmedCuriosityData.pctEasy.toFixed(1)}% Easy (<15°), ${trimmedCuriosityData.pctMod.toFixed(1)}% Moderate (15°–25°), ${trimmedCuriosityData.pctHaz.toFixed(1)}% Hazardous (>25°).`,
       solText: `Sols ${pts[0].sol}–${pts[pts.length - 1].sol} (trimmed)`,
       dataset: 'NASA PDS MSL Curiosity Rover Localization + USGS Gale DEM',
       whyItMatters: 'Actual Curiosity traverse trimmed from Start until its first entry into the boxwork core zone.',
       tags: [{ text: 'measured', cls: 'measured' }],
-      tagsDebrief: [{ text: 'measured', cls: 'measured' }, { text: 'measured DEM', cls: 'dem' }, { text: 'game rule', cls: 'game' }],
+      tagsDebrief: [{ text: 'measured', cls: 'measured' }, { text: 'measured DEM', cls: 'dem' }, { text: 'mission rule', cls: 'game' }],
       worldX: curMesh.meshX,
       worldZ: curMesh.meshZ,
       getWorldY: () => sampleWorldY(anchorPt.x, anchorPt.y, 18)
@@ -4986,6 +4994,24 @@ function bindGameEvents() {
         debriefOverlayDismissed = false;
         applyGameScreenState(levelState.getState());
       }
+    });
+  }
+
+  const openDataMethodsModal = () => {
+    if (!dataMethodsModal) return;
+    dataMethodsModal.classList.remove('hidden');
+  };
+  const closeDataMethodsModal = () => {
+    if (!dataMethodsModal) return;
+    dataMethodsModal.classList.add('hidden');
+  };
+
+  if (btnDataMethods) btnDataMethods.addEventListener('click', openDataMethodsModal);
+  if (btnDmClose) btnDmClose.addEventListener('click', closeDataMethodsModal);
+  if (btnDmDismiss) btnDmDismiss.addEventListener('click', closeDataMethodsModal);
+  if (dataMethodsModal) {
+    dataMethodsModal.addEventListener('click', e => {
+      if (e.target === dataMethodsModal) closeDataMethodsModal();
     });
   }
 

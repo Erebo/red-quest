@@ -621,9 +621,9 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
         whatItIs: 'Surface anomaly near the traverse corridor. Activate Survey Kit → ELEMENTS and click this marker to identify it, add it to the Field Codex, and earn survey points.',
         effectOnMission: null,
         solText: null,
-        dataset: 'Survey Kit Field Identification (GAME)',
+        dataset: 'Survey Kit Field Identification (MISSION RULE)',
         whyItMatters: 'Identifying corridor elements helps verify nearby hazards, resources, and science features.',
-        tags: [{ text: 'GAME', cls: 'game' }, { text: 'unidentified', cls: 'sim' }],
+        tags: [{ text: 'MISSION RULE', cls: 'game' }, { text: 'unidentified', cls: 'sim' }],
         sourceChip: 'game',
         unidentified: true,
         rawElement: el
@@ -631,7 +631,7 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
     }
 
     const isTarget = el.id === 'target-1' || el.id === 'target-2' || el.id === 'target-3';
-    const tags = [{ text: 'GAME', cls: 'game' }];
+    const tags = [{ text: 'MISSION RULE', cls: 'game' }];
     if (isTarget) {
       tags.unshift({ text: 'measured (Curiosity traverse); description unverified', cls: 'unverified' });
     } else if (el.source === 'derived from DEM') {
@@ -667,7 +667,9 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
       dataset: el.coordinateSource === 'measured'
         ? `Curiosity ROVER location (measured) · ${el.placementRule}`
         : `${el.source} · ${el.placementRule}`,
-      whyItMatters: `Effect on mission: ${el.effectOnMission}`,
+      whyItMatters: el.effectOnMission
+        ? (el.effectOnMission.startsWith('Mission effect:') ? el.effectOnMission : `Mission effect: ${el.effectOnMission}`)
+        : 'Identified surface feature.',
       tags,
       sourceChip: el.source === 'derived from DEM' ? 'derived' : 'game',
       rawElement: el

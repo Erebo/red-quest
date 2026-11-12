@@ -539,7 +539,7 @@ export function renderDebriefCalcRevealDOM({
           <th>Estimate</th>
           <th>True value</th>
           <th>Error %</th>
-          <th>Accuracy <span class="tag-pill game">GAME RULE</span></th>
+          <th>Accuracy <span class="tag-pill game">MISSION RULE</span></th>
         </tr>
       </thead>
     `;

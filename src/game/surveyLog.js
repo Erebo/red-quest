@@ -42,7 +42,7 @@ export const SURVEY_LOG_ROWS = Object.freeze([
     label: 'Elements identified',
     unit: '',
     decimals: 0,
-    tagText: 'GAME',
+    tagText: 'MISSION RULE',
     tagCls: 'game'
   }),
   Object.freeze({
@@ -51,7 +51,7 @@ export const SURVEY_LOG_ROWS = Object.freeze([
     label: 'Dust %',
     unit: '%',
     decimals: 1,
-    tagText: 'SIM',
+    tagText: 'MODELED',
     tagCls: 'sim'
   })
 ]);

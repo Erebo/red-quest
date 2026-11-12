@@ -18,7 +18,7 @@ export const LEVEL1_DUST_ZONES = Object.freeze([
     ry: 240.0,
     rotRad: 0.25,
     intensityLabel: 'Elevated dust lofting',
-    source: 'GAME / SIM',
+    source: 'MISSION RULE / MODELED',
     note: 'Open pediment sector prone to convective dust devil sweeping and silt suspension.'
   }),
   Object.freeze({
@@ -30,7 +30,7 @@ export const LEVEL1_DUST_ZONES = Object.freeze([
     ry: 260.0,
     rotRad: -0.35,
     intensityLabel: 'Trapped basaltic silt',
-    source: 'GAME / SIM',
+    source: 'MISSION RULE / MODELED',
     note: 'Leeward hollow trapping windblown dust and loose rippled basalt fines.'
   }),
   Object.freeze({
@@ -42,7 +42,7 @@ export const LEVEL1_DUST_ZONES = Object.freeze([
     ry: 205.0,
     rotRad: 0.15,
     intensityLabel: 'Moderate dust mantle',
-    source: 'GAME / SIM',
+    source: 'MISSION RULE / MODELED',
     note: 'Low-gradient corridor floor collecting wind-deposited fine dust.'
   }),
   Object.freeze({
@@ -54,7 +54,7 @@ export const LEVEL1_DUST_ZONES = Object.freeze([
     ry: 175.0,
     rotRad: -0.18,
     intensityLabel: 'Fine aeolian drape',
-    source: 'GAME / SIM',
+    source: 'MISSION RULE / MODELED',
     note: 'Wind-sorted dust sheet along mid-corridor approach bench.'
   }),
   Object.freeze({
@@ -66,7 +66,7 @@ export const LEVEL1_DUST_ZONES = Object.freeze([
     ry: 165.0,
     rotRad: 0.0,
     intensityLabel: 'Loose surface dust',
-    source: 'GAME / SIM',
+    source: 'MISSION RULE / MODELED',
     note: 'Shallow sediment sink near north central entry bench.'
   })
 ]);

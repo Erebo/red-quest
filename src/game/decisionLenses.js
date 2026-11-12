@@ -47,7 +47,7 @@ export const LENS_CONFIG = Object.freeze({
     rampMid: 'Bedrock',
     rampMax: 'Bright dust',
     swatches: [
-      { kind: 'outline', color: '#eb4c42', label: 'Thin red outline: steep >25° hazard perimeter (game rule / DEM)' }
+      { kind: 'outline', color: '#eb4c42', label: 'Thin red outline: steep >25° hazard perimeter (mission rule / DEM)' }
     ],
     caveat: 'Natural HiRISE mosaic (~2 m/px); steep hazards outlined only, no red fill.',
     stripCaveat: 'HiRISE orbital context (~2 m/px); distances and ascent measured from DEM.'
@@ -68,8 +68,8 @@ export const LENS_CONFIG = Object.freeze({
       { kind: 'box', color: '#2ecc71', label: '< 15° Easy · 15°–25° Moderate · 25 m DEM contours' },
       { kind: 'box', color: '#ff3a2e', label: '> 25° Steep hazard (soft pulse, 1.5× vertical relief)' }
     ],
-    caveat: 'Slopes derived from ~4.9 m DEM; 15°/25° thresholds are game rules.',
-    stripCaveat: 'Slopes derived from DEM (~4.9 m); 15° / 25° tiers are game rules.'
+    caveat: 'Slopes derived from ~4.9 m DEM; 15°/25° thresholds are mission rules.',
+    stripCaveat: 'Slopes derived from DEM (~4.9 m); 15° / 25° tiers are mission rules.'
   },
   minerals: {
     id: 'minerals',
@@ -124,8 +124,8 @@ export const LENS_CONFIG = Object.freeze({
       { kind: 'box', color: '#ffd54a', label: 'Lit ground (high solar incidence)' },
       { kind: 'box', color: '#183b7a', label: 'Cast / terrain shadow' }
     ],
-    caveat: 'derived from DEM; sun position SIM',
-    stripCaveat: 'derived from DEM; sun position SIM'
+    caveat: 'derived from DEM; sun position MODELED',
+    stripCaveat: 'derived from DEM; sun position MODELED'
   },
   radiation: {
     id: 'radiation',
@@ -135,16 +135,16 @@ export const LENS_CONFIG = Object.freeze({
     targetDim: 0.45,
     targetExag: 1.0,
     rampCss: 'linear-gradient(90deg, #146b3a 0%, #2e7a6d 38%, #9b489d 72%, #e832c9 100%)',
-    rampUnits: 'Sky-View Factor (SVF 0.0–1.0) · SVF < 0.85 sheltered: game rule',
+    rampUnits: 'Sky-View Factor (SVF 0.0–1.0) · SVF < 0.85 sheltered: mission rule',
     rampMin: '0.54 Sheltered',
-    rampMid: '0.85 game rule',
+    rampMid: '0.85 mission rule',
     rampMax: '1.00 Exposed',
     swatches: [
-      { kind: 'box', color: '#146b3a', label: 'Sheltered cells (SVF < 0.85 · game rule)' },
+      { kind: 'box', color: '#146b3a', label: 'Sheltered cells (SVF < 0.85 · mission rule)' },
       { kind: 'box', color: '#e832c9', label: 'Exposed crests / open sky (SVF → 1.0)' }
     ],
-    caveat: 'SIM proxy from terrain, not a measured dose map',
-    stripCaveat: 'SIM proxy from terrain, not a measured dose map · SVF < 0.85 sheltered: game rule'
+    caveat: 'modeled radiation (not a measured dose)',
+    stripCaveat: 'modeled radiation (not a measured dose) · SVF < 0.85 sheltered: mission rule'
   }
 });
 

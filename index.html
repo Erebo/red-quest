@@ -126,6 +126,10 @@
         <span class="mode-lbl">RESEARCH</span>
       </button>
     </div>
+    <button id="btn-data-methods" class="hud-help-btn" type="button" title="Data provenance, methods &amp; instrument sources" aria-label="Data &amp; Methods">
+      <svg class="ui-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span class="help-lbl">Data &amp; Methods</span>
+    </button>
     <button id="btn-tutorial-help" class="hud-help-btn mission-only-ctrl" type="button" title="Replay guided tutorial" aria-label="Help — Replay tutorial">
       <svg class="ui-ico" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .8c0 1.8-2.5 2.2-2.5 3.6"/><circle cx="12" cy="17.2" r=".7" fill="currentColor"/></svg>
       <span class="help-lbl">Help</span>
@@ -268,7 +272,7 @@
         <span class="sk-lbl">HAZARD</span>
         <span class="sk-badge hidden">✓</span>
       </button>
-      <button type="button" id="btn-survey-dust" class="sk-tool-btn" data-tool="dust" aria-pressed="false" title="Click route for % in dust zones (GAME/SIM), or terrain for dust check">
+      <button type="button" id="btn-survey-dust" class="sk-tool-btn" data-tool="dust" aria-pressed="false" title="Click route for % in dust zones (MISSION RULE / MODELED), or terrain for dust check">
         <span class="sk-ico">🌫</span>
         <span class="sk-lbl">DUST</span>
         <span class="sk-badge hidden">✓</span>
@@ -333,7 +337,7 @@
       <div class="leg-item"><span class="leg-line" id="leg-route-c" style="background:#fb923c;"></span><span>Route C</span></div>
       <div id="legend-ref-row" class="leg-item hidden"><span class="leg-line leg-ref"></span><span>Curiosity's actual path (measured, reference)</span></div>
 
-      <div class="leg-group-title mission-only-legend">Elements by Family <span class="tag-pill game">GAME</span></div>
+      <div class="leg-group-title mission-only-legend">Elements by Family <span class="tag-pill game">MISSION RULE</span></div>
       <div class="leg-item mission-only-legend"><span class="leg-sym leg-fam-haz"></span><span>Hazards (sand, rockfall, dust, shadow)</span></div>
       <div class="leg-item mission-only-legend"><span class="leg-sym leg-fam-res"></span><span>Resources (shelter, O₂, solar, relay)</span></div>
       <div class="leg-item mission-only-legend"><span class="leg-sym leg-fam-sci"></span><span>Science (targets, drill, geology)</span></div>
@@ -446,7 +450,7 @@
             <div class="li"><span class="sw" style="background:#2ecc71"></span>&lt; 15° Easy</div>
             <div class="li"><span class="sw" style="background:#f1c40f"></span>15°–25° Moderate</div>
             <div class="li"><span class="sw" style="background:#e74c3c"></span>&gt; 25° Hazardous</div>
-            <div class="legend-note">Slopes: measured (derived from DEM). Thresholds (15°/25°): game rules.</div>
+            <div class="legend-note">Slopes: measured (derived from DEM). Thresholds (15°/25°): mission rules.</div>
           </div>
         </details>
       </details>
@@ -535,7 +539,7 @@
         <summary>
           <svg class="rl-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="m17.7 17.7 1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/></svg>
           <span>Atmosphere</span>
-          <span class="sim-badge">SIM</span>
+          <span class="sim-badge">MODELED</span>
         </summary>
         <div class="slider-row">
           <label>Time of day</label>
@@ -585,7 +589,7 @@
         <h4>Measured data <span class="tag-pill measured">MEASURED</span></h4>
         <div class="ig"><span class="il">Elevation <small title="USGS / NASA PDS MSL Gale Crater 1 m DEM Mosaic v3 (MOLA reference areoid 0 m datum)">(MSL Gale DEM, resampled ~4.9 m)</small></span><span class="iv" id="i-elev">—</span></div>
         <div class="ig"><span class="il">Slope <small>(5 m DEM)</small></span><span class="iv" id="i-slope">—</span></div>
-        <div class="ig"><span class="il">Slope tier <span class="tag-pill game">GAME</span></span><span class="iv" id="i-tier">—</span></div>
+        <div class="ig"><span class="il">Slope tier <span class="tag-pill game">MISSION RULE</span></span><span class="iv" id="i-tier">—</span></div>
         <div class="ig"><span class="il">Local X, Y</span><span class="iv mono" id="i-xy">—</span></div>
         <div class="ig"><span class="il">Lon, Lat</span><span class="iv mono" id="i-lonlat">—</span></div>
         <div class="ig" id="i-sol-row"><span class="il">Nearest sol <small>(Curiosity route)</small></span><span class="iv" id="i-sol">—</span></div>
@@ -595,7 +599,7 @@
       </div>
 
       <div class="insp-section env-section">
-        <h4>Environment <span class="sim-badge">SIM</span></h4>
+        <h4>Environment <span class="sim-badge">MODELED</span></h4>
         <div class="ig"><span class="il">Radiation dose rate</span><span class="iv" id="i-rad">—</span></div>
         <div class="ig"><span class="il">Dust opacity (τ) / visibility</span><span class="iv" id="i-dust">—</span></div>
         <div class="ig"><span class="il">Surface temperature</span><span class="iv" id="i-temp">—</span></div>
@@ -640,17 +644,17 @@
         <table class="planner-table">
           <thead>
             <tr>
-              <th style="width: 145px;">Candidate Route <span class="tag-pill game">GAME</span></th>
-              <th class="col-true-val" style="width: 95px;">Best For <span class="tag-pill game">GAME</span></th>
+              <th style="width: 145px;">Candidate Route <span class="tag-pill game">MISSION RULE</span></th>
+              <th class="col-true-val" style="width: 95px;">Profile <span class="tag-pill game">MISSION RULE</span></th>
               <th title="Total 3D route distance">Distance (km) <span class="tag-pill measured">MEASURED</span></th>
               <th title="Cumulative uphill ascent / net elevation change">Ascent / Net (m) <span class="tag-pill measured">MEASURED</span></th>
               <th title="Maximum terrain gradient encountered">Max Slope <span class="tag-pill measured">MEASURED</span></th>
-              <th title="Slopes measured (derived from DEM); <15° Easy, 15°-25° Moderate, >25° Hazardous thresholds are game rules">Slope Tiers (% E / M / H) <span class="tag-pill measured">MEASURED (DEM)</span> <span class="tag-pill game">15°/25° GAME</span></th>
-              <th class="col-true-val" title="Estimated drive time based on slope slowdown and climbing speed">Est. Time <span class="sim-badge">SIM</span></th>
-              <th class="col-true-val" title="Electrical housekeeping, wheel motor work, and gravitational ascent work">Energy <span class="sim-badge">SIM</span></th>
-              <th class="col-true-val" title="Cumulative radiation dose integrated over traverse time">Radiation <span class="sim-badge">SIM</span></th>
-              <th class="col-true-val" title="Count of CRISM hydrated coverage pixels (≤100m) + science targets (≤100m)">Science <span class="tag-pill game">GAME</span></th>
-              <th class="col-true-val" title="Composite safety and terrain difficulty score (0-100)">Risk <span class="sim-badge">SIM</span></th>
+              <th title="Slopes measured (derived from DEM); <15° Easy, 15°-25° Moderate, >25° Hazardous thresholds are mission rules">Slope Tiers (% E / M / H) <span class="tag-pill measured">MEASURED (DEM)</span> <span class="tag-pill game">15°/25° MISSION RULE</span></th>
+              <th class="col-true-val" title="Estimated drive time based on slope slowdown and climbing speed">Est. Time <span class="sim-badge">MODELED</span></th>
+              <th class="col-true-val" title="Electrical housekeeping, wheel motor work, and gravitational ascent work">Energy <span class="sim-badge">MODELED</span></th>
+              <th class="col-true-val" title="Cumulative radiation dose integrated over traverse time">Radiation <span class="sim-badge">MODELED</span></th>
+              <th class="col-true-val" title="Count of CRISM hydrated coverage pixels (≤100m) + science targets (≤100m)">Science <span class="tag-pill game">MISSION RULE</span></th>
+              <th class="col-true-val" title="Composite safety and terrain difficulty score (0-100)">Risk <span class="sim-badge">MODELED</span></th>
               <th style="width: 45px; text-align: center;">View</th>
             </tr>
           </thead>
@@ -691,7 +695,7 @@
   <section id="game-briefing-overlay" class="game-overlay" role="dialog" aria-labelledby="briefing-title">
     <div class="game-card">
       <div class="game-card-top">
-        <span class="tag-pill game">GAME · LEVEL 1</span>
+        <span class="tag-pill game">MISSION · LEVEL 1</span>
         <span class="tag-pill measured">NASA PDS · GALE CRATER</span>
       </div>
       <h1 id="briefing-title">—</h1>
@@ -711,9 +715,10 @@
         <ul id="briefing-targets-list"></ul>
       </div>
       <div class="game-provenance-note">
-        Data tags: <span class="tag-pill measured">MEASURED</span> = from <code>public/data/</code> ·
-        <span class="tag-pill game">GAME</span> = gameplay rules/labels ·
-        <span class="sim-badge">SIM</span> = physics/environment models
+        Data tags: <span class="tag-pill measured">MEASURED</span> = NASA instrument data ·
+        <span class="tag-pill derived">DERIVED</span> = DEM calculations ·
+        <span class="tag-pill game">MISSION RULE</span> = scenario rules ·
+        <span class="sim-badge">MODELED</span> = modeled estimates
       </div>
       <div class="game-actions">
         <button id="btn-start-mission" class="btn-game-primary btn-lg">Start</button>
@@ -748,7 +753,7 @@
       </div>
       <div id="sro-ident-summary" class="dcr-neutral" style="margin-bottom:8px;">—</div>
 
-      <div class="sro-section-title">True Hazard Index per Route <span class="tag-pill game">GAME</span> <span class="sim-badge">SIM</span></div>
+      <div class="sro-section-title">True Hazard Index per Route <span class="tag-pill game">MISSION RULE</span> <span class="sim-badge">MODELED</span></div>
       <div id="sro-haz-index-row" class="sro-haz-index-row"></div>
 
       <div class="sro-section-title" style="margin-top:10px;">Your Numbers vs. True Route Values</div>
@@ -790,13 +795,13 @@
             <thead>
               <tr>
                 <th>Route</th>
-                <th>Strategy <span class="tag-pill game">GAME</span></th>
+                <th>Profile <span class="tag-pill game">MISSION RULE</span></th>
                 <th>Distance <span class="tag-pill measured">MEASURED</span></th>
-                <th>Est. Time <span class="sim-badge">SIM</span></th>
-                <th>Energy <span class="sim-badge">SIM</span></th>
-                <th>Radiation <span class="sim-badge">SIM</span></th>
-                <th>Science <span class="tag-pill game">GAME</span></th>
-                <th>Risk <span class="sim-badge">SIM</span></th>
+                <th>Est. Time <span class="sim-badge">MODELED</span></th>
+                <th>Energy <span class="sim-badge">MODELED</span></th>
+                <th>Radiation <span class="sim-badge">MODELED</span></th>
+                <th>Science <span class="tag-pill game">MISSION RULE</span></th>
+                <th>Risk <span class="sim-badge">MODELED</span></th>
               </tr>
             </thead>
             <tbody id="debrief-true-tbody"></tbody>
@@ -806,7 +811,7 @@
         <div id="debrief-curiosity-comparison" class="debrief-curiosity-comp">
           <div class="dcr-head">
             <h3>Route vs. Curiosity Reference Comparison (Start → Boxwork Core Zone)</h3>
-            <span class="calc-head-sub">Side-by-side comparison only · Distance <span class="tag-pill measured">MEASURED</span> · Slope tiers <span class="tag-pill measured">MEASURED DEM</span> / <span class="tag-pill game">GAME RULE</span></span>
+            <span class="calc-head-sub">Side-by-side comparison only · Distance <span class="tag-pill measured">MEASURED</span> · Slope tiers <span class="tag-pill measured">MEASURED DEM</span> / <span class="tag-pill game">MISSION RULE</span></span>
           </div>
           <div class="table-wrap" style="margin-top:6px;">
             <table class="planner-table debrief-comp-table">
@@ -814,9 +819,9 @@
                 <tr>
                   <th>Path</th>
                   <th>Distance<br><span class="tag-pill measured">MEASURED</span></th>
-                  <th>Easy (&lt;15°)<br><span class="tag-pill game">GAME RULE</span></th>
-                  <th>Moderate (15°–25°)<br><span class="tag-pill game">GAME RULE</span></th>
-                  <th>Hazardous (&gt;25°)<br><span class="tag-pill game">GAME RULE</span></th>
+                  <th>Easy (&lt;15°)<br><span class="tag-pill game">MISSION RULE</span></th>
+                  <th>Moderate (15°–25°)<br><span class="tag-pill game">MISSION RULE</span></th>
+                  <th>Hazardous (&gt;25°)<br><span class="tag-pill game">MISSION RULE</span></th>
                 </tr>
               </thead>
               <tbody id="debrief-comp-tbody"></tbody>
@@ -826,7 +831,7 @@
 
         <div id="debrief-calc-reveal" class="debrief-calc-reveal">
           <div class="dcr-head">
-            <h3>Survey &amp; Planning Accuracy — Your Answers vs. True Metrics <span class="tag-pill game">GAME RULE</span></h3>
+            <h3>Survey &amp; Planning Accuracy — Your Answers vs. True Metrics <span class="tag-pill game">MISSION RULE</span></h3>
             <span class="calc-head-sub">Shows your Survey Kit &amp; Calculator accuracy vs. true route values</span>
           </div>
           <div class="dcr-summary">
@@ -845,6 +850,74 @@
         <button id="btn-debrief-dismiss" class="btn-planner-tool" type="button">Close</button>
         <button id="btn-debrief-choose" class="btn-planner-tool" type="button">Choose a Route →</button>
         <button id="btn-debrief-explore" class="btn-game-primary hidden" type="button">Start Exploration →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Data & Methods Modal (Accessible in both MISSION and RESEARCH modes) -->
+  <section id="data-methods-modal" class="game-overlay hidden overlay-top" role="dialog" aria-labelledby="dm-modal-title" aria-modal="true">
+    <div class="game-card wide dm-modal-card">
+      <div class="game-card-top">
+        <span class="tag-pill measured">PROVENANCE &amp; INSTRUMENTATION</span>
+        <h2 id="dm-modal-title" style="margin:0;font-size:15px;color:#f1f5f9;display:inline-block;margin-left:8px;">Data &amp; Methods</h2>
+        <button id="btn-dm-close" class="game-close-btn" type="button" title="Close Data &amp; Methods" aria-label="Close Data &amp; Methods">×</button>
+      </div>
+      <div class="dm-scroll-body">
+        <div class="dm-section">
+          <h3 class="dm-section-title">Value Provenance Chips</h3>
+          <p class="dm-desc">Every numerical metric, overlay, and attribute in Red Quest displays a provenance chip distinguishing real NASA planetary data from modeled estimates and scenario design rules:</p>
+          <div class="dm-chip-grid">
+            <div class="dm-chip-item">
+              <div class="dm-chip-hdr"><span class="tag-pill measured">MEASURED</span><strong>NASA Instrument Data</strong></div>
+              <p>Direct observations from orbiter and rover instruments without interpolation or synthetic modeling. Examples: MOLA elevation baselines, CRISM hyperspectral band absorptions, THEMIS nighttime thermal brightness, and Curiosity rover drive telemetry.</p>
+            </div>
+            <div class="dm-chip-item">
+              <div class="dm-chip-hdr"><span class="tag-pill derived">DERIVED</span><strong>Computed from NASA Data</strong></div>
+              <p>Values calculated mathematically or geometrically from verified NASA datasets. Examples: 3D terrain slopes computed from the 5 m DEM baseline, cumulative uphill ascent, net elevation change, 3D Euclidean traverse distance, and viewshed geometry.</p>
+            </div>
+            <div class="dm-chip-item">
+              <div class="dm-chip-hdr"><span class="sim-badge">MODELED</span><strong>Estimated / Simulated Models</strong></div>
+              <p>Environmental physics and operational models calculated from formulas. Not measured sensor readings. Examples: rover travel time based on climbing speeds, wheel motor and housekeeping energy consumption, cumulative cosmic radiation dose (RAD proxy), and atmospheric dust optical depth (tau).</p>
+            </div>
+            <div class="dm-chip-item">
+              <div class="dm-chip-hdr"><span class="tag-pill game">MISSION RULE</span><strong>Mission Scenario Design Choices</strong></div>
+              <p>Thresholds, classifications, and parameters established specifically for this mission planning scenario. Examples: slope safety tiers (&lt;15° Easy, 15°–25° Moderate, &gt;25° Hazardous); Sky-View Factor (&lt;0.85) radiation shelter threshold; designated target coordinates.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="dm-section" style="margin-top:16px;">
+          <h3 class="dm-section-title">Verified NASA Data Sources</h3>
+          <div class="dm-sources-grid">
+            <div class="dm-source-item">
+              <strong>HiRISE (High Resolution Imaging Science Experiment)</strong>
+              <span>Sub-meter orbital imagery context and visible surface morphology (NASA/JPL/University of Arizona).</span>
+            </div>
+            <div class="dm-source-item">
+              <strong>MSL DEM (USGS / NASA PDS)</strong>
+              <span>High-resolution 1 m and 4.9 m digital elevation models of Gale Crater and Mount Sharp (Aeolis Mons).</span>
+            </div>
+            <div class="dm-source-item">
+              <strong>THEMIS (Thermal Emission Imaging System)</strong>
+              <span>Nighttime infrared thermal inertia and surface brightness temperature maps (NASA/JPL/ASU).</span>
+            </div>
+            <div class="dm-source-item">
+              <strong>CRISM (Compact Reconnaissance Imaging Spectrometer for Mars)</strong>
+              <span>Orbital hyperspectral mineralogy identifying phyllosilicates (clays) and hydrated sulfates (NASA/JHUAPL).</span>
+            </div>
+            <div class="dm-source-item">
+              <strong>Curiosity Rover Traverse (NASA PDS / JPL)</strong>
+              <span>True ground-truth drive path coordinates, sol-by-sol telemetry, and waypoint drill sites.</span>
+            </div>
+            <div class="dm-source-item">
+              <strong>MSL RAD (Radiation Assessment Detector)</strong>
+              <span>Surface cosmic ray and solar energetic particle dose rate baselines on the floor of Gale Crater.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="game-actions" style="margin-top:14px;display:flex;justify-content:flex-end;">
+        <button id="btn-dm-dismiss" class="btn-game-primary" type="button">Close</button>
       </div>
     </div>
   </section>

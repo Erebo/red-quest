@@ -37,7 +37,7 @@ export const WALKING_SPEED_CONFIG = Object.freeze({
   slopeSlowdownSpanDeg: 10.0,
   slopePenaltyFactor: 0.40,
   minSlopeEfficiency: 0.20,
-  disclaimer: 'game estimate (0.10 km/h flat cruise, 20 m/h vertical climb) — not a real EVA time'
+  disclaimer: 'mission estimate (0.10 km/h flat cruise, 20 m/h vertical climb) — not a real EVA time'
 });
 
 export const PLANNER_ACCURACY_BANDS = Object.freeze({
@@ -139,7 +139,7 @@ export const ROUTE_CALC_FIELDS = Object.freeze([
   }),
   Object.freeze({
     key: 'timeHours',
-    label: 'Travel time (game estimate)',
+    label: 'Travel time (mission estimate)',
     unit: 'h',
     min: 0.0,
     max: 100.0,
@@ -149,7 +149,7 @@ export const ROUTE_CALC_FIELDS = Object.freeze([
     sliderStep: 1,
     curvePower: 1.0,
     decimals: 1,
-    chipText: 'game rule',
+    chipText: 'mission rule',
     chipCls: 'game',
     scaleNote: '0 – 100 h (not real EVA time)'
   })
