@@ -43,6 +43,11 @@ import {
   renderDebriefCalcRevealDOM
 } from './game/routeCalculator.js';
 import { createSurveyKitController } from './game/surveyKit.js';
+import {
+  createSurveyLogController,
+  renderSurveyResultOverlayDOM
+} from './game/surveyLog.js';
+import { createDustZonesOverlay } from './game/dustZones.js';
 import { playUiSound } from './config.js';
 import { createIntroController } from './ui/intro.js';
 import { createMissionSelectController } from './ui/missionSelect.js';
@@ -267,9 +272,24 @@ let showCuriosityPath = true;
 const btnCalcToggle = document.getElementById('btn-calc-toggle');
 const routeCalcPanel = document.getElementById('route-calc-panel');
 const surveyToolGrid = document.getElementById('survey-tool-grid');
+const surveyScansLeft = document.getElementById('survey-scans-left');
+const surveyRingFg = document.getElementById('survey-ring-fg');
+const surveyRingText = document.getElementById('survey-ring-text');
+const surveyIdProgress = document.getElementById('survey-id-progress');
+const surveyLogTbody = document.getElementById('survey-log-tbody');
+const surveyCalcGrid = document.getElementById('survey-calc-grid');
 const surveyLogLine = document.getElementById('survey-log-line');
 const btnSurveyClearPins = document.getElementById('btn-survey-clear-pins');
 const surveyPinsLayer = document.getElementById('survey-pins-layer');
+const surveyResultOverlay = document.getElementById('survey-result-overlay');
+const sroElemScore = document.getElementById('sro-elem-score');
+const sroHazScore = document.getElementById('sro-haz-score');
+const sroTotalScore = document.getElementById('sro-total-score');
+const sroRank = document.getElementById('sro-rank');
+const sroIdentSummary = document.getElementById('sro-ident-summary');
+const sroHazIndexRow = document.getElementById('sro-haz-index-row');
+const sroTablesWrap = document.getElementById('sro-tables-wrap');
+const btnSurveyResultContinue = document.getElementById('btn-survey-result-continue');
 const debriefCalcAcc = document.getElementById('debrief-calc-acc');
 const debriefCalcAnswered = document.getElementById('debrief-calc-answered');
 const debriefCalcScore = document.getElementById('debrief-calc-score');
@@ -278,6 +298,10 @@ const debriefCalcTables = document.getElementById('debrief-calc-tables');
 
 let routeCalc = null;
 let surveyKit = null;
+let surveyLog = null;
+let dustZonesOverlay = null;
+let awaitingSurveyResultContinue = false;
+let frozenSurveyEval = null;
 let lastCalcMaskedState = null;
 
 function isRouteCalcMasked() {
@@ -291,7 +315,6 @@ function syncSurveyKitUi() {
   if (surveyToolGrid) {
     surveyToolGrid.querySelectorAll('.sk-tool-btn').forEach(btn => {
       const t = btn.dataset.tool;
-      if (t === 'dust') return;
       const isAct = activeTool === t;
       btn.classList.toggle('active', isAct);
       btn.setAttribute('aria-pressed', isAct ? 'true' : 'false');
@@ -300,10 +323,13 @@ function syncSurveyKitUi() {
     });
   }
   if (surveyLogLine) {
-    surveyLogLine.textContent = `Scans: ${log.scans} · Tools used: ${log.toolsUsed}/${log.totalTools}`;
+    surveyLogLine.textContent = `Point pins: ${log.pinCount}`;
   }
   const screen = levelState.getState().screen;
   const canUseTools = currentViewMode === 'MISSION' && (screen === GAME_STATES.ANALYZE || screen === GAME_STATES.CHOOSE);
+  if (dustZonesOverlay && dustZonesOverlay.group) {
+    dustZonesOverlay.group.visible = Boolean(canUseTools && activeTool === 'dust');
+  }
   document.body.classList.toggle('cursor-survey-tool', Boolean(canUseTools && activeTool));
 }
 
@@ -444,6 +470,7 @@ function handleAnchorOrElementSelect(anchorOrId) {
   if (!missionElements) return;
   const id = typeof anchorOrId === 'string' ? anchorOrId : anchorOrId.id;
   if (!id) return;
+  if (!missionElements.isElementIdentified(id)) return;
   const el = missionElements.getElementById(id);
   if (el) {
     const unlockedNow = missionElements.unlockType(el.type);
@@ -1462,6 +1489,9 @@ function applyVerticalExaggeration(exag, { skipNormals = false, syncSlider = tru
   if (surveyKit) {
     surveyKit.updateExaggeration(currentExag);
   }
+  if (dustZonesOverlay) {
+    dustZonesOverlay.updateExaggeration(currentExag);
+  }
 
   if (boxworkGroup && boxworkGroup.children[0]) {
     const bLine = boxworkGroup.children[0];
@@ -2194,6 +2224,11 @@ function resetCustomizationToStandard() {
     surveyKit.reset();
     syncSurveyKitUi();
   }
+  if (surveyLog) {
+    surveyLog.reset();
+  }
+  awaitingSurveyResultContinue = false;
+  frozenSurveyEval = null;
   labelCatChips.forEach(chip => {
     chip.classList.add('active');
     chip.setAttribute('aria-pressed', 'true');
@@ -3164,6 +3199,72 @@ function bindUIEvents() {
     if (currentViewMode === 'MISSION' && surveyKit && surveyKit.getActiveTool()) {
       const screen = levelState.getState().screen;
       if (screen === GAME_STATES.ANALYZE || screen === GAME_STATES.CHOOSE) {
+        const activeTool = surveyKit.getActiveTool();
+
+        // 1) Identifying corridor ? elements using the ELEMENTS tool (free of route scan budget)
+        if (activeTool === 'elements' && missionElements) {
+          const hitElem = findHitMissionElement();
+          if (hitElem) {
+            const idResult = missionElements.identifyElement(hitElem.id);
+            if (surveyLog) {
+              const idSet = new Set(
+                [...missionElements.getIdentifiableIds()].filter(id => missionElements.isElementIdentified(id))
+              );
+              surveyLog.updateIdentificationStats(
+                idResult.identifiedCount,
+                idResult.totalIdentifiable,
+                idSet
+              );
+            }
+            renderFieldCodex();
+            surveyKit.showElementIdentifiedPin(hitElem.x, hitElem.y, idResult);
+            if (mapLabels) {
+              const cardPayload = missionElements.buildElementCardPayload(hitElem);
+              if (cardPayload) mapLabels.showDetailCard(cardPayload);
+            }
+            if (idResult.identifiedNow) {
+              showPlannerToast(`★ Identified: ${hitElem.name} (+Field Codex & points)`);
+            }
+            syncSurveyKitUi();
+            if (tutorialCtrl) tutorialCtrl.notifyAction('survey-scan');
+            return;
+          }
+        }
+
+        // 2) Full-route reading when clicking Route A, B, or C lines (-1 scan if new)
+        const hitRouteId = findHitCandidateRouteId();
+        if (hitRouteId && surveyLog) {
+          const scanRes = surveyLog.scanRoute(hitRouteId, activeTool);
+          if (!scanRes.ok) {
+            if (scanRes.outOfBudget) {
+              showPlannerToast(`Route scan budget exhausted (Scans left: ${scanRes.scansLeft}). Point reads, elements & repeats remain free.`);
+            }
+            return;
+          }
+          const tHit = getTerrainIntersection(raycaster.ray);
+          const cand = plannerCandidates.find(c => c.id === hitRouteId);
+          const midWp = cand && cand.waypoints && cand.waypoints.length
+            ? cand.waypoints[Math.floor(cand.waypoints.length * 0.5)]
+            : plannerStart;
+          const pinX = tHit ? tHit.lx : midWp.x;
+          const pinY = tHit ? tHit.ly : midWp.y;
+          const idNear = missionElements
+            ? scanRes.truth.nearElementIds.filter(id => missionElements.isElementIdentified(id)).length
+            : 0;
+          surveyKit.showRoutePinReading(pinX, pinY, activeTool, scanRes.truth, {
+            chargedCost: scanRes.chargedCost,
+            identifiedCount: idNear
+          });
+          selectCandidate(hitRouteId, { userInitiated: false });
+          if (scanRes.chargedCost > 0) {
+            showPlannerToast(`Logged ${scanRes.truth.routeName} ${activeTool.toUpperCase()} (-1 scan · Scans left: ${scanRes.scansLeft})`);
+          }
+          syncSurveyKitUi();
+          if (tutorialCtrl) tutorialCtrl.notifyAction('survey-scan');
+          return;
+        }
+
+        // 3) Free single-point reading on terrain
         const hit = getTerrainIntersection(raycaster.ray);
         if (hit) {
           surveyKit.scanPoint(hit.lx, hit.ly, { postLock: isCurrentPostLock() });
@@ -3518,9 +3619,12 @@ function buildLensRouteCardHtml(cand) {
       <div class="lrs-along" title="Gameplay surface elements within 150 m of route (no recommendations)">
         <span class="lrs-along-lbl">Along this route (within 150 m):</span>
         <span class="lrs-along-vals">
-          <span class="lrs-cnt haz">Haz ${cnt.hazard}</span>
-          <span class="lrs-cnt res">Res ${cnt.resource}</span>
-          <span class="lrs-cnt sci">Sci ${cnt.science}</span>
+          ${isCurrentPostLock()
+            ? `<span class="lrs-cnt haz">Haz ${cnt.hazard}</span>
+               <span class="lrs-cnt res">Res ${cnt.resource}</span>
+               <span class="lrs-cnt sci">Sci ${cnt.science}</span>`
+            : `<span class="lrs-cnt">Haz ? · Res ? · Sci ?</span>`
+          }
           <span class="mhc-tag game">GAME</span>
         </span>
       </div>
@@ -4415,8 +4519,24 @@ function applyGameScreenState(state) {
   updatePhaseStepper(screen);
 
   // Overlays
+  const showResultOverlay = screen === GAME_STATES.EXPLORE && awaitingSurveyResultContinue;
   if (gameBriefingOverlay) gameBriefingOverlay.classList.toggle('hidden', screen !== GAME_STATES.BRIEFING);
-  if (gameExploreOverlay) gameExploreOverlay.classList.toggle('hidden', screen !== GAME_STATES.EXPLORE);
+  if (surveyResultOverlay) {
+    surveyResultOverlay.classList.toggle('hidden', !showResultOverlay);
+    if (showResultOverlay && frozenSurveyEval) {
+      renderSurveyResultOverlayDOM({
+        elemScoreEl: sroElemScore,
+        hazScoreEl: sroHazScore,
+        totalScoreEl: sroTotalScore,
+        rankEl: sroRank,
+        identSummaryEl: sroIdentSummary,
+        hazIndexRowEl: sroHazIndexRow,
+        tablesWrapEl: sroTablesWrap,
+        evaluation: frozenSurveyEval
+      });
+    }
+  }
+  if (gameExploreOverlay) gameExploreOverlay.classList.toggle('hidden', screen !== GAME_STATES.EXPLORE || showResultOverlay);
   if (gameDebriefOverlay) gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF);
 
   // Full reference rover/timeline traverse stays hidden until DEBRIEF in MISSION mode (trimmed dashed Curiosity path shows from ANALYZE+)
@@ -4690,7 +4810,23 @@ function bindGameEvents() {
 
   if (btnLockRoute) {
     btnLockRoute.addEventListener('click', () => {
+      if (surveyLog) {
+        frozenSurveyEval = surveyLog.evaluateCurrent();
+        awaitingSurveyResultContinue = true;
+      } else {
+        awaitingSurveyResultContinue = false;
+      }
       levelState.lockInRoute();
+    });
+  }
+
+  if (btnSurveyResultContinue) {
+    btnSurveyResultContinue.addEventListener('click', () => {
+      awaitingSurveyResultContinue = false;
+      if (surveyResultOverlay) surveyResultOverlay.classList.add('hidden');
+      if (gameExploreOverlay && levelState.getState().screen === GAME_STATES.EXPLORE) {
+        gameExploreOverlay.classList.remove('hidden');
+      }
     });
   }
 
@@ -4745,7 +4881,10 @@ function bindGameEvents() {
     endCinematicIntro();
     panelPrefs.MISSION = { activeSidePanel: 'none', plannerCollapsed: true, profileOpen: false };
     if (routeCalc) routeCalc.setDrawerOpen(false);
-    if (surveyKit) surveyKit.clearTool();
+    if (surveyKit) surveyKit.reset();
+    if (surveyLog) surveyLog.reset();
+    awaitingSurveyResultContinue = false;
+    frozenSurveyEval = null;
     levelState.resetLevel();
     resetCustomizationToStandard();
   });
@@ -4936,6 +5075,21 @@ async function loadAssetsAndInit() {
     });
     scene.add(surveyKit.group);
 
+    dustZonesOverlay = createDustZonesOverlay(sampleTerrainElevation, localToMesh, minElev);
+    scene.add(dustZonesOverlay.group);
+
+    surveyLog = createSurveyLogController({
+      candidates: plannerCandidates,
+      elements: level01Elements.elements,
+      sampleSlopeFn: sampleTerrainSlope,
+      logTbodyEl: surveyLogTbody,
+      calcGridEl: surveyCalcGrid,
+      scansLeftEl: surveyScansLeft,
+      ringFgEl: surveyRingFg,
+      ringTextEl: surveyRingText,
+      idProgressEl: surveyIdProgress
+    });
+
     introCtrl = createIntroController({
       overlayEl: introOverlay,
       starCanvasEl: introStarfield,
@@ -5035,6 +5189,7 @@ async function loadAssetsAndInit() {
       window.__camera = camera;
       window.__routeCalc = routeCalc;
       window.__surveyKit = surveyKit;
+      window.__surveyLog = surveyLog;
       window.__intro = introCtrl;
       window.__missionSelect = missionSelectCtrl;
       window.__tutorial = tutorialCtrl;

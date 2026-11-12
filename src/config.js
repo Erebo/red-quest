@@ -59,6 +59,35 @@ export const PLANNING_SCORE_CONFIG = Object.freeze({
   maxPerEstimate: 10
 });
 
+export const SURVEY_SCAN_BUDGET = 8;
+
+export const SURVEY_CONFIG = Object.freeze({
+  routeScanBudget: SURVEY_SCAN_BUDGET,
+  sampleSpacingM: 10.0,
+  radiusM: 150.0,
+  maxElementScore: 100,
+  identMaxScore: 40,
+  elementAccuracyMaxScore: 60,
+  maxHazardScore: 100,
+  accuracyFullErrPct: 10.0,
+  accuracyZeroErrPct: 50.0,
+  steepZoneThresholdDeg: 15.0
+});
+
+// GAME model weights for composite Hazard Index (0–100); never shown before lock-in.
+export const HAZARD_INDEX_WEIGHTS = Object.freeze({
+  wSteepPct: 1.4,
+  wModPct: 0.55,
+  wHazardElements: 7.5,
+  wDustPct: 0.45
+});
+
+export const SURVEY_RANK_THRESHOLDS = Object.freeze([
+  Object.freeze({ minScore: 150, label: 'Mission Lead' }),
+  Object.freeze({ minScore: 85, label: 'Surveyor' }),
+  Object.freeze({ minScore: 0, label: 'Rookie' })
+]);
+
 export const ROUTE_CALC_FIELDS = Object.freeze([
   Object.freeze({
     key: 'distKm',

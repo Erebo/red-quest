@@ -240,37 +240,77 @@
   <!-- Survey Kit Panel (MISSION mode ANALYZE / CHOOSE only) -->
   <aside id="route-calc-panel" class="calc-panel mission-only-ctrl hidden" role="dialog" aria-label="Survey Kit">
     <div class="sk-head">
-      <span class="sk-title">SURVEY KIT</span>
-      <span class="sk-sub">Click a tool, then click map</span>
+      <div>
+        <span class="sk-title">SURVEY KIT</span>
+        <div class="sk-sub">Click a route line (-1 scan) or terrain (free)</div>
+      </div>
+      <div class="sk-status-col">
+        <span id="survey-scans-left" class="sk-budget-pill">Scans left: 8</span>
+        <div class="sk-ring-wrap" title="Logged route readings (out of 12)">
+          <svg class="sk-ring" width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+            <circle class="sk-ring-bg" cx="17" cy="17" r="14"/>
+            <circle id="survey-ring-fg" class="sk-ring-fg" cx="17" cy="17" r="14" stroke-dasharray="87.96" stroke-dashoffset="87.96"/>
+          </svg>
+          <span id="survey-ring-text" class="sk-ring-text">0/12</span>
+        </div>
+      </div>
     </div>
 
     <div id="survey-tool-grid" class="sk-grid" role="group" aria-label="Survey tools">
-      <button type="button" id="btn-survey-slope" class="sk-tool-btn" data-tool="slope" aria-pressed="false" title="Click terrain to measure slope degrees &amp; tier">
+      <button type="button" id="btn-survey-slope" class="sk-tool-btn" data-tool="slope" aria-pressed="false" title="Click route for max slope &amp; tiers, or terrain for point slope">
         <span class="sk-ico">📐</span>
         <span class="sk-lbl">SLOPE</span>
         <span class="sk-badge hidden">✓</span>
       </button>
-      <button type="button" id="btn-survey-hazard" class="sk-tool-btn" data-tool="hazard" aria-pressed="false" title="Click map to check hazards within 150 m">
+      <button type="button" id="btn-survey-hazard" class="sk-tool-btn" data-tool="hazard" aria-pressed="false" title="Click route for hazards ≤150 m + steep zones, or terrain point">
         <span class="sk-ico">⚠</span>
         <span class="sk-lbl">HAZARD</span>
         <span class="sk-badge hidden">✓</span>
       </button>
-      <button type="button" id="btn-survey-dust" class="sk-tool-btn locked" data-tool="dust" disabled title="No dust data layer available in public/data/">
+      <button type="button" id="btn-survey-dust" class="sk-tool-btn" data-tool="dust" aria-pressed="false" title="Click route for % in dust zones (GAME/SIM), or terrain for dust check">
         <span class="sk-ico">🌫</span>
         <span class="sk-lbl">DUST</span>
-        <span class="sk-lock-note">No data yet</span>
+        <span class="sk-badge hidden">✓</span>
       </button>
-      <button type="button" id="btn-survey-elements" class="sk-tool-btn" data-tool="elements" aria-pressed="false" title="Click map to list elements within 150 m">
+      <button type="button" id="btn-survey-elements" class="sk-tool-btn" data-tool="elements" aria-pressed="false" title="Click ? markers to identify &amp; add to Codex, or click route for count ≤150 m">
         <span class="sk-ico">★</span>
         <span class="sk-lbl">ELEMENTS</span>
         <span class="sk-badge hidden">✓</span>
       </button>
     </div>
 
-    <div id="survey-log-line" class="sk-log">Scans: 0 · Tools used: 0/4</div>
-
-    <div class="sk-actions">
+    <div class="sk-meta-row">
+      <span id="survey-id-progress" class="sk-id-prog">Identified: 0/13</span>
+      <span id="survey-log-line" class="sk-log">Point pins: 0</span>
       <button type="button" id="btn-survey-clear-pins" class="sk-clear-btn">Clear pins</button>
+    </div>
+
+    <div class="sk-section">
+      <div class="sk-sec-head">
+        <span>DATA LOG</span>
+        <small>Fills on route scan · ? = unscanned</small>
+      </div>
+      <div class="table-wrap">
+        <table class="sk-log-table">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th><span class="route-swatch" style="background:#38bdf8"></span> A</th>
+              <th><span class="route-swatch" style="background:#c084fc"></span> B</th>
+              <th><span class="route-swatch" style="background:#fb923c"></span> C</th>
+            </tr>
+          </thead>
+          <tbody id="survey-log-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="sk-section">
+      <div class="sk-sec-head">
+        <span>SURVEY CALCULATOR</span>
+        <small>Type values or estimates (Tab to move)</small>
+      </div>
+      <div id="survey-calc-grid" class="sk-calc-grid" role="group" aria-label="Survey calculator 3 by 4 inputs"></div>
     </div>
   </aside>
 
@@ -649,6 +689,45 @@
       </div>
       <div class="game-actions">
         <button id="btn-start-mission" class="btn-game-primary btn-lg">Start</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="survey-result-overlay" class="game-overlay hidden overlay-top" role="dialog" aria-label="Pre-Explore Survey Results">
+    <div class="game-card wide">
+      <div class="game-card-top">
+        <span class="tag-pill game">SURVEY RESULTS · ROUTE LOCKED</span>
+        <span class="tag-pill measured">TRUE ROUTE METRICS REVEALED</span>
+      </div>
+      <h2>Survey Evaluation &amp; Hazard Index</h2>
+      <div class="sro-scores-bar">
+        <div class="sro-score-box">
+          <span class="sro-k">Element Score</span>
+          <strong id="sro-elem-score" class="sro-v">0 / 100</strong>
+        </div>
+        <div class="sro-score-box">
+          <span class="sro-k">Hazard Score</span>
+          <strong id="sro-haz-score" class="sro-v">0 / 100</strong>
+        </div>
+        <div class="sro-score-box total">
+          <span class="sro-k">Total Score</span>
+          <strong id="sro-total-score" class="sro-v">0 / 200</strong>
+        </div>
+        <div class="sro-score-box rank">
+          <span class="sro-k">Survey Rank</span>
+          <strong id="sro-rank" class="sro-v">Rookie</strong>
+        </div>
+      </div>
+      <div id="sro-ident-summary" class="dcr-neutral" style="margin-bottom:8px;">—</div>
+
+      <div class="sro-section-title">True Hazard Index per Route <span class="tag-pill game">GAME</span> <span class="sim-badge">SIM</span></div>
+      <div id="sro-haz-index-row" class="sro-haz-index-row"></div>
+
+      <div class="sro-section-title" style="margin-top:10px;">Your Numbers vs. True Route Values</div>
+      <div id="sro-tables-wrap" class="dcr-routes-grid"></div>
+
+      <div class="game-actions" style="margin-top:12px;">
+        <button id="btn-survey-result-continue" class="btn-game-primary btn-lg">Continue to Explore →</button>
       </div>
     </div>
   </section>

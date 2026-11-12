@@ -148,13 +148,13 @@ function createFamilyIconTexture(family, type) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('+', 32, 33);
-  } else if (family === 'mystery') {
+  } else if (family === 'mystery' || family === 'unknown') {
     ctx.beginPath();
     ctx.arc(32, 32, 22, 0, Math.PI * 2);
-    ctx.fillStyle = '#181004';
+    ctx.fillStyle = family === 'unknown' ? '#111827' : '#181004';
     ctx.fill();
     ctx.lineWidth = 4;
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = family === 'unknown' ? '#f59e0b' : color;
     ctx.stroke();
     ctx.fillStyle = '#fde68a';
     ctx.font = 'bold 30px sans-serif';
@@ -282,6 +282,9 @@ function createSmallElementMesh(el, sampleElevFn, minElev, iconTextures, hitGeo,
   sprite.position.y = el.type === 'dust_devil_corridor' ? 40 : 20;
   sprite.renderOrder = 14;
   group.add(sprite);
+  group.userData.mainSprite = sprite;
+  group.userData.trueTexKey = texKey;
+  group.userData.trueFamilyHex = meta.hex;
   if (el.family === 'mystery') {
     group.userData.questionSprite = sprite;
   }
@@ -306,7 +309,8 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
     resource: createFamilyIconTexture('resource', 'resource'),
     science: createFamilyIconTexture('science', 'science_target'),
     drill_site: createFamilyIconTexture('science', 'drill_site'),
-    mystery: createFamilyIconTexture('mystery', 'mystery_blip')
+    mystery: createFamilyIconTexture('mystery', 'mystery_blip'),
+    unknown: createFamilyIconTexture('unknown', 'unknown')
   };
   const sharedHitGeo = new THREE.CylinderGeometry(18, 18, 38, 8);
   const sharedHitMat = new THREE.MeshBasicMaterial({
@@ -318,6 +322,33 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
   const markerGroups = new Map();
   const dustMarkers = [];
   const mysteryMarkers = [];
+
+  // Corridor elements near routes require Survey Kit ELEMENTS click to identify (fixed Targets 1–3 start known)
+  const IDENTIFIABLE_IDS = new Set(
+    elements
+      .filter(el => el.visibility !== 'scan' && el.id !== 'target-1' && el.id !== 'target-2' && el.id !== 'target-3')
+      .map(el => el.id)
+  );
+  const identifiedIds = new Set();
+
+  function syncMarkerIdentificationVisual(elId) {
+    const mg = markerGroups.get(elId);
+    if (!mg) return;
+    const isUnknown = IDENTIFIABLE_IDS.has(elId) && !identifiedIds.has(elId) && !isPostLock;
+    const sprite = mg.userData.mainSprite;
+    const pulseRing = mg.userData.pulseRing;
+    if (sprite && sprite.material) {
+      const targetTex = isUnknown ? iconTextures.unknown : (iconTextures[mg.userData.trueTexKey] || iconTextures.science);
+      if (sprite.material.map !== targetTex) {
+        sprite.material.map = targetTex;
+        sprite.material.needsUpdate = true;
+      }
+    }
+    if (pulseRing && pulseRing.material) {
+      const targetHex = isUnknown ? 0xf59e0b : (mg.userData.trueFamilyHex || 0x38bdf8);
+      pulseRing.material.color.setHex(targetHex);
+    }
+  }
 
   elements.forEach((el, idx) => {
     const mg = createSmallElementMesh(el, sampleElevFn, minElev, iconTextures, sharedHitGeo, sharedHitMat, idx);
@@ -375,6 +406,31 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
 
   function resetCodex() {
     unlockedTypes.clear();
+    identifiedIds.clear();
+    markerGroups.forEach((_, elId) => syncMarkerIdentificationVisual(elId));
+  }
+
+  function isElementIdentified(elId) {
+    if (!IDENTIFIABLE_IDS.has(elId)) return true;
+    return isPostLock || identifiedIds.has(elId);
+  }
+
+  function identifyElement(elId) {
+    const el = elementById.get(elId);
+    if (!el) return { identifiedNow: false, element: null };
+    const wasIdentified = identifiedIds.has(elId) || !IDENTIFIABLE_IDS.has(elId);
+    if (IDENTIFIABLE_IDS.has(elId)) {
+      identifiedIds.add(elId);
+      syncMarkerIdentificationVisual(elId);
+    }
+    const unlockedCodexNow = unlockType(el.type);
+    return {
+      identifiedNow: !wasIdentified,
+      unlockedCodexNow,
+      element: el,
+      identifiedCount: identifiedIds.size,
+      totalIdentifiable: IDENTIFIABLE_IDS.size
+    };
   }
 
   function updateExaggeration(exag) {
@@ -420,6 +476,7 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
     if (typeof showAll === 'boolean') showAllElements = showAll;
 
     group.visible = isMissionMode && !isBriefing;
+    markerGroups.forEach((_, elId) => syncMarkerIdentificationVisual(elId));
   }
 
   function setCategoryEnabled(cat, enabled) {
@@ -553,6 +610,26 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
 
   function buildElementCardPayload(el) {
     if (!el) return null;
+    if (!isElementIdentified(el.id)) {
+      return {
+        id: el.id,
+        type: 'unknown_element',
+        category: 'mystery',
+        categoryLabel: 'Unidentified Corridor Element',
+        label: '?',
+        hoverTitle: '? Unidentified Element',
+        whatItIs: 'Surface anomaly near the traverse corridor. Activate Survey Kit → ELEMENTS and click this marker to identify it, add it to the Field Codex, and earn survey points.',
+        effectOnMission: null,
+        solText: null,
+        dataset: 'Survey Kit Field Identification (GAME)',
+        whyItMatters: 'Identifying corridor elements helps verify nearby hazards, resources, and science features.',
+        tags: [{ text: 'GAME', cls: 'game' }, { text: 'unidentified', cls: 'sim' }],
+        sourceChip: 'game',
+        unidentified: true,
+        rawElement: el
+      };
+    }
+
     const isTarget = el.id === 'target-1' || el.id === 'target-2' || el.id === 'target-3';
     const tags = [{ text: 'GAME', cls: 'game' }];
     if (isTarget) {
@@ -607,6 +684,13 @@ export function createMissionElementsController({ elementsData, sampleElevFn, mi
     unlockType,
     isTypeUnlocked: type => unlockedTypes.has(type),
     getUnlockedCount: () => unlockedTypes.size,
+    isElementIdentified,
+    identifyElement,
+    getIdentificationProgress: () => ({
+      identified: identifiedIds.size,
+      total: IDENTIFIABLE_IDS.size
+    }),
+    getIdentifiableIds: () => new Set(IDENTIFIABLE_IDS),
     resetCodex,
     setState,
     setCategoryEnabled,

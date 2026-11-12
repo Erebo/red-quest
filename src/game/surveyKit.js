@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { FAMILY_META } from './missionElements.js';
+import { sampleDustAtPoint } from './dustZones.js';
 
 const MAX_SURVEY_PINS = 5;
 const SURVEY_RADIUS_M = 150.0;
@@ -16,7 +17,7 @@ const TERRAIN_HEIGHT_M = 5000.0;
 export const SURVEY_TOOLS = Object.freeze({
   slope: { id: 'slope', icon: '📐', label: 'SLOPE', title: 'SLOPE' },
   hazard: { id: 'hazard', icon: '⚠', label: 'HAZARD', title: 'HAZARD (≤150 m)' },
-  dust: { id: 'dust', icon: '🌫', label: 'DUST', locked: true, lockedNote: 'No data yet' },
+  dust: { id: 'dust', icon: '🌫', label: 'DUST', locked: false, title: 'DUST (GAME / SIM)' },
   elements: { id: 'elements', icon: '★', label: 'ELEMENTS', title: 'ELEMENTS (≤150 m)' }
 });
 
@@ -55,6 +56,7 @@ export function createSurveyKitController({
 
   function getToolColorHex(tool) {
     if (tool === 'hazard') return 0xef4444;
+    if (tool === 'dust') return 0xf59e0b;
     if (tool === 'elements') return 0x38bdf8;
     return 0x2dd4bf;
   }
@@ -94,7 +96,7 @@ export function createSurveyKitController({
   }
 
   function setActiveTool(toolId) {
-    if (!toolId || toolId === 'dust') {
+    if (!toolId) {
       return activeTool;
     }
     if (activeTool === toolId) {
@@ -174,22 +176,35 @@ export function createSurveyKitController({
       };
     }
 
+    if (tool === 'dust') {
+      const elev = sampleElevFn ? sampleElevFn(lx, ly) : -3800;
+      const d = sampleDustAtPoint(lx, ly, elev);
+      const reading = d.insideZone
+        ? `Dust zone: ${d.zone.name} (${d.zone.intensityLabel}) · τ = ${d.tau.toFixed(2)}`
+        : `Clear corridor · Ambient dust τ = ${d.tau.toFixed(2)} (vis ${d.visibilityKm.toFixed(1)} km)`;
+      return {
+        title: '🌫 Dust Exposure',
+        reading,
+        chips: [
+          { text: 'GAME', cls: 'game' },
+          { text: 'SIM', cls: 'sim' }
+        ]
+      };
+    }
+
     return null;
   }
 
-  function scanPoint(lx, ly, { postLock = false } = {}) {
-    if (!activeTool) return null;
+  function placeReadingPin(tool, lx, ly, info, { countScan = true } = {}) {
+    if (countScan) {
+      scanCount++;
+    }
+    if (tool) usedTools.add(tool);
     const clampedX = Math.max(0, Math.min(TERRAIN_WIDTH_M, lx));
     const clampedY = Math.max(0, Math.min(TERRAIN_HEIGHT_M, ly));
-    const info = buildReading(activeTool, clampedX, clampedY, postLock);
-    if (!info) return null;
-
-    scanCount++;
-    usedTools.add(activeTool);
-
     const elev = sampleElevFn ? sampleElevFn(clampedX, clampedY) : minElev;
     const { meshX, meshZ } = localToMesh(clampedX, clampedY);
-    const hex = getToolColorHex(activeTool);
+    const hex = getToolColorHex(tool);
 
     const markerGroup = new THREE.Group();
     markerGroup.position.set(meshX, (elev - minElev) * currentExag, meshZ);
@@ -247,7 +262,7 @@ export function createSurveyKitController({
       cardEl = document.createElement('div');
       cardEl.className = 'survey-pin-card';
       cardEl.dataset.pinId = pinId;
-      cardEl.dataset.tool = activeTool;
+      cardEl.dataset.tool = tool || 'slope';
 
       const headRow = document.createElement('div');
       headRow.className = 'spc-head';
@@ -281,7 +296,7 @@ export function createSurveyKitController({
 
     pins.push({
       id: pinId,
-      tool: activeTool,
+      tool,
       lx: clampedX,
       ly: clampedY,
       elev,
@@ -299,6 +314,78 @@ export function createSurveyKitController({
     applyAgeFade();
 
     return { pinId, ...info };
+  }
+
+  function scanPoint(lx, ly, { postLock = false } = {}) {
+    if (!activeTool) return null;
+    const clampedX = Math.max(0, Math.min(TERRAIN_WIDTH_M, lx));
+    const clampedY = Math.max(0, Math.min(TERRAIN_HEIGHT_M, ly));
+    const info = buildReading(activeTool, clampedX, clampedY, postLock);
+    if (!info) return null;
+    return placeReadingPin(activeTool, clampedX, clampedY, info, { countScan: true });
+  }
+
+  function showRoutePinReading(lx, ly, toolId, truth, { chargedCost = 0, identifiedCount = 0 } = {}) {
+    if (!truth) return null;
+    let info;
+    if (toolId === 'slope') {
+      info = {
+        title: `📐 ${truth.routeName} · Full Slope`,
+        reading: `Max ${truth.maxSlopeDeg.toFixed(1)}° · Easy ${truth.pctEasy.toFixed(1)}% · Mod ${truth.pctMod.toFixed(1)}% · Steep ${truth.pctSteep.toFixed(1)}%`,
+        chips: [
+          { text: 'measured (DEM)', cls: 'measured' },
+          { text: 'game rule', cls: 'game' },
+          { text: chargedCost > 0 ? '-1 scan' : 'cached (free)', cls: chargedCost > 0 ? 'sim' : 'dem' }
+        ]
+      };
+    } else if (toolId === 'hazard') {
+      info = {
+        title: `⚠ ${truth.routeName} · Hazards`,
+        reading: `Hazard count: ${truth.hazardCount} (${truth.hazElements150m} hazard elements ≤150 m + ${truth.steepZonesCrossed} steep zones crossed)`,
+        chips: [
+          { text: 'derived', cls: 'dem' },
+          { text: 'game rule', cls: 'game' },
+          { text: chargedCost > 0 ? '-1 scan' : 'cached (free)', cls: chargedCost > 0 ? 'sim' : 'dem' }
+        ]
+      };
+    } else if (toolId === 'elements') {
+      info = {
+        title: `★ ${truth.routeName} · Elements`,
+        reading: `${truth.elementsCount} elements within 150 m (${identifiedCount} identified near route)`,
+        chips: [
+          { text: 'GAME', cls: 'game' },
+          { text: chargedCost > 0 ? '-1 scan' : 'cached (free)', cls: chargedCost > 0 ? 'sim' : 'dem' }
+        ]
+      };
+    } else if (toolId === 'dust') {
+      info = {
+        title: `🌫 ${truth.routeName} · Dust Exposure`,
+        reading: `${truth.dustPct.toFixed(1)}% of route inside dust zones (${truth.sampleCount} samples @ 10 m)`,
+        chips: [
+          { text: 'GAME', cls: 'game' },
+          { text: 'SIM', cls: 'sim' },
+          { text: chargedCost > 0 ? '-1 scan' : 'cached (free)', cls: chargedCost > 0 ? 'sim' : 'dem' }
+        ]
+      };
+    }
+    if (!info) return null;
+    return placeReadingPin(toolId, lx, ly, info, { countScan: true });
+  }
+
+  function showElementIdentifiedPin(lx, ly, idResult) {
+    if (!idResult || !idResult.element) return null;
+    const el = idResult.element;
+    const famLabel = FAMILY_META[el.family]?.label || el.family;
+    const statusPrefix = idResult.identifiedNow ? 'Identified & added to Codex! ' : 'Already in Codex · ';
+    const info = {
+      title: `★ ${el.name} (${famLabel})`,
+      reading: `${statusPrefix}${el.whatIsIt?.text || ''}`,
+      chips: [
+        { text: el.source || 'GAME', cls: el.source === 'derived from DEM' ? 'dem' : 'game' },
+        { text: famLabel.toUpperCase(), cls: 'measured' }
+      ]
+    };
+    return placeReadingPin('elements', lx, ly, info, { countScan: false });
   }
 
   function updateExaggeration(exag) {
@@ -356,6 +443,8 @@ export function createSurveyKitController({
     setActiveTool,
     clearTool,
     scanPoint,
+    showRoutePinReading,
+    showElementIdentifiedPin,
     removePinById,
     clearPins,
     updateExaggeration,

@@ -182,3 +182,73 @@ riskScore = min(100.0, (
 - 0–15: Low risk (predominantly flat, gentle grades)
 - 15–30: Moderate risk (requires careful wheel steering across moderate slopes)
 - 30–100: High risk (steep passes, extensive climb, terrain hazards)
+
+## 11. Survey Kit: Deterministic Dust Zones (`GAME / SIM`)
+
+Five elliptical dust-accumulation and convective-lofting regions (`LEVEL1_DUST_ZONES` in `src/game/dustZones.js`) are placed deterministically on flat corridor basins and hollows. A point `(x, y)` lies inside rotated ellipse `(cx, cy, rx, ry, rotRad)` when:
+
+```
+dx = x - cx
+dy = y - cy
+u = dx * cos(-rotRad) - dy * sin(-rotRad)
+v = dx * sin(-rotRad) + dy * cos(-rotRad)
+insideZone = (u / rx)^2 + (v / ry)^2 <= 1.0
+```
+
+- **Point dust opacity:** `tau_point = insideZone ? min(1.5, tau + 0.25) : tau` (using Section 2 baseline `tau`).
+- **Route dust exposure (%):** Sampling each candidate route polyline every `<= 10 m`:
+
+```
+dustExposurePct = (count(samples with insideZone) / totalSamples) * 100.0
+```
+
+## 12. Survey Kit: Derived Route Hazard Count (`DERIVED / GAME`)
+
+Sampling each candidate route every `<= 10 m` against `slope_5m.bin`:
+
+```
+steepZonesCrossed = count of contiguous sampled runs where slopeDeg >= 15.0°
+hazElements150m   = count of non-scan hazard elements within 150.0 m of polyline
+hazardCount       = hazElements150m + steepZonesCrossed
+```
+
+## 13. Survey Kit: Composite Hazard Index (0–100, `GAME`)
+
+Revealed only after Lock In (`HAZARD_INDEX_WEIGHTS` in `src/config.js`, never shown pre-lock):
+
+```
+pctSteep = % of 10 m route samples > 25.0°
+pctMod   = % of 10 m route samples in [15.0°, 25.0°]
+
+hazardIndex = clamp(0.0, 100.0,
+    1.40 * pctSteep +
+    0.55 * pctMod +
+    7.50 * hazElements150m +
+    0.45 * dustExposurePct
+)
+```
+
+## 14. Survey Kit: Calculator Scoring & Ranks (`GAME`)
+
+Each typed numeric input `(elementsCount, hazardCount, maxSlopeDeg, dustPct)` across Routes A, B, and C is scored against its true cached value:
+
+```
+errorPct = (trueVal == 0)
+    ? (estimate == 0 ? 0.0 : min(100.0, abs(estimate) * 25.0))
+    : (abs(estimate - trueVal) / abs(trueVal)) * 100.0
+
+accuracyFactor =
+    errorPct <= 10.0  -> 1.0
+    errorPct >= 50.0  -> 0.0
+    otherwise         -> (50.0 - errorPct) / 40.0   // linear falloff from 10% to 50%
+
+empty or non-numeric input -> 0 points
+```
+
+- **Element Score (0–100):**
+  - Identification points (`0–40`): `(identifiedElements / totalIdentifiable) * 40.0`
+  - Element-count accuracy (`0–60`): `3 routes * 20.0 * accuracyFactor`
+- **Hazard Score (0–100):**
+  - Sum over 9 hazard inputs (`Hazard count`, `Max slope`, `Dust exposure` × Routes A, B, C): `sum((100.0 / 9.0) * accuracyFactor)`
+- **Total Score (0–200):** `Element Score + Hazard Score`
+- **Ranks:** `>= 150`: **Mission Lead** · `>= 85`: **Surveyor** · `< 85`: **Rookie**

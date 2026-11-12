@@ -43,7 +43,7 @@ export function populateBriefingUI(levelData) {
 
   if (startEl) {
     const s = levelData.start;
-    startEl.textContent = `Sol ${s.sol} · X ${s.x.toFixed(1)} m, Y ${s.y.toFixed(1)} m · Elev ${s.elevation.toFixed(1)} m · Slope ${s.slopeDeg.toFixed(1)}°`;
+    startEl.textContent = `North entry · X ${s.x.toFixed(1)} m, Y ${s.y.toFixed(1)} m · Elev ${s.elevation.toFixed(1)} m · Slope ${s.slopeDeg.toFixed(1)}°`;
   }
 
   if (goalEl) {
@@ -53,9 +53,9 @@ export function populateBriefingUI(levelData) {
 
   if (targetsList) {
     targetsList.innerHTML = '';
-    levelData.scienceTargets.forEach(t => {
+    levelData.scienceTargets.forEach((t, idx) => {
       const li = document.createElement('li');
-      li.innerHTML = `<strong>${t.label}</strong>: ${t.title} <small>(X ${t.x.toFixed(0)} m, Y ${t.y.toFixed(0)} m, ${t.elevation.toFixed(1)} m)</small> <span class="tag-pill measured">MEASURED</span>`;
+      li.innerHTML = `<strong>Target ${idx + 1}</strong>: ${t.title} <small>(X ${t.x.toFixed(0)} m, Y ${t.y.toFixed(0)} m, ${t.elevation.toFixed(1)} m)</small> <span class="tag-pill measured">MEASURED</span>`;
       targetsList.appendChild(li);
     });
   }
