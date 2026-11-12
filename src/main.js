@@ -247,10 +247,13 @@ const htTier = document.getElementById('ht-tier');
 const elevationProfileBox = document.getElementById('elevation-profile-box');
 const gameBriefingOverlay = document.getElementById('game-briefing-overlay');
 const gameDebriefOverlay = document.getElementById('game-debrief-overlay');
+const gameExploreOverlay = document.getElementById('game-explore-overlay');
 const btnStartMission = document.getElementById('btn-start-mission');
 const btnGoChoose = document.getElementById('btn-go-choose');
 const btnBackAnalyze = document.getElementById('btn-back-analyze');
 const btnLockRoute = document.getElementById('btn-lock-route');
+const btnGoDebrief = document.getElementById('btn-go-debrief');
+const exploreLockedRoute = document.getElementById('explore-locked-route');
 const btnDebriefClose = document.getElementById('btn-debrief-close');
 const btnDebriefDismiss = document.getElementById('btn-debrief-dismiss');
 const btnDebriefChoose = document.getElementById('btn-debrief-choose');
@@ -4887,7 +4890,7 @@ function applyGameScreenState(state) {
   // Overlays
   if (gameBriefingOverlay) gameBriefingOverlay.classList.toggle('hidden', screen !== GAME_STATES.BRIEFING);
   if (gameDebriefOverlay) gameDebriefOverlay.classList.toggle('hidden', screen !== GAME_STATES.DEBRIEF || debriefOverlayDismissed);
-  if (exploreMapCard) exploreMapCard.classList.toggle('hidden', screen !== GAME_STATES.EXPLORE);
+  if (exploreMapCard) exploreMapCard.classList.add('hidden');
   if (gameProceedModal && screen !== GAME_STATES.DEBRIEF) gameProceedModal.classList.add('hidden');
 
   // Candidate lines visibility: only locked route visible in EXPLORE/DEBRIEF

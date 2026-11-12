@@ -959,6 +959,7 @@ body.screen-explore #mission-dock,
 body.screen-explore #survey-kit-card,
 body.screen-explore #survey-kit-panel,
 body.screen-explore #survey-result-overlay,
+body.screen-explore #explore-map-card,
 body.screen-explore #map-top-controls {
   display: none !important;
 }
