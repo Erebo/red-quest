@@ -43,6 +43,7 @@ export class RoverRouteRibbon {
     this.currentExag = currentExag;
     this.minElev = minElev;
 
+    // Glowing vibrant cyan/blue guide path
     const routeColor = new THREE.Color(candidateRoute.blindColor || '#38bdf8');
 
     // 1. Glowing Route Ribbon (hovering 0.6 m above DEM surface)
@@ -62,7 +63,7 @@ export class RoverRouteRibbon {
     const curvePoints = curve.getPoints(divisions);
 
     // Build a ribbon mesh using triangle strip
-    const ribbonWidth = 2.2;
+    const ribbonWidth = 2.8;
     const ribbonGeo = new THREE.BufferGeometry();
     const positions = new Float32Array(curvePoints.length * 2 * 3);
     const uvs = new Float32Array(curvePoints.length * 2 * 2);
@@ -119,7 +120,7 @@ export class RoverRouteRibbon {
     const ribbonMat = new THREE.MeshBasicMaterial({
       color: routeColor,
       transparent: true,
-      opacity: 0.58,
+      opacity: 0.68,
       side: THREE.DoubleSide,
       depthWrite: false
     });

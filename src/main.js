@@ -66,6 +66,7 @@ import { RoverAudio } from './game/rover/roverAudio.js';
 import { RoverInteractions } from './game/rover/roverInteractions.js';
 import { RoverDetailTerrain, surfaceReliefAt, marsPaletteRGB } from './game/rover/roverTerrain.js';
 import { RoverWorldProps } from './game/rover/roverWorldProps.js';
+import { RoverMovementDust } from './game/rover/roverMovementDust.js';
 
 // --- Performance & Timing Metrics ---
 const appStartTime = performance.now();
@@ -567,6 +568,7 @@ let roverInteractions = null;
 let roverTerrain = null;
 let roverWorldProps = null;
 let roverDustStormParticles = null;
+let roverMovementDust = null;
 let exploreAtmosphereBackup = null;
 let basePaletteBuilt = false;
 let activeDriveStats = null;
@@ -4966,6 +4968,9 @@ function applyGameScreenState(state) {
       roverDustStormParticles.setExaggeration(currentExag);
       roverDustStormParticles.setVisible(true);
     }
+    if (roverMovementDust) {
+      roverMovementDust.setVisible(true);
+    }
   } else {
     // When leaving EXPLORE mode or while awaiting survey result
     controls.enabled = true;
@@ -4974,6 +4979,7 @@ function applyGameScreenState(state) {
     if (roverTerrain) roverTerrain.setActive(false);
     if (roverWorldProps) roverWorldProps.setActive(false);
     if (roverDustStormParticles) roverDustStormParticles.setVisible(false);
+    if (roverMovementDust) roverMovementDust.setVisible(false);
     exitExploreLook();
     if (roverExploreModel) roverExploreModel.visible = false;
     if (roverShadow) roverShadow.visible = false;
@@ -5504,8 +5510,13 @@ async function loadAssetsAndInit() {
 
     roverChaseCamera = new RoverChaseCamera(camera, renderer.domElement);
     roverRouteRibbon = new RoverRouteRibbon(scene);
-    roverHUD = new RoverHUD();
+    roverMovementDust = new RoverMovementDust(scene);
     roverAudio = new RoverAudio();
+    roverHUD = new RoverHUD({
+      onWarningAlert: () => {
+        if (roverAudio) roverAudio.playWarningBuzz();
+      }
+    });
     roverInteractions = new RoverInteractions(
       level01,
       level01Elements,
@@ -5930,6 +5941,11 @@ function animate() {
     // 7c. Swirling dust storm particles inside slow zones
     if (roverDustStormParticles) {
       roverDustStormParticles.update(dt, now / 1000.0);
+    }
+
+    // 7d. Rover movement dust puffs behind wheels
+    if (roverMovementDust) {
+      roverMovementDust.update(dt, roverPhysics, currentExag, minElev, now / 1000.0);
     }
 
     // Clear one-shot input flags after processing

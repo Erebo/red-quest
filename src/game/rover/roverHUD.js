@@ -27,8 +27,9 @@ function normaliseAngle(radians) {
 const CARDINALS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 
 export class RoverHUD {
-  constructor() {
+  constructor(options = {}) {
     this.container = document.getElementById('rover-hud');
+    this.onWarningAlert = options.onWarningAlert || null;
 
     // Top Nav Bar
     this.goalDist = document.getElementById('hud-goal-dist');
@@ -102,6 +103,10 @@ export class RoverHUD {
     this.centerSubtitle.textContent = subtitle;
     this.centerAlert.classList.toggle('dust-storm', Boolean(isDust));
     this.centerAlert.classList.remove('hidden');
+
+    if (isDust && this.onWarningAlert) {
+      this.onWarningAlert();
+    }
 
     // Trigger restart of pop animation
     this.centerAlert.style.animation = 'none';

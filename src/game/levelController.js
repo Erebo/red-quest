@@ -87,15 +87,29 @@ export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = n
       const sciPts = driveStats.scienceScore || 0;
       const poiCount = driveStats.discoveredCount || 0;
       
-      // Calculate Grade:
-      // High score (>300) + good battery (>50%) = A+
-      // >200 or >30% = A
-      // else B
-      let grade = 'A';
-      if (sciPts >= 350 && batRem >= 50) grade = 'A+';
-      else if (sciPts >= 200 || batRem >= 60) grade = 'A';
-      else if (batRem >= 30) grade = 'B';
-      else grade = 'C';
+      // Composite Mission Grade Evaluation:
+      // Balances primary survey count (14 total elements across the map)
+      // with secondary weights for science points and battery / fuel conservation.
+      // Visiting ~5/14 elements with normal battery usage earns around B+.
+      const poiScore = Math.min(50.0, Math.pow(Math.min(14, poiCount) / 5.0, 0.70) * 38.0);
+      const sciScore = Math.min(30.0, (Math.min(750, sciPts) / 750.0) * 30.0);
+      const batScore = Math.min(20.0, (Math.max(0, Math.min(100, batRem)) / 100.0) * 20.0);
+      const compositeScore = poiScore + sciScore + batScore;
+
+      let grade = 'D';
+      if (compositeScore >= 88.0) {
+        grade = 'A+';
+      } else if (compositeScore >= 78.0) {
+        grade = 'A';
+      } else if (compositeScore >= 68.0) {
+        grade = 'B+';
+      } else if (compositeScore >= 56.0) {
+        grade = 'B';
+      } else if (compositeScore >= 42.0) {
+        grade = 'C';
+      } else {
+        grade = 'D';
+      }
 
       summaryBox.innerHTML = `
         <div class="dms-grade-badge">
@@ -106,7 +120,7 @@ export function populateDebriefUI(levelData, lockedRouteId, trimmedCuriosity = n
           <div class="dms-stat-card">
             <span class="dms-lbl">Science Gathered <span class="tag-pill game">GAME</span></span>
             <strong class="dms-val text-cyan">+${sciPts} pts</strong>
-            <small>${poiCount} outcrops/cores logged</small>
+            <small>${poiCount} / 14 elements surveyed</small>
           </div>
           <div class="dms-stat-card">
             <span class="dms-lbl">Distance Traversed <span class="tag-pill measured">MEASURED</span></span>

@@ -12,6 +12,7 @@
 const INTERIOR_SRC = new URL('../../../docs/noise-vehicle-interior.mp3', import.meta.url).href;
 const DRIVE_SRC = new URL('../../../docs/gravel-road.mp3', import.meta.url).href;
 const LEVEL_UP_SRC = new URL('../../../docs/level-up.mp3', import.meta.url).href;
+const WARNING_BUZZ_SRC = new URL('../../../docs/warning-buzz.mp3', import.meta.url).href;
 
 const clamp01 = v => Math.max(0, Math.min(1, v));
 
@@ -36,6 +37,13 @@ export class RoverAudio {
     this.levelUp.preload = 'auto';
     this.levelUp.volume = 0.65;
 
+    // One-shot warning buzz played when hazard / dust storm alerts trigger.
+    this.warningBuzz = new Audio();
+    this.warningBuzz.src = WARNING_BUZZ_SRC;
+    this.warningBuzz.loop = false;
+    this.warningBuzz.preload = 'auto';
+    this.warningBuzz.volume = 0.70;
+
     this.active = false;
     this._fadeTimer = null;
     this._unlockBound = false;
@@ -57,6 +65,7 @@ export class RoverAudio {
         this.interior.pause();
         this.drive.pause();
         this.levelUp.pause();
+        this.warningBuzz.pause();
       } else if (this.active) {
         this._startInterior();
         if (this._isDriving) this._startDrive();
@@ -118,6 +127,16 @@ export class RoverAudio {
     if (!this.active) return;
     try { this.levelUp.currentTime = 0; } catch (e) { /* not seekable yet */ }
     const p = this.levelUp.play();
+    if (p && p.catch) p.catch(() => { /* wait for user gesture */ });
+  }
+
+  /**
+   * Play warning buzz for dust storms / hazard alerts.
+   */
+  playWarningBuzz() {
+    if (!this.active) return;
+    try { this.warningBuzz.currentTime = 0; } catch (e) { /* not seekable yet */ }
+    const p = this.warningBuzz.play();
     if (p && p.catch) p.catch(() => { /* wait for user gesture */ });
   }
 
