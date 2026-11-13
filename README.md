@@ -105,7 +105,7 @@ All three climb 239 m net. All three distances, ascents and slope figures are `M
 
 ## 4. Screenshot Walkthrough
 
-Nine captures from the running build, in mission order.
+Nine captures from the running build.
 
 ### 01. Mission Briefing and Regional Dossier
 ![01 Briefing](docs/screenshots/01-briefing.png)
@@ -127,21 +127,21 @@ Nine captures from the running build, in mission order.
 ![05 Survey Kit](docs/screenshots/07-survey-kit.png)
 *Survey Kit with point probes and corridor scans across slope, hazard, dust and element categories, against the 8-scan budget.*
 
-### 06. Corridor Selection and Route Certification
-![06 Choose Lock In](docs/screenshots/08-choose-lockin.png)
+### 06. Research GIS and Analysis Mode
+![06 Research Mode](docs/screenshots/11-research.png)
+*RESEARCH mode: free layer toggles, pinned point inspection with measured coordinates and telemetry, full crater terrain analysis.*
+
+### 07. Corridor Selection and Route Certification
+![07 Choose Lock In](docs/screenshots/08-choose-lockin.png)
 *CHOOSE stage comparing distance, cumulative ascent, maximum slope and identified targets before the route is locked.*
 
-### 07. Surface Traversal and Systems HUD
-![07 Explore HUD](docs/screenshots/09-explore-hud.png)
+### 08. Surface Traversal and Systems HUD
+![08 Explore HUD](docs/screenshots/09-explore-hud.png)
 *EXPLORE stage: third-person rover driving with wheel dust, terrain alignment and live oxygen, battery and radiation telemetry.*
 
-### 08. Mission Debrief and Ground-Truth Scoring
-![08 Debrief Score](docs/screenshots/10-debrief-score.png)
+### 09. Mission Debrief and Ground-Truth Scoring
+![09 Debrief Score](docs/screenshots/10-debrief-score.png)
 *DEBRIEF stage: scored estimates, survey accuracy, and the overlay against the genuine Curiosity traverse.*
-
-### 09. Research GIS and Analysis Mode
-![09 Research Mode](docs/screenshots/11-research.png)
-*RESEARCH mode: free layer toggles, pinned point inspection with measured coordinates and telemetry, full crater terrain analysis.*
 
 ---
 
