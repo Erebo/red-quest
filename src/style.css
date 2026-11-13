@@ -960,6 +960,7 @@ body.screen-explore #survey-kit-card,
 body.screen-explore #survey-kit-panel,
 body.screen-explore #survey-result-overlay,
 body.screen-explore #explore-map-card,
+body.screen-explore #game-explore-overlay,
 body.screen-explore #map-top-controls {
   display: none !important;
 }
@@ -1045,8 +1046,8 @@ body.screen-explore #game-explore-overlay .sim-badge {
 }
 
 .hud-dest-arrow {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -1056,10 +1057,16 @@ body.screen-explore #game-explore-overlay .sim-badge {
   border: 2px solid #e07a5f;
   box-shadow: 0 2px 0 #c9613f;
   color: #c9613f;
-  font-size: 15px;
   line-height: 1;
   transform-origin: 50% 50%;
   transition: transform 0.12s linear;
+}
+
+.hud-arrow-svg {
+  width: 19px;
+  height: 19px;
+  stroke: #c9613f;
+  display: block;
 }
 
 .hud-dest-dist {
@@ -1407,7 +1414,7 @@ body.screen-explore #game-explore-overlay .sim-badge {
 .hud-action-prompt {
   position: absolute;
   left: 50%;
-  bottom: 120px;
+  bottom: 84px;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -1419,6 +1426,148 @@ body.screen-explore #game-explore-overlay .sim-badge {
   border-radius: 999px;
   box-shadow: 0 4px 0 #c9613f, 0 10px 24px rgba(74, 53, 40, 0.2);
   pointer-events: auto;
+}
+
+/* ---------- Pure Typography / Floating Bubbly Controls (Cardless & Windowless) ---------- */
+.hud-controls-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  pointer-events: none;
+  z-index: 48;
+  user-select: none;
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Large popping start state */
+.hud-controls-bubble.intro-pop {
+  bottom: 34px;
+  transform: translateX(-50%) scale(1.35);
+  animation: hcbIntroBounce 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes hcbIntroBounce {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(28px) scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-8px) scale(1.42);
+  }
+  100% {
+    transform: translateX(-50%) translateY(0) scale(1.35);
+  }
+}
+
+.hcb-key-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hcb-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  background: linear-gradient(180deg, #fffdf8 0%, #fef3c7 100%);
+  border: 2px solid #ea580c;
+  border-bottom: 4px solid #9a3412;
+  border-radius: 9px;
+  font-family: ui-rounded, "Segoe UI Rounded", "Nunito", var(--mono);
+  font-size: 13px;
+  font-weight: 900;
+  color: #7c2d12;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45), 0 0 10px rgba(234, 88, 12, 0.3);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: all 0.3s ease;
+}
+
+.hud-controls-bubble.intro-pop .hcb-key {
+  min-width: 32px;
+  height: 32px;
+  font-size: 14.5px;
+  border-width: 2.5px;
+  border-bottom-width: 5px;
+  border-color: #f97316;
+  border-bottom-color: #9a3412;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55), 0 0 20px rgba(249, 115, 22, 0.55);
+}
+
+.hcb-key.hcb-wide {
+  min-width: 52px;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+}
+
+.hud-controls-bubble.intro-pop .hcb-key.hcb-wide {
+  min-width: 60px;
+  font-size: 12px;
+}
+
+.hcb-label {
+  font-family: ui-rounded, "Segoe UI Rounded", "Nunito", "Trebuchet MS", var(--sans);
+  font-size: 12.5px;
+  font-weight: 900;
+  color: #fffaf0;
+  letter-spacing: 1.2px;
+  margin-left: 4px;
+  white-space: nowrap;
+  text-shadow:
+    0 2px 0 #9a3412,
+    0 3px 0 #7c2d12,
+    0 4px 10px rgba(0, 0, 0, 0.9),
+    0 0 16px rgba(234, 88, 12, 0.6);
+  transition: all 0.3s ease;
+}
+
+.hud-controls-bubble.intro-pop .hcb-label {
+  font-size: 14.5px;
+  letter-spacing: 1.4px;
+  color: #fffdf5;
+  text-shadow:
+    0 2px 0 #c2410c,
+    0 4px 0 #7c2d12,
+    0 6px 14px rgba(0, 0, 0, 0.95),
+    0 0 24px rgba(249, 115, 22, 0.85);
+}
+
+.hcb-divider {
+  width: 2px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+  margin: 0 4px;
+}
+
+.hud-controls-bubble.intro-pop .hcb-divider {
+  height: 26px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+@media (max-width: 768px) {
+  .hud-controls-bubble {
+    gap: 8px;
+    padding: 6px 12px;
+  }
+  .hcb-label {
+    display: none;
+  }
+  .hcb-divider {
+    display: none;
+  }
 }
 
 .hud-action-prompt.hidden {
