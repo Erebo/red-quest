@@ -11,7 +11,7 @@ A browser-based Mars traverse planner: orbital terrain, mineral and thermal data
 
 ![Red Quest — route analysis over Gale Crater](docs/screenshots/intro.png)
 
-**Demo video:** https://youtu.be/lk8x-bBKwGY · **Built for:** [Interplanetary Survival Guide: Martian Map](https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide-martian-map/?tab=details), NASA Space Apps Challenge 2026
+**Demo video:** https://youtu.be/lk8x-bBKwGY · **Live demo:** https://red-quest-roan.vercel.app/ · **Built for:** [Interplanetary Survival Guide: Martian Map](https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide-martian-map/?tab=details), NASA Space Apps Challenge 2026
 
 ---
 
