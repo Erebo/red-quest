@@ -790,6 +790,11 @@ body.mode-mission #map-top-controls .lenses-btn:active:not(:disabled){transform:
 
 body.mode-mission #planner-panel{bottom:74px}
 body.mode-mission #planner-panel.hidden{display:none}
+body.mode-mission #planner-panel.collapsed{display:none!important}
+
+body.cinematic-intro-active #planner-panel,
+body.cinematic-intro-active .mission-dock,
+body.cinematic-intro-active .mission-objective-banner{display:none!important}
 body.mode-mission #inspector-panel{top:calc(var(--hud-bottom, 60px) + 6px)}
 body.mode-mission #inspector-panel .panel-body{max-height:calc(var(--side-max-h, 500px) - 8px)}
 body.mode-mission #layers-panel.open{top:calc(var(--hud-bottom, 60px) + 56px)}
