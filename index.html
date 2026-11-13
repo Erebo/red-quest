@@ -696,180 +696,310 @@
     <div class="game-card wide briefing-card">
       <div class="briefing-card-glow"></div>
 
-      <!-- Top header bar: Badges, Title, Story -->
+      <!-- Top header bar: Badges, Title, Short Mission Line -->
       <div class="briefing-header">
         <div class="briefing-badge-row">
           <span class="tag-pill game">MISSION 01 · GALE EXPEDITION</span>
           <span class="tag-pill measured">NASA PDS ARCHIVE</span>
-          <span class="tag-pill dem">1m DEM · MRO HIRISE</span>
-          <span class="tag-pill measured">CRISM · THEMIS</span>
           <span class="briefing-sector-tag">SECTOR: MOUNT SHARP 5×5 km</span>
         </div>
         <div class="briefing-title-row">
           <h1 id="briefing-title" class="briefing-title">Level 1: Approach to the Boxwork Core</h1>
           <span class="briefing-sol-stamp">SOLS 3721 – 4805</span>
         </div>
-        <p id="briefing-story" class="briefing-lead">Curiosity entered this 5 km × 5 km sector of Mount Sharp at Sol 3721 on the northern edge (-3,857.5 m) and climbed toward the Sols 4600–4805 boxwork core zone (-3,617.1 m). Analyze the orbital DEM slope map, CRISM mineral spectra, and THEMIS thermal imagery to select one of three candidate traverses (Route A, Route B, or Route C) before locking in your plan.</p>
+        <p id="briefing-story" class="briefing-lead">Plan a route across Mount Sharp, then travel it to the boxwork core zone.</p>
       </div>
 
-      <!-- Scrollable content area for rich research data and targets -->
-      <div class="briefing-scroll-content">
-
-        <!-- 4-Box Telemetry / Research Recon Grid -->
-        <div class="briefing-research-grid">
-          <div class="br-card">
-            <div class="br-card-head">
-              <span class="br-icon">📐</span>
-              <span class="br-label">Orbital Topography</span>
-              <span class="tag-pill measured">MEASURED DEM</span>
-            </div>
-            <div class="br-metric-main">1,053.3 m <small>total relief</small></div>
-            <div class="br-metric-sub">
-              <span>Quad: -4,131.7 m to -3,078.4 m</span>
-              <span>Net Climb: +240.2 m ascent</span>
-            </div>
-            <div class="br-tag-desc">1 m/px DEM filtered over 5 m vehicular baseline (&lt;15° safe, 15°–25° mod, &gt;25° haz).</div>
-          </div>
-
-          <div class="br-card">
-            <div class="br-card-head">
-              <span class="br-icon">🧪</span>
-              <span class="br-label">CRISM Mineralogy</span>
-              <span class="tag-pill measured">MEASURED CRISM</span>
-            </div>
-            <div class="br-metric-main">Phyllosilicates <small>&amp; Sulfates</small></div>
-            <div class="br-metric-sub">
-              <span>Smectite clays (ancient water)</span>
-              <span>Polyhydrated ridge sulfates</span>
-            </div>
-            <div class="br-tag-desc">Targeting polygonally fractured bedrock formed during ancient groundwater percolation.</div>
-          </div>
-
-          <div class="br-card">
-            <div class="br-card-head">
-              <span class="br-icon">🌡️</span>
-              <span class="br-label">THEMIS Thermal IR</span>
-              <span class="tag-pill measured">MEASURED THEMIS</span>
-            </div>
-            <div class="br-metric-main">Thermal Inertia <small>Night-IR</small></div>
-            <div class="br-metric-sub">
-              <span>High TI: Exposed bedrock outcrops</span>
-              <span>Low TI: Sandy drifts &amp; ripple hazards</span>
-            </div>
-            <div class="br-tag-desc">100 m/px thermal inertia separates driveable rock pavements from loose sandy traps.</div>
-          </div>
-
-          <div class="br-card">
-            <div class="br-card-head">
-              <span class="br-icon">🛰️</span>
-              <span class="br-label">Mission Traverse</span>
-              <span class="tag-pill measured">MEASURED MSL</span>
-            </div>
-            <div class="br-metric-main">Sols 3721–4805+ <small>traverse</small></div>
-            <div class="br-metric-sub">
-              <span>1,819 rover reference waypoints</span>
-              <span>RAD: ~0.61 mSv/day modeled GCR</span>
-            </div>
-            <div class="br-tag-desc">Real Curiosity traverse baseline across the Mount Sharp exploration corridor.</div>
+      <!-- Row of 3 Icon Chips: Start, Goal, Distance -->
+      <div class="briefing-chips-row">
+        <div class="bchip start">
+          <svg class="ui-ico bchip-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polygon points="12 8 8 12 12 16 12 8"/></svg>
+          <div class="bchip-content">
+            <span class="bchip-k">START</span>
+            <span class="bchip-v">North entry (Sol 3721)</span>
           </div>
         </div>
 
-        <!-- Waypoint Corridor: Departure & Destination -->
-        <div class="briefing-corridor-grid">
-          <div class="bcorr-card start">
-            <div class="bcorr-tag-row">
-              <span class="bcorr-type">DEPARTURE VECTOR</span>
-              <span class="tag-pill measured">MEASURED</span>
-              <span class="bcorr-sol">SOL 3721</span>
-            </div>
-            <div class="bcorr-name">North Entry Point</div>
-            <div id="briefing-start" class="bcorr-specs">
-              <div class="bcorr-spec"><span class="bc-k">Grid</span><span class="bc-v">X 3,467.4 m, Y 4,999.6 m</span></div>
-              <div class="bcorr-spec"><span class="bc-k">Geo</span><span class="bc-v">137.3979° E, -4.7638° S</span></div>
-              <div class="bcorr-spec"><span class="bc-k">Elevation</span><span class="bc-v">-3,857.5 m</span></div>
-              <div class="bcorr-spec"><span class="bc-k">Local Slope</span><span class="bc-v">1.0° (Level terrain)</span></div>
-            </div>
-          </div>
-
-          <div class="bcorr-connector">
-            <span class="bcorr-line"></span>
-            <span class="bcorr-badge">3.3 km Corridor</span>
-            <span class="bcorr-line"></span>
-          </div>
-
-          <div class="bcorr-card goal">
-            <div class="bcorr-tag-row">
-              <span class="bcorr-type">PRIMARY OBJECTIVE</span>
-              <span class="tag-pill measured">MEASURED</span>
-              <span class="tag-pill game">TARGET</span>
-              <span class="bcorr-sol">SOLS 4600–4805</span>
-            </div>
-            <div class="bcorr-name">Center of Boxwork Core Zone</div>
-            <div id="briefing-goal" class="bcorr-specs">
-              <div class="bcorr-spec"><span class="bc-k">Grid</span><span class="bc-v">X 2,432.1 m, Y 2,479.0 m</span></div>
-              <div class="bcorr-spec"><span class="bc-k">Geo</span><span class="bc-v">137.3804° E, -4.8064° S</span></div>
-              <div class="bcorr-spec"><span class="bc-k">Elevation</span><span class="bc-v">-3,617.2 m</span></div>
-              <div class="bcorr-spec"><span class="bc-k">Local Slope</span><span class="bc-v">13.1° (Ridge flank)</span></div>
-            </div>
+        <div class="bchip goal">
+          <svg class="ui-ico bchip-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+          <div class="bchip-content">
+            <span class="bchip-k">GOAL</span>
+            <span class="bchip-v">Boxwork core zone</span>
           </div>
         </div>
 
-        <!-- Science Target Dossiers -->
-        <div class="briefing-targets-section">
-          <div class="bts-header">
-            <div class="bts-title-row">
-              <span class="bts-title">Primary Science Objectives (3)</span>
-              <span class="tag-pill measured">MEASURED WAYPOINTS</span>
-            </div>
-            <span class="bts-subtitle">Locate, survey, and unlock scientific field data along your chosen traverse corridor</span>
-          </div>
-          <div id="briefing-targets-cards" class="briefing-targets-cards"></div>
-          <ul id="briefing-targets-list" style="display:none;"></ul>
-        </div>
-
-        <!-- 3 Candidate Traverses Preview Strip -->
-        <div class="briefing-candidates-preview">
-          <div class="bcp-title">Candidate Traverse Corridors to Evaluate in ANALYZE:</div>
-          <div class="bcp-cards">
-            <div class="bcp-card route-a">
-              <span class="bcp-swatch" style="background:#38bdf8"></span>
-              <div class="bcp-info">
-                <strong>Route A</strong>
-                <span>Low-slope corridor · Prioritizes gentler gradients &lt;15°</span>
-              </div>
-            </div>
-            <div class="bcp-card route-b">
-              <span class="bcp-swatch" style="background:#c084fc"></span>
-              <div class="bcp-info">
-                <strong>Route B</strong>
-                <span>Direct ridge route · Shorter line, steeper climb</span>
-              </div>
-            </div>
-            <div class="bcp-card route-c">
-              <span class="bcp-swatch" style="background:#fb923c"></span>
-              <div class="bcp-info">
-                <strong>Route C</strong>
-                <span>Mineral science detour · Traverses CRISM phyllosilicate deposits</span>
-              </div>
-            </div>
+        <div class="bchip dist">
+          <svg class="ui-ico bchip-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19L19 4"/><path d="M13 4h6v6"/><path d="M11 20H5v-6"/></svg>
+          <div class="bchip-content">
+            <span class="bchip-k">DISTANCE</span>
+            <span class="bchip-v">About 3.3 km corridor</span>
           </div>
         </div>
-
       </div>
 
-      <!-- Footer Bar: Provenance Legend + Launch CTA Button -->
+      <!-- HOW TO PLAY: 4 large cards connected by glowing lines/arrows -->
+      <div class="briefing-how-to-play">
+        <div class="htp-header-row">
+          <span class="htp-eyebrow">HOW TO PLAY</span>
+          <span class="htp-hint">4-STAGE EXPEDITION SURVEY</span>
+        </div>
+        <div class="how-to-play-flow">
+          <div class="htp-card htp-1">
+            <div class="htp-card-glow"></div>
+            <div class="htp-step-badge">1</div>
+            <div class="htp-icon-wrap">
+              <svg class="ui-ico htp-ico" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+            </div>
+            <div class="htp-title">ANALYZE</div>
+            <div class="htp-desc">Scan the terrain and compare three routes.</div>
+          </div>
+
+          <div class="htp-connector htp-conn-1" aria-hidden="true">
+            <span class="htp-line"></span>
+            <svg class="htp-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <defs>
+                <linearGradient id="htp-arrow-grad-1" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#00e5ff"/>
+                  <stop offset="100%" stop-color="#c084fc"/>
+                </linearGradient>
+              </defs>
+              <polyline points="9 18 15 12 9 6" stroke="url(#htp-arrow-grad-1)"/>
+            </svg>
+          </div>
+
+          <div class="htp-card htp-2">
+            <div class="htp-card-glow"></div>
+            <div class="htp-step-badge">2</div>
+            <div class="htp-icon-wrap">
+              <svg class="ui-ico htp-ico" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 17C12 17 12 6 15.5 6"/><path d="M8.5 18h7"/></svg>
+            </div>
+            <div class="htp-title">CHOOSE</div>
+            <div class="htp-desc">Lock in one route.</div>
+          </div>
+
+          <div class="htp-connector htp-conn-2" aria-hidden="true">
+            <span class="htp-line"></span>
+            <svg class="htp-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <defs>
+                <linearGradient id="htp-arrow-grad-2" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#c084fc"/>
+                  <stop offset="100%" stop-color="#ff6b35"/>
+                </linearGradient>
+              </defs>
+              <polyline points="9 18 15 12 9 6" stroke="url(#htp-arrow-grad-2)"/>
+            </svg>
+          </div>
+
+          <div class="htp-card htp-3">
+            <div class="htp-card-glow"></div>
+            <div class="htp-step-badge">3</div>
+            <div class="htp-icon-wrap">
+              <svg class="ui-ico htp-ico" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="17" r="2.5"/><circle cx="17" cy="17" r="2.5"/><path d="M5 17H4l1-5h12l2 5h-1"/><path d="M9 12V8h6l2 4"/><path d="M12 8V5l3-1"/></svg>
+            </div>
+            <div class="htp-title">EXPLORE</div>
+            <div class="htp-desc">Travel it and manage oxygen and battery.</div>
+          </div>
+
+          <div class="htp-connector htp-conn-3" aria-hidden="true">
+            <span class="htp-line"></span>
+            <svg class="htp-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <defs>
+                <linearGradient id="htp-arrow-grad-3" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#ff6b35"/>
+                  <stop offset="100%" stop-color="#10b981"/>
+                </linearGradient>
+              </defs>
+              <polyline points="9 18 15 12 9 6" stroke="url(#htp-arrow-grad-3)"/>
+            </svg>
+          </div>
+
+          <div class="htp-card htp-4">
+            <div class="htp-card-glow"></div>
+            <div class="htp-step-badge">4</div>
+            <div class="htp-icon-wrap">
+              <svg class="ui-ico htp-ico" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3v18"/><path d="M5 4h11l-2 4 2 4H5"/></svg>
+            </div>
+            <div class="htp-title">DEBRIEF</div>
+            <div class="htp-desc">See your score against the real data.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Collapsed "Mission data" panel below the cards, closed by default, with its content unchanged -->
+      <details id="briefing-details-panel" class="briefing-details-accordion">
+        <summary class="bdata-summary">
+          <div class="bdata-summary-content">
+            <svg class="ui-ico bdata-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+            <span class="bdata-title">Mission data</span>
+            <span class="bdata-sub">Orbital topography, CRISM, THEMIS, targets &amp; candidate corridors</span>
+          </div>
+          <span class="bdata-toggle-tag">EXPAND DATA ▾</span>
+        </summary>
+
+        <div class="briefing-scroll-content">
+          <!-- Full narrative preserved -->
+          <div class="bdata-narrative-box">
+            <span class="bdata-narrative-lbl">FULL MISSION DOSSIER</span>
+            <p id="briefing-full-story" class="bdata-full-story">Curiosity entered this 5 km × 5 km sector of Mount Sharp at Sol 3721 on the northern edge (-3,857.5 m) and climbed toward the Sols 4600–4805 boxwork core zone (-3,617.1 m). Analyze the orbital DEM slope map, CRISM mineral spectra, and THEMIS thermal imagery to select one of three candidate traverses (Route A, Route B, or Route C) before locking in your plan.</p>
+          </div>
+
+          <!-- 4-Box Telemetry / Research Recon Grid -->
+          <div class="briefing-research-grid">
+            <div class="br-card">
+              <div class="br-card-head">
+                <span class="br-icon">📐</span>
+                <span class="br-label">Orbital Topography</span>
+                <span class="tag-pill measured">MEASURED DEM</span>
+              </div>
+              <div class="br-metric-main">1,053.3 m <small>total relief</small></div>
+              <div class="br-metric-sub">
+                <span>Quad: -4,131.7 m to -3,078.4 m</span>
+                <span>Net Climb: +240.2 m ascent</span>
+              </div>
+              <div class="br-tag-desc">1 m/px DEM filtered over 5 m vehicular baseline (&lt;15° safe, 15°–25° mod, &gt;25° haz).</div>
+            </div>
+
+            <div class="br-card">
+              <div class="br-card-head">
+                <span class="br-icon">🧪</span>
+                <span class="br-label">CRISM Mineralogy</span>
+                <span class="tag-pill measured">MEASURED CRISM</span>
+              </div>
+              <div class="br-metric-main">Phyllosilicates <small>&amp; Sulfates</small></div>
+              <div class="br-metric-sub">
+                <span>Smectite clays (ancient water)</span>
+                <span>Polyhydrated ridge sulfates</span>
+              </div>
+              <div class="br-tag-desc">Targeting polygonally fractured bedrock formed during ancient groundwater percolation.</div>
+            </div>
+
+            <div class="br-card">
+              <div class="br-card-head">
+                <span class="br-icon">🌡️</span>
+                <span class="br-label">THEMIS Thermal IR</span>
+                <span class="tag-pill measured">MEASURED THEMIS</span>
+              </div>
+              <div class="br-metric-main">Thermal Inertia <small>Night-IR</small></div>
+              <div class="br-metric-sub">
+                <span>High TI: Exposed bedrock outcrops</span>
+                <span>Low TI: Sandy drifts &amp; ripple hazards</span>
+              </div>
+              <div class="br-tag-desc">100 m/px thermal inertia separates driveable rock pavements from loose sandy traps.</div>
+            </div>
+
+            <div class="br-card">
+              <div class="br-card-head">
+                <span class="br-icon">🛰️</span>
+                <span class="br-label">Mission Traverse</span>
+                <span class="tag-pill measured">MEASURED MSL</span>
+              </div>
+              <div class="br-metric-main">Sols 3721–4805+ <small>traverse</small></div>
+              <div class="br-metric-sub">
+                <span>1,819 rover reference waypoints</span>
+                <span>RAD: ~0.61 mSv/day modeled GCR</span>
+              </div>
+              <div class="br-tag-desc">Real Curiosity traverse baseline across the Mount Sharp exploration corridor.</div>
+            </div>
+          </div>
+
+          <!-- Waypoint Corridor: Departure & Destination -->
+          <div class="briefing-corridor-grid">
+            <div class="bcorr-card start">
+              <div class="bcorr-tag-row">
+                <span class="bcorr-type">DEPARTURE VECTOR</span>
+                <span class="tag-pill measured">MEASURED</span>
+                <span class="bcorr-sol">SOL 3721</span>
+              </div>
+              <div class="bcorr-name">North Entry Point</div>
+              <div id="briefing-start" class="bcorr-specs">
+                <div class="bcorr-spec"><span class="bc-k">Grid</span><span class="bc-v">X 3,467.4 m, Y 4,999.6 m</span></div>
+                <div class="bcorr-spec"><span class="bc-k">Geo</span><span class="bc-v">137.3979° E, -4.7638° S</span></div>
+                <div class="bcorr-spec"><span class="bc-k">Elevation</span><span class="bc-v">-3,857.5 m</span></div>
+                <div class="bcorr-spec"><span class="bc-k">Local Slope</span><span class="bc-v">1.0° (Level terrain)</span></div>
+              </div>
+            </div>
+
+            <div class="bcorr-connector">
+              <span class="bcorr-line"></span>
+              <span class="bcorr-badge">3.3 km Corridor</span>
+              <span class="bcorr-line"></span>
+            </div>
+
+            <div class="bcorr-card goal">
+              <div class="bcorr-tag-row">
+                <span class="bcorr-type">PRIMARY OBJECTIVE</span>
+                <span class="tag-pill measured">MEASURED</span>
+                <span class="tag-pill game">TARGET</span>
+                <span class="bcorr-sol">SOLS 4600–4805</span>
+              </div>
+              <div class="bcorr-name">Center of Boxwork Core Zone</div>
+              <div id="briefing-goal" class="bcorr-specs">
+                <div class="bcorr-spec"><span class="bc-k">Grid</span><span class="bc-v">X 2,432.1 m, Y 2,479.0 m</span></div>
+                <div class="bcorr-spec"><span class="bc-k">Geo</span><span class="bc-v">137.3804° E, -4.8064° S</span></div>
+                <div class="bcorr-spec"><span class="bc-k">Elevation</span><span class="bc-v">-3,617.2 m</span></div>
+                <div class="bcorr-spec"><span class="bc-k">Local Slope</span><span class="bc-v">13.1° (Ridge flank)</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Science Target Dossiers -->
+          <div class="briefing-targets-section">
+            <div class="bts-header">
+              <div class="bts-title-row">
+                <span class="bts-title">Primary Science Objectives (3)</span>
+                <span class="tag-pill measured">MEASURED WAYPOINTS</span>
+              </div>
+              <span class="bts-subtitle">Locate, survey, and unlock scientific field data along your chosen traverse corridor</span>
+            </div>
+            <div id="briefing-targets-cards" class="briefing-targets-cards"></div>
+            <ul id="briefing-targets-list" style="display:none;"></ul>
+          </div>
+
+          <!-- 3 Candidate Traverses Preview Strip -->
+          <div class="briefing-candidates-preview">
+            <div class="bcp-title">Candidate Traverse Corridors to Evaluate in ANALYZE:</div>
+            <div class="bcp-cards">
+              <div class="bcp-card route-a">
+                <span class="bcp-swatch" style="background:#38bdf8"></span>
+                <div class="bcp-info">
+                  <strong>Route A</strong>
+                  <span>Low-slope corridor · Prioritizes gentler gradients &lt;15°</span>
+                </div>
+              </div>
+              <div class="bcp-card route-b">
+                <span class="bcp-swatch" style="background:#c084fc"></span>
+                <div class="bcp-info">
+                  <strong>Route B</strong>
+                  <span>Direct ridge route · Shorter line, steeper climb</span>
+                </div>
+              </div>
+              <div class="bcp-card route-c">
+                <span class="bcp-swatch" style="background:#fb923c"></span>
+                <div class="bcp-info">
+                  <strong>Route C</strong>
+                  <span>Mineral science detour · Traverses CRISM phyllosilicate deposits</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Provenance Note Inside Collapsed Panel -->
+          <div class="game-provenance-note">
+            Data Provenance:
+            <span class="tag-pill measured">MEASURED</span> NASA instrument data ·
+            <span class="tag-pill dem">DERIVED</span> DEM calculations ·
+            <span class="tag-pill game">MISSION RULE</span> scenario parameters ·
+            <span class="sim-badge">MODELED</span> mission estimates
+          </div>
+        </div>
+      </details>
+
+      <!-- Footer Bar: Single Big Glowing Start Mission CTA Button -->
       <div class="briefing-footer">
-        <div class="game-provenance-note">
-          Data Provenance:
-          <span class="tag-pill measured">MEASURED</span> NASA instrument data ·
-          <span class="tag-pill dem">DERIVED</span> DEM calculations ·
-          <span class="tag-pill game">MISSION RULE</span> scenario parameters ·
-          <span class="sim-badge">MODELED</span> mission estimates
-        </div>
-        <div class="briefing-cta-wrap">
+        <div class="briefing-cta-wrap center">
           <button id="btn-start-mission" class="btn-briefing-start" type="button">
             <span class="btn-start-glow"></span>
-            <span class="btn-start-text">INITIALIZE EXPEDITION SURVEY →</span>
+            <span class="btn-start-text">Start Mission</span>
           </button>
         </div>
       </div>

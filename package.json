@@ -2,16 +2,35 @@
   "name": "red-quest",
   "private": true,
   "version": "1.0.0",
+  "description": "Interactive 3D Mars surface mapping and traverse simulation engine built on NASA PDS, HiRISE, CRISM, and THEMIS planetary datasets for Gale Crater.",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
+  "keywords": [
+    "mars",
+    "nasa",
+    "space-apps-challenge",
+    "planetary-science",
+    "hirise",
+    "crism",
+    "themis",
+    "gale-crater",
+    "curiosity-rover",
+    "threejs",
+    "webgl",
+    "terrain-analysis",
+    "pathfinding"
+  ],
+  "author": "Astro Dots",
+  "license": "MIT",
   "dependencies": {
     "three": "^0.174.0"
   },
   "devDependencies": {
+    "playwright": "^1.65.0",
     "vite": "^6.2.0"
   }
 }

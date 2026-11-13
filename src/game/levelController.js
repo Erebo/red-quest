@@ -34,13 +34,15 @@ export function buildBlindedPlannerCandidates(levelData) {
 export function populateBriefingUI(levelData) {
   const titleEl = document.getElementById('briefing-title');
   const storyEl = document.getElementById('briefing-story');
+  const fullStoryEl = document.getElementById('briefing-full-story');
   const startEl = document.getElementById('briefing-start');
   const goalEl = document.getElementById('briefing-goal');
   const targetsList = document.getElementById('briefing-targets-list');
   const targetsCards = document.getElementById('briefing-targets-cards');
 
   if (titleEl) titleEl.textContent = levelData.title.value;
-  if (storyEl) storyEl.textContent = levelData.story.value;
+  if (storyEl) storyEl.textContent = 'Plan a route across Mount Sharp, then travel it to the boxwork core zone.';
+  if (fullStoryEl) fullStoryEl.textContent = levelData.story.value;
 
   if (startEl) {
     const s = levelData.start;
