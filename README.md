@@ -9,7 +9,7 @@ Interactive 3D Mars surface mapping and traverse simulation engine built on NASA
 [![Vite](https://img.shields.io/badge/Vite-6.2.0-646CFF.svg)](https://vitejs.dev/)
 [![NASA Space Apps](https://img.shields.io/badge/NASA%20Space%20Apps-2026-critical.svg)](https://www.spaceappschallenge.org/)
 
-![Red Quest Hero Interface](docs/screenshots/02-analyze-routes.png)
+![Red Quest Hero Interface](docs/screenshots/intro.png)
 
 ---
 
@@ -114,13 +114,6 @@ The following sequence illustrates the complete operational workflow of Red Ques
 
 ---
 
-### 03. Terrain Slope and Obstacle Classification Lens
-![03 Terrain Lens](docs/screenshots/03-terrain-lens.png)
-*Terrain decision lens rendering continuous slope gradient colors (<15° green, 15°–25° yellow, >25° red) paired with 25 m elevation contour lines.*  
-**User Action**: The operator detects hazardous scarps exceeding 25° inclination and verifies that candidate corridors navigate through passable topographical gaps.
-
----
-
 ### 04. CRISM Spectral Mineralogy Lens
 ![04 Minerals Lens](docs/screenshots/04-minerals-lens.png)
 *Minerals decision lens rendering orbital CRISM spectral indicators: phyllosilicates / smectite clay in magenta and polyhydrated sulfates in cyan.*  
@@ -132,13 +125,6 @@ The following sequence illustrates the complete operational workflow of Red Ques
 ![05 Heat Lens](docs/screenshots/05-heat-lens.png)
 *Heat decision lens visualizing THEMIS Day IR relative thermal brightness (32–255 DN) across the 5 km × 5 km corridor.*  
 **User Action**: The operator differentiates exposed, high thermal-inertia bedrock pavements from low thermal-inertia sandy drift traps that risk wheel slippage.
-
----
-
-### 06. Solar Insolation and Cast Shadow Lens
-![06 Sun Power Lens](docs/screenshots/06-sun-power-lens.png)
-*Sun & Power decision lens rendering direct solar illumination and ray-marched cast shadows for diurnal traverse planning.*  
-**User Action**: The operator toggles diurnal solar angles (Morning, Noon, Evening) to verify photovoltaic power generation and anticipate shadow cold traps.
 
 ---
 
@@ -167,6 +153,13 @@ The following sequence illustrates the complete operational workflow of Red Ques
 ![10 Debrief Score](docs/screenshots/10-debrief-score.png)
 *DEBRIEF stage presenting empirical performance scoring, pre-lock survey accuracy, and overlay comparison against the genuine Curiosity rover traverse.*  
 **User Action**: The operator analyzes plan deviations against true USGS elevation metrics and reviews MSL Curiosity historical traverse benchmarks.
+
+---
+
+### 11. Research GIS and Scientific Analysis Mode
+![11 Research Mode](docs/screenshots/11-research.png)
+*RESEARCH mode providing free GIS layer toggles, pinned point inspection with measured coordinates and environmental telemetry, and full Gale Crater terrain analysis.*  
+**User Action**: The operator inspects raw scientific layers, pins arbitrary coordinates for deep telemetry readouts, and cross-analyzes orbital data alongside Curiosity's traverse.
 
 ---
 
