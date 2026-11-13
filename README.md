@@ -2,7 +2,7 @@
 
 **READ THE LAND. SURVIVE THE RED.**
 
-A browser-based Mars traverse planner: orbital terrain, mineral and thermal data fused into six analytical lenses over a real 5 km × 5 km sector of Gale Crater, with an A* route planner, a drivable rover, and a scored debrief against Curiosity's actual traverse.
+A browser-based Mars traverse planner: orbital terrain, mineral and thermal data fused into six analytical lenses over a real 5 km × 5 km sector of Gale Crater, with an automated route planner, a drivable rover, and a scored debrief against Curiosity's actual traverse.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Three.js](https://img.shields.io/badge/Three.js-r174-black.svg)](https://threejs.org/)
@@ -28,7 +28,7 @@ A browser-based Mars traverse planner: orbital terrain, mineral and thermal data
   - [6.3 Slope Gradient Calculation and Safety Tiers](#63-slope-gradient-calculation-and-safety-tiers)
   - [6.4 Solar Insolation and Cast Shadow Model](#64-solar-insolation-and-cast-shadow-model)
   - [6.5 Sky-View Factor Radiation Shielding Proxy](#65-sky-view-factor-radiation-shielding-proxy)
-  - [6.6 Worker-Accelerated A* Traverse Generation](#66-worker-accelerated-a-traverse-generation)
+  - [6.6 Worker-Accelerated Traverse Generation](#66-worker-accelerated-traverse-generation)
   - [6.7 Deterministic Environmental Feature Placement](#67-deterministic-environmental-feature-placement)
   - [6.8 Empirical Evaluation and Scoring Bands](#68-empirical-evaluation-and-scoring-bands)
 - [7. System Architecture](#7-system-architecture)
@@ -65,7 +65,7 @@ Built for the NASA Space Apps Challenge category **Interplanetary Survival Guide
 | :-------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------- |
 | **Multi-Source Data Integration**             | Five data types fused in one scene: 1 m Gale DEM, HiRISE colour orthoimage, THEMIS Day IR, CRISM multispectral products, MSL localized traverse.                                   | `public/data/`, `src/config.js`, `docs/DATA_SOURCES.md`                                    |
 | **Astronaut Safety & Hazard Detection**       | Slope tiers (<15°, 15°–25°, >25°), sky-view factor radiation shielding, thermal and dust hazard detection, rockfall and radio occlusion zones.                                     | `src/game/decisionLenses.js`, `src/game/surveyKit.js`, `src/game/terrainAnalysisWorker.js` |
-| **Obstacle Avoidance & Pathfinding**          | Asynchronous A* in a dedicated Web Worker, hard barrier at 25° slope, three candidate corridors with different cost weightings.                                                   | `src/routeWorker.js`, `src/game/levels/level01.json`                                       |
+| **Obstacle Avoidance & Pathfinding**          | Asynchronous pathfinding in a dedicated Web Worker, hard barrier at 25° slope, three candidate corridors with different cost weightings.                                                   | `src/routeWorker.js`, `src/game/levels/level01.json`                                       |
 | **Layered Multi-Spectral Visualization**      | Six real-time lenses (Satellite, Terrain, Minerals, Heat, Sun & Power, Radiation Shelter) toggled non-destructively over true topography.                                          | `src/game/decisionLenses.js`, `src/main.js`                                                |
 | **Scientific Waypoints & Resource Discovery** | 18 mission elements in four families (science, hazard, resource, mystery) placed on DEM and CRISM constraints, with the three science targets matched to Curiosity campaign sites. | `src/game/levels/level01_elements.json`, `src/game/missionElements.js`                     |
 | **Rigorous Ground-Truth Debrief**             | Pre-lock estimates scored against DEM-derived truth, plus an overlay of the real Curiosity traverse the player never saw.                                                          | `src/game/surveyLog.js`, `src/game/routeCalculator.js`                                     |
@@ -99,7 +99,7 @@ All three climb 239 m net. All three distances, ascents and slope figures are `M
 
 **Physical traverse simulation.** Terrain-normal alignment, wheel dust, slope-dependent battery drain, oxygen and radiation telemetry, waypoint surveying.
 
-**Unconstrained Research mode.** Free layer toggles, arbitrary start and goal waypoints, manual A* recalculation, and coordinate inspection with full telemetry readout.
+**Unconstrained Research mode.** Free layer toggles, arbitrary start and goal waypoints, manual route recalculation, and coordinate inspection with full telemetry readout.
 
 **Terrain-wide slope distribution.** 65.5% of the sector is below 15°, 19.7% sits between 15° and 25°, and 14.8% exceeds 25°.
 
@@ -262,7 +262,7 @@ SVF          = 1 - (1 / 12) * sum over azimuths of sin(horizon(az))
 
 Rays extend across 12 radial offsets out to roughly 1.1 km. Open ground returns `SVF → 1.0`. Scarp bases and canyon walls fall below 0.85, which the mission rule designates a **Natural Radiation Shelter**.
 
-### 6.6 Worker-Accelerated A* Traverse Generation
+### 6.6 Worker-Accelerated Traverse Generation
 
 Pathfinding runs in a Web Worker so it never blocks the render loop. The graph is the DEM grid downsampled to 257 × 257 nodes, with 8-directional connectivity at the effective 4.88 m step. Base step cost is the 3D segment length `d`, which already includes the elevation change.
 
@@ -333,7 +333,7 @@ flowchart TD
         THREE_APP[Three.js WebGL Renderer]
         SHADERS[Lens Shader Materials]
         FSM[State Machine: src/game/gameState.js]
-        WORKER[A* Worker: src/routeWorker.js]
+        WORKER[Pathfinding Worker: src/routeWorker.js]
         TERRAIN[Terrain Worker: terrainAnalysisWorker.js]
         PHYSICS[Rover Kinematics & HUD]
         UI[HUD, Lenses, Survey Kit & Debrief]
@@ -506,7 +506,7 @@ red-quest/
 │   ├── main.js                  # Bootstrap, render loop, UI orchestration
 │   ├── config.js                # Scoring config, sliders, planner bands
 │   ├── style.css                # Interface styling
-│   ├── routeWorker.js           # A* pathfinding worker (257x257 graph)
+│   ├── routeWorker.js           # Pathfinding worker (257x257 graph)
 │   ├── game/
 │   │   ├── gameState.js         # Five-state machine
 │   │   ├── decisionLenses.js    # Lens definitions and materials
