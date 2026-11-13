@@ -2294,7 +2294,10 @@ const INTRO_DURATION = 4000;
 
 function startCinematicIntro() {
   isIntroActive = true;
+  document.body.classList.add('cinematic-intro-active');
   btnSkipIntro.style.display = 'block';
+  panelPrefs.MISSION.plannerCollapsed = true;
+  syncPanelsToViewMode();
 
   const startCam = new THREE.Vector3(0, 7500, 4500);
   const startTarget = new THREE.Vector3(0, 200, 0);
@@ -2331,6 +2334,7 @@ function startCinematicIntro() {
 function endCinematicIntro() {
   if (!isIntroActive) return;
   isIntroActive = false;
+  document.body.classList.remove('cinematic-intro-active');
   btnSkipIntro.style.display = 'none';
 
   const { meshX, meshZ } = localToMesh(2430, 2480);
@@ -2338,6 +2342,7 @@ function endCinematicIntro() {
   camera.position.set(meshX + 180, targetY + 700, meshZ + 900);
   controls.target.set(meshX, targetY, meshZ);
   controls.update();
+  syncPanelsToViewMode();
 }
 
 // --- Reset Customization to Standard Defaults ---
@@ -2430,8 +2435,12 @@ function resetCustomizationToStandard() {
   if (inspectorMode) inspectorMode.textContent = '(hover)';
   if (inspectorUnpin) inspectorUnpin.style.display = 'none';
   if (pinnedReticle) pinnedReticle.visible = false;
-  if (currentViewMode === 'MISSION') panelPrefs.MISSION.inspectorOpen = false;
-  panelPrefs[currentViewMode].plannerCollapsed = false;
+  if (currentViewMode === 'MISSION') {
+    panelPrefs.MISSION.inspectorOpen = false;
+    panelPrefs.MISSION.plannerCollapsed = true;
+  } else {
+    panelPrefs.RESEARCH.plannerCollapsed = false;
+  }
 
   // 10. Reset Camera Orbit
   controls.target.set(0, ((-3772.0 - minElev) * currentExag), 0);
@@ -4961,7 +4970,7 @@ function applyGameScreenState(state) {
 
   // Planner panel & blinded Route A/B/C controls
   const showPlanner = screen === GAME_STATES.ANALYZE || screen === GAME_STATES.CHOOSE;
-  if (showPlanner && panelPrefs.MISSION) {
+  if (screen === GAME_STATES.CHOOSE && panelPrefs.MISSION) {
     panelPrefs.MISSION.plannerCollapsed = false;
   }
   if (plannerPanel) {
@@ -5309,6 +5318,7 @@ function bindGameEvents() {
 
   if (btnStartMission) {
     btnStartMission.addEventListener('click', () => {
+      panelPrefs.MISSION.plannerCollapsed = true;
       levelState.startMission();
       if (!hasPlayedIntro) {
         hasPlayedIntro = true;
@@ -5319,6 +5329,7 @@ function bindGameEvents() {
 
   if (btnGoChoose) {
     btnGoChoose.addEventListener('click', () => {
+      panelPrefs.MISSION.plannerCollapsed = false;
       levelState.goToChoose();
     });
   }
