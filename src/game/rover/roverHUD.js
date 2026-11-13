@@ -79,6 +79,10 @@ export class RoverHUD {
     this.centerAlertTimer = null;
     this._lastDustSlowTime = 0;
 
+    // Persistent Bubbly Controls Prompt at Bottom-Middle
+    this.controlsBubble = document.getElementById('hud-controls-bubble');
+    this._controlsBubbleTimer = null;
+
     // Toast notification
     this.toast = document.getElementById('planner-toast');
     this.toastTimer = null;
@@ -87,10 +91,22 @@ export class RoverHUD {
 
   show() {
     if (this.container) this.container.classList.remove('hidden');
+    if (this.controlsBubble) {
+      this.controlsBubble.classList.add('intro-pop');
+      if (this._controlsBubbleTimer) clearTimeout(this._controlsBubbleTimer);
+      // After 5 seconds of large popping intro, transition to slightly less large persistent bubble
+      this._controlsBubbleTimer = setTimeout(() => {
+        if (this.controlsBubble) this.controlsBubble.classList.remove('intro-pop');
+      }, 5000);
+    }
   }
 
   hide() {
     if (this.container) this.container.classList.add('hidden');
+    if (this._controlsBubbleTimer) {
+      clearTimeout(this._controlsBubbleTimer);
+      this._controlsBubbleTimer = null;
+    }
   }
 
   setRoute(route) {

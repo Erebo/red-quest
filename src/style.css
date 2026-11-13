@@ -1095,6 +1095,7 @@ body.screen-explore #survey-kit-card,
 body.screen-explore #survey-kit-panel,
 body.screen-explore #survey-result-overlay,
 body.screen-explore #explore-map-card,
+body.screen-explore #game-explore-overlay,
 body.screen-explore #map-top-controls {
   display: none !important;
 }
@@ -1131,6 +1132,27 @@ body.screen-explore #game-explore-overlay .sim-badge {
 }
 
 /* ---------- Top Nav Destination Bar (Arcade Banner) ---------- */
+/* =========================================================
+   COZY ARCADE OPEN-WORLD CARDLESS & BUBBLY GPS HUD
+   Clean floating bubbly elements, rounded keycaps,
+   playful glowing typography, soft shadows, zero rectangular cards.
+   ========================================================= */
+.rover-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 45;
+  display: block;
+  padding: 0;
+  font-family: ui-rounded, "Segoe UI Rounded", "Nunito", "Trebuchet MS", var(--sans);
+  user-select: none;
+}
+
+.rover-hud.hidden {
+  display: none !important;
+}
+
+/* ---------- Top Nav Destination Bar (More Transparent Translucent Arcade Banner) ---------- */
 .hud-nav-bar {
   position: absolute;
   top: 22px;
@@ -1139,13 +1161,13 @@ body.screen-explore #game-explore-overlay .sim-badge {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 9px 20px 9px 22px;
-  background: rgba(255, 248, 238, 0.94);
-  backdrop-filter: blur(14px);
-  border: 2.5px solid #e6cdaf;
-  border-left: 5px solid #e07a5f;
+  padding: 8px 18px 8px 20px;
+  background: rgba(255, 248, 238, 0.52);
+  backdrop-filter: blur(16px);
+  border: 2px solid rgba(230, 205, 175, 0.65);
+  border-left: 4.5px solid #e07a5f;
   border-radius: 20px;
-  box-shadow: 0 8px 22px rgba(74, 53, 40, 0.18), inset 0 2px 0 rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.6);
   pointer-events: auto;
 }
 
@@ -1164,7 +1186,7 @@ body.screen-explore #game-explore-overlay .sim-badge {
 }
 
 .hud-nav-title {
-  color: #4a3528;
+  color: #3b281c;
   font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.3px;
@@ -1176,30 +1198,36 @@ body.screen-explore #game-explore-overlay .sim-badge {
   align-items: center;
   gap: 10px;
   padding-left: 14px;
-  border-left: 2px solid #f0ddc4;
+  border-left: 2px solid rgba(240, 221, 196, 0.7);
 }
 
 .hud-dest-arrow {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: #fde8cf;
+  background: rgba(253, 232, 207, 0.85);
   border: 2px solid #e07a5f;
   box-shadow: 0 2px 0 #c9613f;
   color: #c9613f;
-  font-size: 15px;
   line-height: 1;
   transform-origin: 50% 50%;
   transition: transform 0.12s linear;
 }
 
+.hud-arrow-svg {
+  width: 19px;
+  height: 19px;
+  stroke: #c9613f;
+  display: block;
+}
+
 .hud-dest-dist {
   font-family: ui-rounded, "Segoe UI Rounded", "Nunito", "Trebuchet MS", var(--sans);
-  color: #4a3528;
+  color: #3b281c;
   font-size: 22px;
   font-weight: 800;
   letter-spacing: 0.2px;
@@ -1232,78 +1260,95 @@ body.screen-explore #game-explore-overlay .sim-badge {
   box-shadow: 0 1px 0 #c9613f;
 }
 
-/* ---------- Top Right: Mission Science Progress Card (Cozy Badge) ---------- */
+/* ---------- Top Right: Cardless Floating Science Score ---------- */
 .hud-mission-card {
   position: absolute;
-  top: 22px;
+  top: 20px;
   right: 22px;
-  width: 215px;
-  padding: 11px 16px;
-  background: rgba(255, 248, 238, 0.94);
-  backdrop-filter: blur(14px);
-  border: 2.5px solid #e6cdaf;
-  border-top: 4px solid #f2b84b;
-  border-radius: 20px;
-  box-shadow: 0 8px 22px rgba(74, 53, 40, 0.18), inset 0 2px 0 rgba(255, 255, 255, 0.9);
+  width: auto;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
 }
 
 .hud-mission-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
+  gap: 8px;
 }
 
 .hud-mission-tag {
-  font-size: 9px;
-  font-weight: 800;
-  color: #a86a12;
+  font-size: 10px;
+  font-weight: 900;
+  color: #ffedd5;
   letter-spacing: 1.2px;
+  text-shadow: 0 2px 0 #b45309, 0 3px 8px rgba(0, 0, 0, 0.85);
 }
 
 .hud-mission-count {
-  font-size: 10px;
-  font-weight: 800;
-  color: #a5876b;
+  font-size: 11px;
+  font-weight: 900;
+  color: #fed7aa;
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1.5px solid rgba(245, 158, 11, 0.5);
+  border-radius: 999px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
 .hud-mission-score-row {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 6px;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
 }
 
 .hud-mission-label {
-  font-size: 10px;
-  font-weight: 800;
-  color: #6f5140;
-  letter-spacing: 0.4px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #fffdf5;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 0 #b45309, 0 3px 8px rgba(0, 0, 0, 0.85);
 }
 
 .hud-mission-pts {
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 900;
-  color: #4a3528;
+  color: #fef08a;
+  line-height: 1;
+  text-shadow:
+    0 2px 0 #b45309,
+    0 4px 0 #78350f,
+    0 6px 14px rgba(0, 0, 0, 0.9),
+    0 0 22px rgba(245, 158, 11, 0.7);
 }
 
 .hud-mission-progress-bar {
-  width: 100%;
+  width: 140px;
   height: 7px;
-  background: #f0ddc4;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
   border-radius: 999px;
   overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .hud-mission-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #f2b84b, #e07a5f);
+  background: linear-gradient(90deg, #f59e0b, #ea580c);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.7);
   transition: width 0.2s ease-out;
 }
 
-/* ---------- Bottom Left: Cozy Arcade Corner GPS Radar & Telemetry ---------- */
+/* ---------- Bottom Left: Radar Minimap & Docked Telemetry Strip ---------- */
 .hud-radar-pod {
   position: absolute;
   left: 22px;
@@ -1358,41 +1403,42 @@ body.screen-explore #game-explore-overlay .sim-badge {
   letter-spacing: 1px;
 }
 
-/* Compact Telemetry Strip docked beneath the radar */
+/* Reverted Compact Telemetry Strip docked beneath the radar */
 .hud-telemetry-strip {
   width: 224px;
   display: grid;
   grid-template-columns: auto 1fr 1fr;
   align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-  background: rgba(255, 248, 238, 0.94);
-  backdrop-filter: blur(14px);
-  border: 2.5px solid #e6cdaf;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 248, 238, 0.52);
+  backdrop-filter: blur(16px);
+  border: 2px solid rgba(230, 205, 175, 0.65);
   border-radius: 18px;
-  box-shadow: 0 8px 22px rgba(74, 53, 40, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .hud-speedometer {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding-right: 8px;
-  border-right: 2px solid #f0ddc4;
+  padding-right: 10px;
+  border-right: 2px solid rgba(240, 221, 196, 0.7);
 }
 
 .hud-speed-digits {
-  font-size: 26px;
+  font-size: 34px;
   font-weight: 900;
-  color: #4a3528;
-  line-height: 1;
+  color: #3b281c;
+  line-height: 0.95;
 }
 
 .hud-speed-unit {
-  font-size: 8.5px;
-  font-weight: 800;
+  font-size: 9.5px;
+  font-weight: 900;
   color: #c9613f;
-  letter-spacing: 0.8px;
+  letter-spacing: 1px;
+  margin-top: 2px;
 }
 
 .hud-stat-col {
@@ -1408,22 +1454,22 @@ body.screen-explore #game-explore-overlay .sim-badge {
 }
 
 .hud-stat-label {
-  font-size: 8px;
-  font-weight: 800;
-  color: #a5876b;
+  font-size: 8.5px;
+  font-weight: 900;
+  color: #8c684d;
   letter-spacing: 0.5px;
 }
 
 .hud-stat-val {
-  font-size: 9.5px;
-  font-weight: 800;
-  color: #4a3528;
+  font-size: 11px;
+  font-weight: 900;
+  color: #3b281c;
 }
 
 .hud-bar-track {
   width: 100%;
-  height: 7px;
-  background: #f0ddc4;
+  height: 8px;
+  background: rgba(240, 221, 196, 0.75);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -1444,38 +1490,39 @@ body.screen-explore #game-explore-overlay .sim-badge {
   box-shadow: 0 0 6px rgba(242, 184, 75, 0.5);
 }
 
-.hud-radar-controls {
-  font-size: 8.5px;
-  font-weight: 800;
-  color: #a5876b;
-  letter-spacing: 0.6px;
-  padding-left: 2px;
-}
-
-/* ---------- Bottom Right: Cozy Tactical POI Feed ---------- */
+/* ---------- Bottom Right: Cardless Floating Nearby Radar Feed ---------- */
 .hud-poi-feed {
   position: absolute;
   right: 22px;
   bottom: 22px;
-  width: 250px;
-  padding: 11px 14px;
-  background: rgba(255, 248, 238, 0.94);
-  backdrop-filter: blur(14px);
-  border: 2.5px solid #e6cdaf;
-  border-top: 4px solid #5aa9a3;
-  border-radius: 20px;
-  box-shadow: 0 8px 22px rgba(74, 53, 40, 0.18), inset 0 2px 0 rgba(255, 255, 255, 0.9);
+  width: 240px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
   pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .hud-poi-head {
-  font-size: 9px;
-  font-weight: 800;
-  color: #3f847f;
-  letter-spacing: 1px;
-  margin-bottom: 7px;
-  padding-bottom: 4px;
-  border-bottom: 1.5px dashed #eed7bb;
+  font-size: 10.5px;
+  font-weight: 900;
+  color: #fffdf5;
+  letter-spacing: 1.2px;
+  margin-bottom: 2px;
+  padding: 0;
+  border: none;
+  text-shadow:
+    0 2px 0 #0f766e,
+    0 3px 0 #115e59,
+    0 4px 10px rgba(0, 0, 0, 0.9),
+    0 0 16px rgba(20, 184, 166, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .hud-scanner-list {
@@ -1484,7 +1531,7 @@ body.screen-explore #game-explore-overlay .sim-badge {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 
 .hud-scanner-row {
@@ -1492,7 +1539,13 @@ body.screen-explore #game-explore-overlay .sim-badge {
   grid-template-columns: 8px 1fr auto;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  padding: 5px 12px;
+  background: rgba(255, 248, 238, 0.95);
+  backdrop-filter: blur(12px);
+  border: 2px solid #e6cdaf;
+  border-bottom: 3.5px solid #d49575;
+  border-radius: 999px;
+  box-shadow: 0 6px 16px rgba(74, 53, 40, 0.22);
 }
 
 .hud-scanner-dot {
@@ -1502,10 +1555,10 @@ body.screen-explore #game-explore-overlay .sim-badge {
 }
 
 .hud-scanner-name {
-  color: #6f5140;
+  color: #4a3528;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1516,8 +1569,8 @@ body.screen-explore #game-explore-overlay .sim-badge {
   align-items: center;
   gap: 4px;
   font-size: 10.5px;
-  font-weight: 800;
-  color: #4a3528;
+  font-weight: 900;
+  color: #e07a5f;
 }
 
 .hud-scanner-arrow {
@@ -1531,18 +1584,19 @@ body.screen-explore #game-explore-overlay .sim-badge {
 }
 
 .hud-scanner-empty {
-  font-size: 9.5px;
-  font-weight: 700;
-  color: #a5876b;
-  font-style: italic;
-  letter-spacing: 0.4px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #ffedd5;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+  padding: 4px 8px;
 }
 
 /* ---------- Center Action Prompt (Arcade Key Button) ---------- */
 .hud-action-prompt {
   position: absolute;
   left: 50%;
-  bottom: 120px;
+  bottom: 84px;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -1554,6 +1608,148 @@ body.screen-explore #game-explore-overlay .sim-badge {
   border-radius: 999px;
   box-shadow: 0 4px 0 #c9613f, 0 10px 24px rgba(74, 53, 40, 0.2);
   pointer-events: auto;
+}
+
+/* ---------- Pure Typography / Floating Bubbly Controls (Cardless & Windowless) ---------- */
+.hud-controls-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  pointer-events: none;
+  z-index: 48;
+  user-select: none;
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Large popping start state */
+.hud-controls-bubble.intro-pop {
+  bottom: 34px;
+  transform: translateX(-50%) scale(1.35);
+  animation: hcbIntroBounce 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes hcbIntroBounce {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(28px) scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-8px) scale(1.42);
+  }
+  100% {
+    transform: translateX(-50%) translateY(0) scale(1.35);
+  }
+}
+
+.hcb-key-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hcb-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  background: linear-gradient(180deg, #fffdf8 0%, #fef3c7 100%);
+  border: 2px solid #ea580c;
+  border-bottom: 4px solid #9a3412;
+  border-radius: 9px;
+  font-family: ui-rounded, "Segoe UI Rounded", "Nunito", var(--mono);
+  font-size: 13px;
+  font-weight: 900;
+  color: #7c2d12;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45), 0 0 10px rgba(234, 88, 12, 0.3);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: all 0.3s ease;
+}
+
+.hud-controls-bubble.intro-pop .hcb-key {
+  min-width: 32px;
+  height: 32px;
+  font-size: 14.5px;
+  border-width: 2.5px;
+  border-bottom-width: 5px;
+  border-color: #f97316;
+  border-bottom-color: #9a3412;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55), 0 0 20px rgba(249, 115, 22, 0.55);
+}
+
+.hcb-key.hcb-wide {
+  min-width: 52px;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+}
+
+.hud-controls-bubble.intro-pop .hcb-key.hcb-wide {
+  min-width: 60px;
+  font-size: 12px;
+}
+
+.hcb-label {
+  font-family: ui-rounded, "Segoe UI Rounded", "Nunito", "Trebuchet MS", var(--sans);
+  font-size: 12.5px;
+  font-weight: 900;
+  color: #fffaf0;
+  letter-spacing: 1.2px;
+  margin-left: 4px;
+  white-space: nowrap;
+  text-shadow:
+    0 2px 0 #9a3412,
+    0 3px 0 #7c2d12,
+    0 4px 10px rgba(0, 0, 0, 0.9),
+    0 0 16px rgba(234, 88, 12, 0.6);
+  transition: all 0.3s ease;
+}
+
+.hud-controls-bubble.intro-pop .hcb-label {
+  font-size: 14.5px;
+  letter-spacing: 1.4px;
+  color: #fffdf5;
+  text-shadow:
+    0 2px 0 #c2410c,
+    0 4px 0 #7c2d12,
+    0 6px 14px rgba(0, 0, 0, 0.95),
+    0 0 24px rgba(249, 115, 22, 0.85);
+}
+
+.hcb-divider {
+  width: 2px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+  margin: 0 4px;
+}
+
+.hud-controls-bubble.intro-pop .hcb-divider {
+  height: 26px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+@media (max-width: 768px) {
+  .hud-controls-bubble {
+    gap: 8px;
+    padding: 6px 12px;
+  }
+  .hcb-label {
+    display: none;
+  }
+  .hcb-divider {
+    display: none;
+  }
 }
 
 .hud-action-prompt.hidden {
