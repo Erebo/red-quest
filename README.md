@@ -2,14 +2,16 @@
 
 **READ THE LAND. SURVIVE THE RED.**
 
-Interactive 3D Mars surface mapping and traverse planning tool for Gale Crater, built on NASA Planetary Data System (PDS), HiRISE, CRISM and THEMIS data.
+A browser-based Mars traverse planner: orbital terrain, mineral and thermal data fused into six analytical lenses over a real 5 km × 5 km sector of Gale Crater, with an A\* route planner, a drivable rover, and a scored debrief against Curiosity's actual traverse.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Three.js](https://img.shields.io/badge/Three.js-r174-black.svg)](https://threejs.org/)
 [![Vite](https://img.shields.io/badge/Vite-6.2.0-646CFF.svg)](https://vitejs.dev/)
-[![NASA Space Apps](https://img.shields.io/badge/NASA%20Space%20Apps-2026-critical.svg)](https://www.spaceappschallenge.org/)
+[![NASA Space Apps](https://img.shields.io/badge/NASA%20Space%20Apps-2026-critical.svg)](https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide-martian-map/?tab=details)
 
-![Red Quest Hero Interface](docs/screenshots/intro.png)
+![Red Quest — route analysis over Gale Crater](docs/screenshots/intro.png)
+
+**Demo video:** `PLACEHOLDER_URL` · **Built for:** [Interplanetary Survival Guide: Martian Map](https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide-martian-map/?tab=details), NASA Space Apps Challenge 2026
 
 ---
 
@@ -26,7 +28,7 @@ Interactive 3D Mars surface mapping and traverse planning tool for Gale Crater, 
   - [6.3 Slope Gradient Calculation and Safety Tiers](#63-slope-gradient-calculation-and-safety-tiers)
   - [6.4 Solar Insolation and Cast Shadow Model](#64-solar-insolation-and-cast-shadow-model)
   - [6.5 Sky-View Factor Radiation Shielding Proxy](#65-sky-view-factor-radiation-shielding-proxy)
-  - [6.6 Worker-Accelerated A* Traverse Generation](#66-worker-accelerated-a-traverse-generation)
+  - [6.6 Worker-Accelerated A\* Traverse Generation](#66-worker-accelerated-a-traverse-generation)
   - [6.7 Deterministic Environmental Feature Placement](#67-deterministic-environmental-feature-placement)
   - [6.8 Empirical Evaluation and Scoring Bands](#68-empirical-evaluation-and-scoring-bands)
 - [7. System Architecture](#7-system-architecture)
@@ -59,14 +61,14 @@ Red Quest puts those layers on one 5 km × 5 km sector of Mount Sharp and turns 
 
 Built for the NASA Space Apps Challenge category **Interplanetary Survival Guide: Martian Map**. Each criterion is mapped to the component that implements it.
 
-| Challenge Criterion | Technical Implementation in Red Quest | Repository Component |
-| :--- | :--- | :--- |
-| **Multi-Source Data Integration** | Five data types fused in one scene: 1 m Gale DEM, HiRISE colour orthoimage, THEMIS Day IR, CRISM multispectral products, MSL localized traverse. | `public/data/`, `src/config.js`, `docs/DATA_SOURCES.md` |
-| **Astronaut Safety & Hazard Detection** | Slope tiers (<15°, 15°–25°, >25°), sky-view factor radiation shielding, thermal and dust hazard detection, rockfall and radio occlusion zones. | `src/game/decisionLenses.js`, `src/game/surveyKit.js`, `src/game/terrainAnalysisWorker.js` |
-| **Obstacle Avoidance & Pathfinding** | Asynchronous A* in a dedicated Web Worker, hard barrier at 25° slope, three candidate corridors with different cost weightings. | `src/routeWorker.js`, `src/game/levels/level01.json` |
-| **Layered Multi-Spectral Visualization** | Six real-time lenses (Satellite, Terrain, Minerals, Heat, Sun & Power, Radiation Shelter) toggled non-destructively over true topography. | `src/game/decisionLenses.js`, `src/main.js` |
-| **Scientific Waypoints & Resource Discovery** | 18 mission elements in four families (science, hazard, resource, mystery) placed on DEM and CRISM constraints, with the three science targets matched to Curiosity campaign sites. | `src/game/levels/level01_elements.json`, `src/game/missionElements.js` |
-| **Rigorous Ground-Truth Debrief** | Pre-lock estimates scored against DEM-derived truth, plus an overlay of the real Curiosity traverse the player never saw. | `src/game/surveyLog.js`, `src/game/routeCalculator.js` |
+| Challenge Criterion                           | Technical Implementation in Red Quest                                                                                                                                              | Repository Component                                                                       |
+| :-------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------- |
+| **Multi-Source Data Integration**             | Five data types fused in one scene: 1 m Gale DEM, HiRISE colour orthoimage, THEMIS Day IR, CRISM multispectral products, MSL localized traverse.                                   | `public/data/`, `src/config.js`, `docs/DATA_SOURCES.md`                                    |
+| **Astronaut Safety & Hazard Detection**       | Slope tiers (<15°, 15°–25°, >25°), sky-view factor radiation shielding, thermal and dust hazard detection, rockfall and radio occlusion zones.                                     | `src/game/decisionLenses.js`, `src/game/surveyKit.js`, `src/game/terrainAnalysisWorker.js` |
+| **Obstacle Avoidance & Pathfinding**          | Asynchronous A\* in a dedicated Web Worker, hard barrier at 25° slope, three candidate corridors with different cost weightings.                                                   | `src/routeWorker.js`, `src/game/levels/level01.json`                                       |
+| **Layered Multi-Spectral Visualization**      | Six real-time lenses (Satellite, Terrain, Minerals, Heat, Sun & Power, Radiation Shelter) toggled non-destructively over true topography.                                          | `src/game/decisionLenses.js`, `src/main.js`                                                |
+| **Scientific Waypoints & Resource Discovery** | 18 mission elements in four families (science, hazard, resource, mystery) placed on DEM and CRISM constraints, with the three science targets matched to Curiosity campaign sites. | `src/game/levels/level01_elements.json`, `src/game/missionElements.js`                     |
+| **Rigorous Ground-Truth Debrief**             | Pre-lock estimates scored against DEM-derived truth, plus an overlay of the real Curiosity traverse the player never saw.                                                          | `src/game/surveyLog.js`, `src/game/routeCalculator.js`                                     |
 
 ---
 
@@ -85,11 +87,11 @@ Built for the NASA Space Apps Challenge category **Interplanetary Survival Guide
 
 **Three candidate traverses**, presented blind as Route A, B and C.
 
-| Route | Strategy | Distance | Cumulative ascent | Max slope | Easy / moderate slopes |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Route A** — Low-slope corridor | Safest | 3.322 km | 266.5 m | 18.4° | 99.3% / 0.7% |
-| **Route B** — Direct traverse | Shortest | 2.971 km | 261.6 m | 23.8° | 91.5% / 8.5% |
-| **Route C** — Mineral survey loop | Science | 4.103 km | 385.9 m | 24.8° | 82.0% / 18.0% |
+| Route                             | Strategy | Distance | Cumulative ascent | Max slope | Easy / moderate slopes |
+| :-------------------------------- | :------- | :------- | :---------------- | :-------- | :--------------------- |
+| **Route A** — Low-slope corridor  | Safest   | 3.322 km | 266.5 m           | 18.4°     | 99.3% / 0.7%           |
+| **Route B** — Direct traverse     | Shortest | 2.971 km | 261.6 m           | 23.8°     | 91.5% / 8.5%           |
+| **Route C** — Mineral survey loop | Science  | 4.103 km | 385.9 m           | 24.8°     | 82.0% / 18.0%          |
 
 All three climb 239 m net. All three distances, ascents and slope figures are `MEASURED` from the DEM along each corridor.
 
@@ -97,7 +99,7 @@ All three climb 239 m net. All three distances, ascents and slope figures are `M
 
 **Physical traverse simulation.** Terrain-normal alignment, wheel dust, slope-dependent battery drain, oxygen and radiation telemetry, waypoint surveying.
 
-**Unconstrained Research mode.** Free layer toggles, arbitrary start and goal waypoints, manual A* recalculation, and coordinate inspection with full telemetry readout.
+**Unconstrained Research mode.** Free layer toggles, arbitrary start and goal waypoints, manual A\* recalculation, and coordinate inspection with full telemetry readout.
 
 **Terrain-wide slope distribution.** 65.5% of the sector is below 15°, 19.7% sits between 15° and 25°, and 14.8% exceeds 25°.
 
@@ -108,40 +110,49 @@ All three climb 239 m net. All three distances, ascents and slope figures are `M
 Nine captures from the running build.
 
 ### 01. Mission Briefing and Regional Dossier
+
 ![01 Briefing](docs/screenshots/01-briefing.png)
-*Briefing screen with the Mount Sharp slope sector coordinates, the −3,857.5 m to −3,617.2 m traverse elevation band, primary science waypoints and the four-stage objective list.*
+_Briefing screen with the Mount Sharp slope sector coordinates, the −3,857.5 m to −3,617.2 m traverse elevation band, primary science waypoints and the four-stage objective list._
 
 ### 02. Multi-Route Traverse Analysis
+
 ![02 Analyze Routes](docs/screenshots/02-analyze-routes.png)
-*ANALYZE stage: the 3D surface model with three computed corridors (Route A, Route B, Route C) and the blinded comparison table.*
+_ANALYZE stage: the 3D surface model with three computed corridors (Route A, Route B, Route C) and the blinded comparison table._
 
 ### 03. CRISM Spectral Mineralogy Lens
+
 ![03 Minerals Lens](docs/screenshots/04-minerals-lens.png)
-*Minerals lens rendering CRISM summary products: phyllosilicate clay in magenta, polyhydrated sulfate in cyan.*
+_Minerals lens rendering CRISM summary products: phyllosilicate clay in magenta, polyhydrated sulfate in cyan._
 
 ### 04. THEMIS Thermal Brightness Lens
+
 ![04 Heat Lens](docs/screenshots/05-heat-lens.png)
-*Heat lens showing THEMIS Day IR relative brightness (32–255 DN) across the 5 km × 5 km sector.*
+_Heat lens showing THEMIS Day IR relative brightness (32–255 DN) across the 5 km × 5 km sector._
 
 ### 05. Field Survey Diagnostic Kit
+
 ![05 Survey Kit](docs/screenshots/07-survey-kit.png)
-*Survey Kit with point probes and corridor scans across slope, hazard, dust and element categories, against the 8-scan budget.*
+_Survey Kit with point probes and corridor scans across slope, hazard, dust and element categories, against the 8-scan budget._
 
 ### 06. Research GIS and Analysis Mode
+
 ![06 Research Mode](docs/screenshots/11-research.png)
-*RESEARCH mode: free layer toggles, pinned point inspection with measured coordinates and telemetry, full crater terrain analysis.*
+_RESEARCH mode: free layer toggles, pinned point inspection with measured coordinates and telemetry, full crater terrain analysis._
 
 ### 07. Corridor Selection and Route Certification
+
 ![07 Choose Lock In](docs/screenshots/08-choose-lockin.png)
-*CHOOSE stage comparing distance, cumulative ascent, maximum slope and identified targets before the route is locked.*
+_CHOOSE stage comparing distance, cumulative ascent, maximum slope and identified targets before the route is locked._
 
 ### 08. Surface Traversal and Systems HUD
+
 ![08 Explore HUD](docs/screenshots/09-explore-hud.png)
-*EXPLORE stage: third-person rover driving with wheel dust, terrain alignment and live oxygen, battery and radiation telemetry.*
+_EXPLORE stage: third-person rover driving with wheel dust, terrain alignment and live oxygen, battery and radiation telemetry._
 
 ### 09. Mission Debrief and Ground-Truth Scoring
+
 ![09 Debrief Score](docs/screenshots/10-debrief-score.png)
-*DEBRIEF stage: scored estimates, survey accuracy, and the overlay against the genuine Curiosity traverse.*
+_DEBRIEF stage: scored estimates, survey accuracy, and the overlay against the genuine Curiosity traverse._
 
 ---
 
@@ -156,39 +167,39 @@ Every value shown to the player carries one of four tags:
 
 ### 5.1 Datasets and resources
 
-| No. | Dataset / resource | Source link | How it is used | Origin / distribution |
-| :--- | :--- | :--- | :--- | :--- |
-| 1 | USGS MSL Gale Merged DEM 1 m (v3) | [astrogeology.usgs.gov](<https://astrogeology.usgs.gov/search/map/mars_msl_gale_merged_dem_1m>) | 3D terrain visualization, slope classification, route distance and elevation gain. Also supports the Terrain, Sun & Power, and Radiation Shelter lenses. | USGS Astrogeology product based on Mars Science Laboratory (Curiosity) mission mapping. |
-| 2 | MSL Gale HiRISE Color Mosaic (USGS, from MRO HiRISE) | [astrogeology.usgs.gov](<https://astrogeology.usgs.gov/search/map/mars_msl_gale_merged_orthophoto_mosaic_25cm>) | Satellite lens and high-resolution image draping over the 3D terrain. | NASA Mars Reconnaissance Orbiter (MRO) HiRISE; distributed by USGS. |
-| 3 | THEMIS Day IR Controlled Mosaic, Aeolis 30S 135E (Mars Odyssey) | [astrogeology.usgs.gov](<https://astrogeology.usgs.gov/search/map/mars_themis_day_ir_controlled_mosaic_aeolis_30s_135e_100_mpp>) | Heat lens showing relative brightness across the 5 × 5 km exploration area. | NASA Mars Odyssey THEMIS instrument; distributed by USGS. |
-| 4 | CRISM MRDR Tile t0902, Phyllosilicate (PHY) Product (MRO) | [pds-geosciences.wustl.edu](<https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-multispectral-v1/mrocr_3201/>) | Minerals lens, clay-mineral indicators, map labels and route-based mineral readings. | NASA MRO CRISM data product, distributed through Washington University in St. Louis. |
-| 5 | CRISM MRDR Tile t0902, Hydrated Minerals (HYD) Product (MRO) | [crismtypespectra.rsl.wustl.edu](<https://crismtypespectra.rsl.wustl.edu/>) | CRISM spectral reference library for checking hydrated-mineral signatures, including sulfate-related spectra. This is a reference resource, not a verified direct download link for the t0902 HYD tile. | CRISM-related spectral reference resource hosted by Washington University in St. Louis. |
-| 6 | MSL PLACES Localized Traverse (`localized_interp.csv`) | [MSL Analyst's Notebook](<https://an.rsl.wustl.edu/msl/AN/an3.aspx>) | Curiosity's actual traverse as a dashed reference line, the starting point and the Debrief comparison. | NASA Mars Science Laboratory mission data, provided through the MSL Analyst's Notebook. |
-| 7 | MSL RAD RDR (`MSL-M-RAD-3-RDR-V1.0`) | [PDS PPI](<https://search-pdsppi.igpp.ucla.edu/search/view/?f=yes&id=pds://PPI/MSL-M-RAD-3-RDR-V1.0>) | If integrated, provides reference ranges for simulated radiation values. Display these values as SIM, not as live measurements. | NASA Mars Science Laboratory / Radiation Assessment Detector (RAD); archived in the Planetary Data System. |
-| 8 | MSL REMS RDR, Curiosity Weather Data | [PDS Atmospheres](<https://pdsatmospheres.nmsu.edu/data_and_services/atmospheres_data/MARS/curiosity/rems.html>) | If integrated, provides reference ranges for simulated temperature and atmospheric-pressure values. Display these values as SIM. | NASA Mars Science Laboratory / Rover Environmental Monitoring Station (REMS); distributed through the PDS Atmospheres Node. |
-| 9 | MSL PLACES Orbital DEM (`msl_orbital_dem.img`) | [MSL Analyst's Notebook](<https://an.rsl.wustl.edu/msl/AN/an3.aspx>) | If downloaded and integrated, can provide additional orbital elevation reference data. | Mission-related data accessed through the MSL Analyst's Notebook. Verify the DEM's original source and processing details. |
+| No. | Dataset / resource                                              | Source link                                                                                                                    | How it is used                                                                                                                                                                                          | Origin / distribution                                                                                                       |
+| :-- | :-------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------- |
+| 1   | USGS MSL Gale Merged DEM 1 m (v3)                               | [astrogeology.usgs.gov](https://astrogeology.usgs.gov/search/map/mars_msl_gale_merged_dem_1m)                                  | 3D terrain visualization, slope classification, route distance and elevation gain. Also supports the Terrain, Sun & Power, and Radiation Shelter lenses.                                                | USGS Astrogeology product based on Mars Science Laboratory (Curiosity) mission mapping.                                     |
+| 2   | MSL Gale HiRISE Color Mosaic (USGS, from MRO HiRISE)            | [astrogeology.usgs.gov](https://astrogeology.usgs.gov/search/map/mars_msl_gale_merged_orthophoto_mosaic_25cm)                  | Satellite lens and high-resolution image draping over the 3D terrain.                                                                                                                                   | NASA Mars Reconnaissance Orbiter (MRO) HiRISE; distributed by USGS.                                                         |
+| 3   | THEMIS Day IR Controlled Mosaic, Aeolis 30S 135E (Mars Odyssey) | [astrogeology.usgs.gov](https://astrogeology.usgs.gov/search/map/mars_themis_day_ir_controlled_mosaic_aeolis_30s_135e_100_mpp) | Heat lens showing relative brightness across the 5 × 5 km exploration area.                                                                                                                             | NASA Mars Odyssey THEMIS instrument; distributed by USGS.                                                                   |
+| 4   | CRISM MRDR Tile t0902, Phyllosilicate (PHY) Product (MRO)       | [pds-geosciences.wustl.edu](https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-multispectral-v1/mrocr_3201/)              | Minerals lens, clay-mineral indicators, map labels and route-based mineral readings.                                                                                                                    | NASA MRO CRISM data product, distributed through Washington University in St. Louis.                                        |
+| 5   | CRISM MRDR Tile t0902, Hydrated Minerals (HYD) Product (MRO)    | [crismtypespectra.rsl.wustl.edu](https://crismtypespectra.rsl.wustl.edu/)                                                      | CRISM spectral reference library for checking hydrated-mineral signatures, including sulfate-related spectra. This is a reference resource, not a verified direct download link for the t0902 HYD tile. | CRISM-related spectral reference resource hosted by Washington University in St. Louis.                                     |
+| 6   | MSL PLACES Localized Traverse (`localized_interp.csv`)          | [MSL Analyst's Notebook](https://an.rsl.wustl.edu/msl/AN/an3.aspx)                                                             | Curiosity's actual traverse as a dashed reference line, the starting point and the Debrief comparison.                                                                                                  | NASA Mars Science Laboratory mission data, provided through the MSL Analyst's Notebook.                                     |
+| 7   | MSL RAD RDR (`MSL-M-RAD-3-RDR-V1.0`)                            | [PDS PPI](https://search-pdsppi.igpp.ucla.edu/search/view/?f=yes&id=pds://PPI/MSL-M-RAD-3-RDR-V1.0)                            | If integrated, provides reference ranges for simulated radiation values. Display these values as SIM, not as live measurements.                                                                         | NASA Mars Science Laboratory / Radiation Assessment Detector (RAD); archived in the Planetary Data System.                  |
+| 8   | MSL REMS RDR, Curiosity Weather Data                            | [PDS Atmospheres](https://pdsatmospheres.nmsu.edu/data_and_services/atmospheres_data/MARS/curiosity/rems.html)                 | If integrated, provides reference ranges for simulated temperature and atmospheric-pressure values. Display these values as SIM.                                                                        | NASA Mars Science Laboratory / Rover Environmental Monitoring Station (REMS); distributed through the PDS Atmospheres Node. |
+| 9   | MSL PLACES Orbital DEM (`msl_orbital_dem.img`)                  | [MSL Analyst's Notebook](https://an.rsl.wustl.edu/msl/AN/an3.aspx)                                                             | If downloaded and integrated, can provide additional orbital elevation reference data.                                                                                                                  | Mission-related data accessed through the MSL Analyst's Notebook. Verify the DEM's original source and processing details.  |
 
 ### 5.2 Runtime assets and provenance
 
-| Runtime asset | Derived from | Role | Provenance |
-| :--- | :--- | :--- | :--- |
-| `terrain_height.bin` | Gale DEM, cropped and resampled | 1025 × 1025 Float32 elevation grid, displaces the terrain mesh | `MEASURED` |
-| `slope_5m.bin` | Gale DEM, 5 m baseline central difference | Slope field driving grade resistance, tier classification and survey scans | `DERIVED` |
-| `slope_classified.png`, `slope_5m_classified.png` | Slope field plus tier thresholds | Traversability maps for the Terrain lens | `DERIVED` (thresholds `MISSION RULE`) |
-| `terrain_texture.png` | HiRISE orthoimage, 8× downsample | 2500 × 2500 surface texture at 2 m/px | `MEASURED` |
-| `themis_crop.png` | THEMIS Day IR mosaic | Heat lens, 50 × 50 px at 100 m/px, relative brightness only | `MEASURED` |
-| `crism_hyd_crop.png`, `crism_phy_crop.png` | CRISM summary products | Minerals lens, two channels at ~181 m/px | `MEASURED` |
-| `route.json` | MSL localized traverse, thinned to ~5 m spacing | Reference path, level start point, debrief overlay | `MEASURED` |
-| Drive time, energy, dose, risk, dust, temperature, wind | Formulas in `docs/SIMULATED_DATA.md` | Route metrics and HUD telemetry | `MODELED` (`SIM`) |
-| Slope tiers, scan budget, scoring thresholds, element placement rules | Game design | Constraints and scoring | `MISSION RULE` (`game`) |
+| Runtime asset                                                         | Derived from                                    | Role                                                                       | Provenance                            |
+| :-------------------------------------------------------------------- | :---------------------------------------------- | :------------------------------------------------------------------------- | :------------------------------------ |
+| `terrain_height.bin`                                                  | Gale DEM, cropped and resampled                 | 1025 × 1025 Float32 elevation grid, displaces the terrain mesh             | `MEASURED`                            |
+| `slope_5m.bin`                                                        | Gale DEM, 5 m baseline central difference       | Slope field driving grade resistance, tier classification and survey scans | `DERIVED`                             |
+| `slope_classified.png`, `slope_5m_classified.png`                     | Slope field plus tier thresholds                | Traversability maps for the Terrain lens                                   | `DERIVED` (thresholds `MISSION RULE`) |
+| `terrain_texture.png`                                                 | HiRISE orthoimage, 8× downsample                | 2500 × 2500 surface texture at 2 m/px                                      | `MEASURED`                            |
+| `themis_crop.png`                                                     | THEMIS Day IR mosaic                            | Heat lens, 50 × 50 px at 100 m/px, relative brightness only                | `MEASURED`                            |
+| `crism_hyd_crop.png`, `crism_phy_crop.png`                            | CRISM summary products                          | Minerals lens, two channels at ~181 m/px                                   | `MEASURED`                            |
+| `route.json`                                                          | MSL localized traverse, thinned to ~5 m spacing | Reference path, level start point, debrief overlay                         | `MEASURED`                            |
+| Drive time, energy, dose, risk, dust, temperature, wind               | Formulas in `docs/SIMULATED_DATA.md`            | Route metrics and HUD telemetry                                            | `MODELED` (`SIM`)                     |
+| Slope tiers, scan budget, scoring thresholds, element placement rules | Game design                                     | Constraints and scoring                                                    | `MISSION RULE` (`game`)               |
 
 ### 5.3 Dataset citations
 
-- **Gale DEM**: Fergason, R. L., et al. (2012), *Gale Crater elevation model derived from HiRISE and CTX stereo imagery*, USGS Astrogeology Science Center.
-- **MRO HiRISE**: McEwen, A. S., et al. (2007), *Mars Reconnaissance Orbiter's High Resolution Imaging Science Experiment (HiRISE)*, J. Geophys. Res., 112, E05S02. [HiRISE Operations Center](https://hirise.lpl.arizona.edu/).
-- **MRO CRISM**: Murchie, S., et al. (2007), *Compact Reconnaissance Imaging Spectrometer for Mars (CRISM) on Mars Reconnaissance Orbiter (MRO)*, J. Geophys. Res., 112, E05S03. Tile `frt0000t0902_07_mrdr`. Summary products defined by Viviano-Beck, C. E., et al. (2014), J. Geophys. Res. Planets, 119, 1403–1431.
-- **Mars Odyssey THEMIS**: Christensen, P. R., et al. (2004), *The Thermal Emission Imaging System (THEMIS) for the Mars 2001 Odyssey Mission*, Space Sci. Rev., 110(1), 85–130. [THEMIS archive](https://themis.asu.edu/).
-- **MSL traverse and RAD**: Hassler, D. M., et al. (2014), *Mars' Surface Radiation Environment Measured with the Mars Science Laboratory's Curiosity Rover*, Science, 343(6169), 1244797.
+- **Gale DEM**: Fergason, R. L., et al. (2012), _Gale Crater elevation model derived from HiRISE and CTX stereo imagery_, USGS Astrogeology Science Center.
+- **MRO HiRISE**: McEwen, A. S., et al. (2007), _Mars Reconnaissance Orbiter's High Resolution Imaging Science Experiment (HiRISE)_, J. Geophys. Res., 112, E05S02. [HiRISE Operations Center](https://hirise.lpl.arizona.edu/).
+- **MRO CRISM**: Murchie, S., et al. (2007), _Compact Reconnaissance Imaging Spectrometer for Mars (CRISM) on Mars Reconnaissance Orbiter (MRO)_, J. Geophys. Res., 112, E05S03. Tile `frt0000t0902_07_mrdr`. Summary products defined by Viviano-Beck, C. E., et al. (2014), J. Geophys. Res. Planets, 119, 1403–1431.
+- **Mars Odyssey THEMIS**: Christensen, P. R., et al. (2004), _The Thermal Emission Imaging System (THEMIS) for the Mars 2001 Odyssey Mission_, Space Sci. Rev., 110(1), 85–130. [THEMIS archive](https://themis.asu.edu/).
+- **MSL traverse and RAD**: Hassler, D. M., et al. (2014), _Mars' Surface Radiation Environment Measured with the Mars Science Laboratory's Curiosity Rover_, Science, 343(6169), 1244797.
 
 ---
 
@@ -251,7 +262,7 @@ SVF          = 1 - (1 / 12) * sum over azimuths of sin(horizon(az))
 
 Rays extend across 12 radial offsets out to roughly 1.1 km. Open ground returns `SVF → 1.0`. Scarp bases and canyon walls fall below 0.85, which the mission rule designates a **Natural Radiation Shelter**.
 
-### 6.6 Worker-Accelerated A* Traverse Generation
+### 6.6 Worker-Accelerated A\* Traverse Generation
 
 Pathfinding runs in a Web Worker so it never blocks the render loop. The graph is the DEM grid downsampled to 257 × 257 nodes, with 8-directional connectivity at the effective 4.88 m step. Base step cost is the 3D segment length `d`, which already includes the elevation change.
 
@@ -547,16 +558,20 @@ Full regeneration from the archives needs the original USGS 1 m GeoTIFF and the 
 ## 12. Team, Attribution, and License
 
 ### Development Team — Astro Dots
-- **Mahadi Rahman Jihad** — *Team Lead and System Designer*
-- **Tahseen Alam Taseen** — *Visual and Media Lead*
-- **Tartib Kaiser Munna** — *Application Developer*
-- **Tasfia Mozumder Aupy** — *Research and Documentation Lead*
+
+- **Mahadi Rahman Jihad** — _Team Lead and System Designer_
+- **Tahseen Alam Taseen** — _Visual and Media Lead_
+- **Tartib Kaiser Munna** — _Application Developer_
+- **Tasfia Mozumder Aupy** — _Research and Documentation Lead_
 
 ### Engineering and Tooling Note
+
 This application was engineered using **Vite**, **Three.js**, and modern web standards, developed with agentic IDE assistance for rapid prototyping and scientific dataset integration.
 
 ### Institutional Acknowledgments
+
 We express our gratitude to the planetary scientists, mission engineers, and archive managers whose dedication makes exploration data accessible to the global public:
+
 - **NASA** (National Aeronautics and Space Administration)
 - **USGS Astrogeology Science Center**
 - **NASA Planetary Data System (PDS) Geosciences Node**
@@ -566,4 +581,5 @@ We express our gratitude to the planetary scientists, mission engineers, and arc
 - **NASA Jet Propulsion Laboratory / Mars Science Laboratory Curiosity Team**
 
 ### License
+
 This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for complete details.
