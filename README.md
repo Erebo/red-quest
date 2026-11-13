@@ -154,17 +154,19 @@ Every value shown to the player carries one of four tags:
 - `MODELED` — a physical simulation produced by a formula. Displayed in the interface as `SIM`.
 - `MISSION RULE` — a game constraint chosen by us, not a NASA limit. Displayed in the interface as `game`.
 
-### 5.1 Datasets in use
+### 5.1 Datasets and resources
 
-| Dataset | Product | Provider / archive | Native resolution | Extent |
+| No. | Dataset / resource | Source link | How it is used | Origin / distribution |
 | :--- | :--- | :--- | :--- | :--- |
-| Gale crater elevation | `MSL_Gale_DEM_Mosaic_1m_v3.tif` | USGS Astrogeology Science Center | 1 m/px | 5 km × 5 km |
-| Surface orthoimage | `MSL_Gale_HiRISE-LRGB_78quads_sharp_cog.tif` | NASA MRO HiRISE, University of Arizona | 0.25 m/px | 5 km × 5 km |
-| Daytime thermal IR | `THEMIS_DayIR_ControlledMosaic_Aeolis_30S135E_100mpp.tif` | Mars Odyssey THEMIS, Arizona State University | 100 m/px | 5 km × 5 km |
-| Spectral mineralogy | `t0902_mrrhyd_05s138_0327_4`, `t0902_mrrphy_05s138_0327_4` | NASA MRO CRISM, JHU Applied Physics Laboratory | ~181 m/px | 27 × 28 px crop |
-| Rover traverse | `MSL-M-ROVER-6-RDR-PLACES-V1.0`, file `localized_interp.csv` | NASA PDS Geosciences | Sub-metre waypoints | Sols 3721–4868, 1,819 points |
-| Radiation environment | `MSL-M-RAD-3-RDR-V1.0` | PDS Planetary Plasma Interactions | In-situ dosimetry | Regional baseline only |
-| Atmospheric weather (REMS) | Not acquired | — | — | Not integrated at runtime |
+| 1 | USGS MSL Gale Merged DEM 1 m (v3) | [astrogeology.usgs.gov](<https://astrogeology.usgs.gov/search/map/mars_msl_gale_merged_dem_1m>) | 3D terrain visualization, slope classification, route distance and elevation gain. Also supports the Terrain, Sun & Power, and Radiation Shelter lenses. | USGS Astrogeology product based on Mars Science Laboratory (Curiosity) mission mapping. |
+| 2 | MSL Gale HiRISE Color Mosaic (USGS, from MRO HiRISE) | [astrogeology.usgs.gov](<https://astrogeology.usgs.gov/search/map/mars_msl_gale_merged_orthophoto_mosaic_25cm>) | Satellite lens and high-resolution image draping over the 3D terrain. | NASA Mars Reconnaissance Orbiter (MRO) HiRISE; distributed by USGS. |
+| 3 | THEMIS Day IR Controlled Mosaic, Aeolis 30S 135E (Mars Odyssey) | [astrogeology.usgs.gov](<https://astrogeology.usgs.gov/search/map/mars_themis_day_ir_controlled_mosaic_aeolis_30s_135e_100_mpp>) | Heat lens showing relative brightness across the 5 × 5 km exploration area. | NASA Mars Odyssey THEMIS instrument; distributed by USGS. |
+| 4 | CRISM MRDR Tile t0902, Phyllosilicate (PHY) Product (MRO) | [pds-geosciences.wustl.edu](<https://pds-geosciences.wustl.edu/mro/mro-m-crism-5-rdr-multispectral-v1/mrocr_3201/>) | Minerals lens, clay-mineral indicators, map labels and route-based mineral readings. | NASA MRO CRISM data product, distributed through Washington University in St. Louis. |
+| 5 | CRISM MRDR Tile t0902, Hydrated Minerals (HYD) Product (MRO) | [crismtypespectra.rsl.wustl.edu](<https://crismtypespectra.rsl.wustl.edu/>) | CRISM spectral reference library for checking hydrated-mineral signatures, including sulfate-related spectra. This is a reference resource, not a verified direct download link for the t0902 HYD tile. | CRISM-related spectral reference resource hosted by Washington University in St. Louis. |
+| 6 | MSL PLACES Localized Traverse (`localized_interp.csv`) | [MSL Analyst's Notebook](<https://an.rsl.wustl.edu/msl/AN/an3.aspx>) | Curiosity's actual traverse as a dashed reference line, the starting point and the Debrief comparison. | NASA Mars Science Laboratory mission data, provided through the MSL Analyst's Notebook. |
+| 7 | MSL RAD RDR (`MSL-M-RAD-3-RDR-V1.0`) | [PDS PPI](<https://search-pdsppi.igpp.ucla.edu/search/view/?f=yes&id=pds://PPI/MSL-M-RAD-3-RDR-V1.0>) | If integrated, provides reference ranges for simulated radiation values. Display these values as SIM, not as live measurements. | NASA Mars Science Laboratory / Radiation Assessment Detector (RAD); archived in the Planetary Data System. |
+| 8 | MSL REMS RDR, Curiosity Weather Data | [PDS Atmospheres](<https://pdsatmospheres.nmsu.edu/data_and_services/atmospheres_data/MARS/curiosity/rems.html>) | If integrated, provides reference ranges for simulated temperature and atmospheric-pressure values. Display these values as SIM. | NASA Mars Science Laboratory / Rover Environmental Monitoring Station (REMS); distributed through the PDS Atmospheres Node. |
+| 9 | MSL PLACES Orbital DEM (`msl_orbital_dem.img`) | [MSL Analyst's Notebook](<https://an.rsl.wustl.edu/msl/AN/an3.aspx>) | If downloaded and integrated, can provide additional orbital elevation reference data. | Mission-related data accessed through the MSL Analyst's Notebook. Verify the DEM's original source and processing details. |
 
 ### 5.2 Runtime assets and provenance
 
