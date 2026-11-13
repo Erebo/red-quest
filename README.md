@@ -9,6 +9,11 @@ Interactive 3D Mars surface mapping and traverse simulation engine built on NASA
 [![Vite](https://img.shields.io/badge/Vite-6.2.0-646CFF.svg)](https://vitejs.dev/)
 [![NASA Space Apps](https://img.shields.io/badge/NASA%20Space%20Apps-2026-critical.svg)](https://www.spaceappschallenge.org/)
 
+<<<<<<< HEAD
+=======
+![Red Quest Hero Interface](docs/screenshots/02-analyze-routes.png)
+
+>>>>>>> 5dca7156e112cb01dd588f800ac072464bf5822e
 ---
 
 ## Table of Contents
@@ -96,6 +101,7 @@ This system is developed in alignment with the NASA Space Apps Challenge categor
 
 ## 4. Screenshot Walkthrough
 
+<<<<<<< HEAD
 The following 15-stage visual sequence illustrates the complete end-to-end capabilities of Red Quest, captured at 1440 × 900 resolution across both operational Mission Mode and the unconstrained Research GIS platform.
 
 ### 01. Mission Briefing and Regional Dossier
@@ -122,31 +128,69 @@ The following 15-stage visual sequence illustrates the complete end-to-end capab
 ### 04. Terrain Slope and Obstacle Classification Lens
 ![04 Terrain Lens](docs/screenshots/04-terrain-lens.png)
 *Terrain decision lens rendering continuous slope gradient colors (<15° green, 15°–25° yellow, >25° red) paired with 25 m elevation contour lines and active element markers.*  
+=======
+The following sequence illustrates the complete operational workflow of Red Quest captured at 1440 × 900 resolution.
+
+### 01. Mission Briefing and Regional Dossier
+![01 Briefing](docs/screenshots/01-briefing.png)
+*Initial expedition briefing displaying Mount Sharp northern slope coordinates, elevation range (-3,857.5 m to -3,617.2 m), primary science waypoints, and the 4-stage operational sequence.*  
+**User Action**: The operator inspects the topographical parameters, reviews the mission dossier, and initializes the expedition survey.
+
+---
+
+### 02. Multi-Route Traverse Analysis
+![02 Analyze Routes](docs/screenshots/02-analyze-routes.png)
+*ANALYZE stage showing the 3D surface model of Gale Crater with three computed candidate traverse corridors (Route A, Route B, Route C) and the blinded comparison table.*  
+**User Action**: The operator orbits the 3D terrain, reviews corridor length and ascent estimates, and examines candidate route trajectories across the scarp.
+
+---
+
+### 03. Terrain Slope and Obstacle Classification Lens
+![03 Terrain Lens](docs/screenshots/03-terrain-lens.png)
+*Terrain decision lens rendering continuous slope gradient colors (<15° green, 15°–25° yellow, >25° red) paired with 25 m elevation contour lines.*  
+>>>>>>> 5dca7156e112cb01dd588f800ac072464bf5822e
 **User Action**: The operator detects hazardous scarps exceeding 25° inclination and verifies that candidate corridors navigate through passable topographical gaps.
 
 ---
 
+<<<<<<< HEAD
 ### 05. CRISM Spectral Mineralogy Lens
 ![05 Minerals Lens](docs/screenshots/05-minerals-lens.png)
 *Minerals decision lens rendering orbital CRISM spectral indicators: phyllosilicates / smectite clay in magenta and polyhydrated sulfates in cyan with element pins.*  
+=======
+### 04. CRISM Spectral Mineralogy Lens
+![04 Minerals Lens](docs/screenshots/04-minerals-lens.png)
+*Minerals decision lens rendering orbital CRISM spectral indicators: phyllosilicates / smectite clay in magenta and polyhydrated sulfates in cyan.*  
+>>>>>>> 5dca7156e112cb01dd588f800ac072464bf5822e
 **User Action**: The operator correlates route paths with high-priority geochemical signatures representing ancient aqueous deposition environments.
 
 ---
 
+<<<<<<< HEAD
 ### 06. THEMIS Thermal Inertia Lens
 ![06 Heat Lens](docs/screenshots/06-heat-lens.png)
+=======
+### 05. THEMIS Thermal Inertia Lens
+![05 Heat Lens](docs/screenshots/05-heat-lens.png)
+>>>>>>> 5dca7156e112cb01dd588f800ac072464bf5822e
 *Heat decision lens visualizing THEMIS Day IR relative thermal brightness (32–255 DN) across the 5 km × 5 km corridor.*  
 **User Action**: The operator differentiates exposed, high thermal-inertia bedrock pavements from low thermal-inertia sandy drift traps that risk wheel slippage.
 
 ---
 
+<<<<<<< HEAD
 ### 07. Solar Insolation and Cast Shadow Lens
 ![07 Sun Power Lens](docs/screenshots/07-sun-power-lens.png)
+=======
+### 06. Solar Insolation and Cast Shadow Lens
+![06 Sun Power Lens](docs/screenshots/06-sun-power-lens.png)
+>>>>>>> 5dca7156e112cb01dd588f800ac072464bf5822e
 *Sun & Power decision lens rendering direct solar illumination and ray-marched cast shadows for diurnal traverse planning.*  
 **User Action**: The operator toggles diurnal solar angles (Morning, Noon, Evening) to verify photovoltaic power generation and anticipate shadow cold traps.
 
 ---
 
+<<<<<<< HEAD
 ### 08. Sky-View Factor Radiation Shelter Lens
 ![08 Radiation Lens](docs/screenshots/08-radiation-lens.png)
 *Radiation Shelter decision lens rendering hemispherical Sky-View Factor (SVF) occlusion zones below 0.85 where steep terrain shields extravehicular astronauts from cosmic radiation.*  
@@ -156,32 +200,52 @@ The following 15-stage visual sequence illustrates the complete end-to-end capab
 
 ### 09. Field Survey Diagnostic Kit
 ![09 Survey Kit](docs/screenshots/09-survey-kit.png)
+=======
+### 07. Field Survey Diagnostic Kit
+![07 Survey Kit](docs/screenshots/07-survey-kit.png)
+>>>>>>> 5dca7156e112cb01dd588f800ac072464bf5822e
 *Interactive Survey Kit interface providing point probes and corridor scans across slope, hazard, dust, and element categories under an 8-scan operational budget.*  
 **User Action**: The operator deploys diagnostic probes to measure local slope angles, detect hidden hazards, and log corridor metrics into the expedition ledger.
 
 ---
 
+<<<<<<< HEAD
 ### 10. Corridor Selection and Route Certification
 ![10 Choose Lock In](docs/screenshots/10-choose-lockin.png)
+=======
+### 08. Corridor Selection and Route Certification
+![08 Choose Lock In](docs/screenshots/08-choose-lockin.png)
+>>>>>>> 5dca7156e112cb01dd588f800ac072464bf5822e
 *CHOOSE stage presenting final route trade-offs between distance, cumulative ascent, maximum slope, and identified scientific targets.*  
 **User Action**: The operator evaluates trade-off metrics, selects the optimal corridor (e.g., Route A), and locks in the route plan for surface deployment.
 
 ---
 
+<<<<<<< HEAD
 ### 11. Surface Traversal and Kinetic Rover HUD
 ![11 Explore HUD](docs/screenshots/11-explore-hud.png)
+=======
+### 09. Surface Traversal and Systems HUD
+![09 Explore HUD](docs/screenshots/09-explore-hud.png)
+>>>>>>> 5dca7156e112cb01dd588f800ac072464bf5822e
 *EXPLORE stage featuring the third-person rover driving simulation with dynamic wheel dust, terrain alignment, and active resource telemetry (Oxygen, Battery, Radiation).*  
 **User Action**: The operator drives the rover along the certified route corridor, managing power consumption and surveying localized scientific elements.
 
 ---
 
+<<<<<<< HEAD
 ### 12. Mission Debrief and Ground-Truth Scoring
 ![12 Debrief Score](docs/screenshots/12-debrief-score.png)
+=======
+### 10. Mission Debrief and Ground-Truth Scoring
+![10 Debrief Score](docs/screenshots/10-debrief-score.png)
+>>>>>>> 5dca7156e112cb01dd588f800ac072464bf5822e
 *DEBRIEF stage presenting empirical performance scoring, pre-lock survey accuracy, and overlay comparison against the genuine Curiosity rover traverse.*  
 **User Action**: The operator analyzes plan deviations against true USGS elevation metrics and reviews MSL Curiosity historical traverse benchmarks.
 
 ---
 
+<<<<<<< HEAD
 ### 13. Research Mode Free Exploration
 ![13 Research Overview](docs/screenshots/13-research-overview.png)
 *Research GIS platform providing unconstrained 3D camera navigation, arbitrary coordinate sampling, and custom route pathfinding across the entire 25 km² sector.*  
@@ -203,6 +267,8 @@ The following 15-stage visual sequence illustrates the complete end-to-end capab
 
 ---
 
+=======
+>>>>>>> 5dca7156e112cb01dd588f800ac072464bf5822e
 ## 5. Scientific Data and Provenance
 
 Every data point rendered in Red Quest originates from verified planetary science repositories or explicitly tagged mathematical models. Strict provenance tags are maintained across the user interface: `MEASURED` (raw or geometrically extracted instrument data), `DERIVED` (deterministic algorithmic derivations from measured rasters), `MODELED` (empirical physical simulations), and `MISSION RULE` (defined operational boundary constraints).
